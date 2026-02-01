@@ -1,7 +1,9 @@
 de\streuland\plot\Plot.class
 de\streuland\path\PathGenerator.class
+de\streuland\plot\Plot$PlotState.class
 de\streuland\plot\PlotStorage.class
 de\streuland\plot\PlotManager.class
+de\streuland\plot\SpatialGrid.class
 de\streuland\StreulandPlugin.class
 de\streuland\listener\ProtectionListener.class
 de\streuland\path\PathGenerator$BlockPosition.class

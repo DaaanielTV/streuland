@@ -15,7 +15,7 @@ import java.util.concurrent.CompletableFuture;
  * 
  * Responsibilities:
  * - Create new plots with validation
- * - Find plots by coordinates
+ * - Find plots by coordinates using SpatialGrid
  * - Check distance constraints
  * - Validate terrain suitability
  */
@@ -28,12 +28,14 @@ public class PlotManager {
     private final int maxSearchRadius;
     private final int baseHeight;
     private final boolean validateAsync;
+    private final SpatialGrid spatialGrid;
     
     private int plotCounter = 0;  // Simple counter for plot IDs
     
     public PlotManager(JavaPlugin plugin, PlotStorage storage) {
         this.plugin = plugin;
         this.storage = storage;
+        this.spatialGrid = new SpatialGrid(plugin);
         
         FileConfiguration config = plugin.getConfig();
         String worldName = config.getString("world.name", "world");
@@ -48,6 +50,9 @@ public class PlotManager {
         this.maxSearchRadius = config.getInt("plot.max-search-radius", 5000);
         this.baseHeight = config.getInt("plot.base-height", 64);
         this.validateAsync = config.getBoolean("async.validate-async", true);
+        
+        // Rebuild spatial grid from loaded plots
+        spatialGrid.rebuild(storage.getAllPlots());
         
         plugin.getLogger().info("PlotManager initialized: world=" + worldName + ", size=" + plotSize + ", minDist=" + minDistance);
     }
@@ -90,6 +95,7 @@ public class PlotManager {
     /**
      * Creates a plot at the specified location without validation.
      * Block changes are executed on the main thread.
+     * Plot is added to spatial grid after creation.
      */
     private Plot createPlotAtLocation(UUID playerUUID, int centerX, int centerZ) {
         String plotId = "plot_" + (++plotCounter);
@@ -97,11 +103,13 @@ public class PlotManager {
         // Find safe spawn Y coordinate
         int spawnY = findSafeSpawnY(centerX, centerZ);
         
-        Plot plot = new Plot(plotId, centerX, centerZ, plotSize, playerUUID, System.currentTimeMillis(), spawnY);
+        // Create unclaimed plot that will be claimed
+        Plot plot = new Plot(plotId, centerX, centerZ, plotSize, playerUUID, System.currentTimeMillis(), spawnY, Plot.PlotState.CLAIMED);
         
-        // Schedule on main thread to save plot
+        // Schedule on main thread to save plot and add to grid
         Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, () -> {
             storage.savePlot(plot);
+            spatialGrid.addPlot(plot);
             plugin.getLogger().info("Created plot " + plotId + " at (" + centerX + "," + centerZ + ") for " + playerUUID + " with spawn Y=" + spawnY);
         });
         
@@ -136,12 +144,17 @@ public class PlotManager {
     /**
      * Validates if a location is suitable for a plot.
      * Checks:
-     * - No overlap with existing plots
+     * - No overlap with existing plots (via spatial grid)
      * - Minimum distance to other plots
      * - Terrain is not in water/lava
      * - Surface is accessible
      */
     private boolean isValidPlotLocation(int x, int z) {
+        // Check for overlap using spatial grid
+        if (!spatialGrid.isLocationAvailable(x, z, plotSize)) {
+            return false;
+        }
+        
         // Check distance to existing plots
         for (Plot plot : storage.getAllPlots()) {
             double distance = Math.sqrt(
@@ -204,15 +217,10 @@ public class PlotManager {
     }
     
     /**
-     * Finds a plot at given block coordinates.
+     * Finds a plot at given block coordinates using spatial grid (O(1) lookup).
      */
     public Plot getPlotAt(int x, int z) {
-        for (Plot plot : storage.getAllPlots()) {
-            if (plot.contains(x, z)) {
-                return plot;
-            }
-        }
-        return null;
+        return spatialGrid.getPlotAt(x, z);
     }
     
     /**
@@ -286,6 +294,10 @@ public class PlotManager {
         return storage;
     }
     
+    public SpatialGrid getSpatialGrid() {
+        return spatialGrid;
+    }
+    
     /**
      * Pre-generates unclaimed plots in a grid pattern.
      * Called during server setup to create a pool of claimable plots.
@@ -303,11 +315,12 @@ public class PlotManager {
                     continue;
                 }
                 
-                // Create unclaimed plot (owner = null)
+                // Create unclaimed plot (owner = null, state = UNCLAIMED)
                 String plotId = "unclaimed_" + plotCounter++;
                 int spawnY = findSafeSpawnY(centerX, centerZ);
-                Plot unclaimedPlot = new Plot(plotId, centerX, centerZ, plotSize, null, System.currentTimeMillis(), spawnY);
+                Plot unclaimedPlot = new Plot(plotId, centerX, centerZ, plotSize, null, System.currentTimeMillis(), spawnY, Plot.PlotState.UNCLAIMED);
                 storage.savePlot(unclaimedPlot);
+                spatialGrid.addPlot(unclaimedPlot);
                 generated++;
             }
         }

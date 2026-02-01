@@ -10,21 +10,37 @@ import java.util.UUID;
  * Data is immutable after creation; modifications should go through PlotManager.
  */
 public class Plot {
+    /**
+     * Enum representing the three possible plot states:
+     * - UNCLAIMED: Plot exists but has no owner (anyone can claim it, anyone can build in it)
+     * - CLAIMED: Plot has an owner (only owner/trusted can build)
+     */
+    public enum PlotState {
+        UNCLAIMED,
+        CLAIMED
+    }
+    
     private final String plotId;
     private final int centerX;
     private final int centerZ;
     private final int size;
     private final UUID owner;
+    private final PlotState state;
     private final long createdAt;
     private final int spawnY;  // Safe Y coordinate for spawning
     private final Set<UUID> trustedPlayers;
     
     public Plot(String plotId, int centerX, int centerZ, int size, UUID owner, long createdAt, int spawnY) {
+        this(plotId, centerX, centerZ, size, owner, createdAt, spawnY, owner == null ? PlotState.UNCLAIMED : PlotState.CLAIMED);
+    }
+    
+    public Plot(String plotId, int centerX, int centerZ, int size, UUID owner, long createdAt, int spawnY, PlotState state) {
         this.plotId = plotId;
         this.centerX = centerX;
         this.centerZ = centerZ;
         this.size = size;
         this.owner = owner;
+        this.state = state;
         this.createdAt = createdAt;
         this.spawnY = spawnY;
         this.trustedPlayers = new HashSet<>();
@@ -80,6 +96,13 @@ public class Plot {
     }
     
     /**
+     * Gets the plot state (UNCLAIMED or CLAIMED)
+     */
+    public PlotState getState() {
+        return state;
+    }
+    
+    /**
      * Adds a trusted player to the plot
      */
     public void addTrusted(UUID player) {
@@ -94,10 +117,18 @@ public class Plot {
     }
     
     /**
-     * Checks if a player is the owner or trusted
+     * Checks if a player is allowed to build in this plot.
+     * 
+     * Rules:
+     * - UNCLAIMED plots: Any player can build (returns true)
+     * - CLAIMED plots: Only owner or trusted players can build
      */
     public boolean isAllowed(UUID player) {
-        if (owner == null) return false;  // Unclaimed plots cannot be built in
+        if (state == PlotState.UNCLAIMED) {
+            return true;  // Anyone can build in unclaimed plots
+        }
+        // For CLAIMED plots, check ownership
+        if (owner == null) return false;
         return owner.equals(player) || trustedPlayers.contains(player);
     }
     

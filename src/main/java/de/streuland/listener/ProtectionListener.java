@@ -16,12 +16,13 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.Set;
 
 /**
- * Handles protection of plots and paths.
+ * Handles protection of plots, paths, and unclaimed areas with three-zone logic.
  * 
- * Rules:
- * - Only owner/trusted can build in plots
- * - Visitors can walk through but not interact
- * - Paths are public and indestructible
+ * Zones:
+ * 1. PATH (Y=63-67, specific materials): Public, indestructible
+ * 2. PLOT - UNCLAIMED: Public, anyone can build
+ * 3. PLOT - CLAIMED: Only owner/trusted can build
+ * 4. WILDERNESS: No building allowed outside all above zones
  */
 public class ProtectionListener implements Listener {
     private final JavaPlugin plugin;
@@ -54,27 +55,33 @@ public class ProtectionListener implements Listener {
         int x = event.getBlock().getX();
         int z = event.getBlock().getZ();
         
-        // Check if breaking a path block (always denied) - paths at Y=63 only
+        // ZONE 1: PATH blocks (Y=63-67, specific materials) - always deny
         if (isPathBlock(event.getBlock())) {
             event.setCancelled(true);
             player.sendMessage("§cDu kannst Path-Blöcke nicht abbauen!");
             return;
         }
         
-        // Check if in a plot
+        // ZONE 2 & 3: Check if in a plot
         Plot plot = plotManager.getPlotAt(x, z);
+        
         if (plot != null) {
-            // Check if player is allowed to build
-            if (!plot.isAllowed(player.getUniqueId())) {
-                event.setCancelled(true);
-                player.sendMessage("§cDu darfst hier nicht bauen!");
+            // Block is in a plot
+            if (plot.getState() == Plot.PlotState.UNCLAIMED) {
+                // ZONE 2: UNCLAIMED plot - allow any player to break
                 return;
+            } else if (plot.getState() == Plot.PlotState.CLAIMED) {
+                // ZONE 3: CLAIMED plot - only owner/trusted allowed
+                if (!plot.isAllowed(player.getUniqueId())) {
+                    event.setCancelled(true);
+                    player.sendMessage("§cDieser Plot gehört " + plot.getOwner() + "!");
+                    return;
+                }
             }
         } else {
-            // Not in any plot - deny breaking outside plots
+            // ZONE 4: WILDERNESS - no building allowed outside all plots
             event.setCancelled(true);
             player.sendMessage("§cDu kannst nur in deinem Plot abbauen!");
-            return;
         }
     }
     
@@ -84,27 +91,33 @@ public class ProtectionListener implements Listener {
         int x = event.getBlock().getX();
         int z = event.getBlock().getZ();
         
-        // Check if placing a path block (at Y=63)
+        // ZONE 1: PATH blocks (Y=63-67) - always deny
         if (isPathBlock(event.getBlock())) {
             event.setCancelled(true);
             player.sendMessage("§cDu kannst nicht auf Paths bauen!");
             return;
         }
         
-        // Check if in a plot
+        // ZONE 2 & 3: Check if in a plot
         Plot plot = plotManager.getPlotAt(x, z);
+        
         if (plot != null) {
-            // Check if player is allowed to build in this plot
-            if (!plot.isAllowed(player.getUniqueId())) {
-                event.setCancelled(true);
-                player.sendMessage("§cDu darfst hier nicht bauen!");
+            // Block is in a plot
+            if (plot.getState() == Plot.PlotState.UNCLAIMED) {
+                // ZONE 2: UNCLAIMED plot - allow any player to place
                 return;
+            } else if (plot.getState() == Plot.PlotState.CLAIMED) {
+                // ZONE 3: CLAIMED plot - only owner/trusted allowed
+                if (!plot.isAllowed(player.getUniqueId())) {
+                    event.setCancelled(true);
+                    player.sendMessage("§cDieser Plot gehört " + plot.getOwner() + "!");
+                    return;
+                }
             }
         } else {
-            // Not in any plot - deny building outside plots
+            // ZONE 4: WILDERNESS - no building allowed outside all plots
             event.setCancelled(true);
             player.sendMessage("§cDu kannst nur in deinem Plot bauen!");
-            return;
         }
     }
     
@@ -122,12 +135,18 @@ public class ProtectionListener implements Listener {
         Plot plot = plotManager.getPlotAt(x, z);
         if (plot != null) {
             // Player is in a plot
-            if (!plot.isAllowed(player.getUniqueId())) {
-                // Visitor - check if interaction is allowed
-                if (!allowVisitorInteract && isInteractiveBlock(event.getClickedBlock().getType())) {
-                    event.setCancelled(true);
-                    player.sendMessage("§cBesucher können hier nicht interagieren!");
-                    return;
+            if (plot.getState() == Plot.PlotState.UNCLAIMED) {
+                // UNCLAIMED plots: allow interaction for anyone
+                return;
+            } else if (plot.getState() == Plot.PlotState.CLAIMED) {
+                // CLAIMED plots: check if player is allowed
+                if (!plot.isAllowed(player.getUniqueId())) {
+                    // Visitor - check if interaction is allowed
+                    if (!allowVisitorInteract && isInteractiveBlock(event.getClickedBlock().getType())) {
+                        event.setCancelled(true);
+                        player.sendMessage("§cBesucher können hier nicht interagieren!");
+                        return;
+                    }
                 }
             }
         }

@@ -37,7 +37,7 @@ public class PlotStorage {
     }
     
     /**
-     * Saves a plot to disk
+     * Saves a plot to disk with state persistence
      */
     public void savePlot(Plot plot) {
         File plotFile = new File(dataFolder, plot.getPlotId() + ".yml");
@@ -47,7 +47,8 @@ public class PlotStorage {
         config.set("centerX", plot.getCenterX());
         config.set("centerZ", plot.getCenterZ());
         config.set("size", plot.getSize());
-        config.set("owner", plot.getOwner().toString());
+        config.set("owner", plot.getOwner() != null ? plot.getOwner().toString() : null);
+        config.set("state", plot.getState().name());  // Persist state: UNCLAIMED or CLAIMED
         config.set("createdAt", plot.getCreatedAt());
         config.set("spawnY", plot.getSpawnY());
         config.set("trusted", plot.getTrustedPlayers().stream()
@@ -62,7 +63,9 @@ public class PlotStorage {
         
         // Update cache and index
         cachedPlots.put(plot.getPlotId(), plot);
-        ownerToPlotId.putIfAbsent(plot.getOwner(), plot.getPlotId());
+        if (plot.getOwner() != null) {
+            ownerToPlotId.putIfAbsent(plot.getOwner(), plot.getPlotId());
+        }
         
         saveIndex();
     }
@@ -95,7 +98,7 @@ public class PlotStorage {
     }
     
     /**
-     * Loads a single plot from file
+     * Loads a single plot from file with state persistence
      */
     private Plot loadPlotFromFile(File file) {
         try {
@@ -105,11 +108,16 @@ public class PlotStorage {
             int centerX = config.getInt("centerX");
             int centerZ = config.getInt("centerZ");
             int size = config.getInt("size");
-            UUID owner = UUID.fromString(config.getString("owner"));
+            String ownerStr = config.getString("owner");
+            UUID owner = ownerStr != null && !ownerStr.equals("null") ? UUID.fromString(ownerStr) : null;
             long createdAt = config.getLong("createdAt");
             int spawnY = config.getInt("spawnY", 64);  // Default to 64 if not set
             
-            Plot plot = new Plot(id, centerX, centerZ, size, owner, createdAt, spawnY);
+            // Load plot state (default to UNCLAIMED if not set, for backwards compatibility)
+            String stateStr = config.getString("state", owner == null ? "UNCLAIMED" : "CLAIMED");
+            Plot.PlotState state = Plot.PlotState.valueOf(stateStr);
+            
+            Plot plot = new Plot(id, centerX, centerZ, size, owner, createdAt, spawnY, state);
             
             // Load trusted players
             List<String> trustedList = config.getStringList("trusted");
@@ -163,14 +171,15 @@ public class PlotStorage {
     }
     
     /**
-     * Claims an unclaimed plot for a player
+     * Claims an unclaimed plot for a player, transitioning it from UNCLAIMED to CLAIMED state
      */
     public void claimPlot(String plotId, UUID player) {
         Plot plot = cachedPlots.get(plotId);
-        if (plot != null) {
-            // Create a new plot with the claiming player as owner
+        if (plot != null && plot.getState() == Plot.PlotState.UNCLAIMED) {
+            // Transition from UNCLAIMED to CLAIMED state
             Plot claimedPlot = new Plot(plot.getPlotId(), plot.getCenterX(), plot.getCenterZ(), 
-                                       plot.getSize(), player, System.currentTimeMillis(), plot.getSpawnY());
+                                       plot.getSize(), player, System.currentTimeMillis(), plot.getSpawnY(), 
+                                       Plot.PlotState.CLAIMED);
             
             // Transfer trusted players if any
             for (UUID trusted : plot.getTrustedPlayers()) {
@@ -182,7 +191,7 @@ public class PlotStorage {
             savePlot(claimedPlot);
             saveIndex();
             
-            plugin.getLogger().info("Plot " + plotId + " claimed by " + player);
+            plugin.getLogger().info("Plot " + plotId + " claimed by " + player + " (transitioned to CLAIMED state)");
         }
     }
     

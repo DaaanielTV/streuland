@@ -16,11 +16,13 @@ import java.util.List;
  * Handles /plot command and subcommands.
  * 
  * Subcommands:
- * - /plot create - Create a new plot
- * - /plot info - Get plot info
- * - /plot trust - Trust a player
- * - /plot untrust - Untrust a player
- * - /plot home - Teleport to plot
+ * - /plot create - Generate and claim a new plot (admin/on-demand generation)
+ * - /plot claim - Claim an existing unclaimed plot at player location
+ * - /plot info - Get plot info at current location
+ * - /plot trust - Trust a player on your plot
+ * - /plot untrust - Untrust a player from your plot
+ * - /plot home - Teleport to your plot
+ * - /plot list - List your plots
  */
 public class PlotCommandExecutor implements CommandExecutor {
     private final JavaPlugin plugin;
@@ -70,8 +72,16 @@ public class PlotCommandExecutor implements CommandExecutor {
         }
     }
     
+    /**
+     * /plot create - Generate a NEW plot at a random location (on-demand generation).
+     * This command:
+     * - Does NOT check plot limit (allows admin/system to generate pools)
+     * - Generates a new plot location
+     * - Immediately claims it for the player
+     * - Counts against the player's 4-plot limit after claiming
+     */
     private boolean handleCreate(Player player) {
-        // Check if player has reached plot limit (4 plots)
+        // Check if player has reached plot limit BEFORE creating
         List<Plot> playerPlots = plotManager.getStorage().getPlayerPlots(player.getUniqueId());
         if (playerPlots.size() >= 4) {
             player.sendMessage("§cDu kannst maximal 4 Plots besitzen!");
@@ -88,7 +98,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                 
                 plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
                     pathGenerator.buildPathBlocks(pathBlocks);
-                    player.sendMessage("§aPlot erstellt! Lage: " + plot.getCenterX() + ", " + plot.getCenterZ());
+                    player.sendMessage("§aPlot erstellt und beansprucht! Lage: " + plot.getCenterX() + ", " + plot.getCenterZ());
                     player.sendMessage("§aNutze /plot home um dorthin zu teleportieren");
                 });
             } else {
@@ -99,29 +109,42 @@ public class PlotCommandExecutor implements CommandExecutor {
         return true;
     }
     
+    /**
+     * /plot claim - Claim an EXISTING unclaimed plot at player's current location.
+     * This command:
+     * - Is POSITION-BASED (player must stand in plot)
+     * - Does NOT generate any plot
+     * - Requires plot to be in UNCLAIMED state
+     * - Transitions plot from UNCLAIMED to CLAIMED
+     * - Counts against the player's 4-plot limit
+     */
     private boolean handleClaim(Player player) {
         // Get the plot the player is standing on
         Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         
         if (plot == null) {
-            player.sendMessage("§cDu stehst auf keinem Plot!");
+            player.sendMessage("§cDu stehst in keinem Plot!");
             return true;
         }
         
-        // Check if plot already has an owner
-        if (plot.getOwner() != null) {
-            player.sendMessage("§cDieser Plot ist bereits beansprucht!");
+        // Check if plot is unclaimed
+        if (plot.getState() != Plot.PlotState.UNCLAIMED) {
+            if (plot.getOwner() != null) {
+                player.sendMessage("§cDieser Plot gehört bereits " + plot.getOwner() + "!");
+            } else {
+                player.sendMessage("§cDieser Plot kann nicht beansprucht werden!");
+            }
             return true;
         }
         
-        // Check if player has reached plot limit (4 plots)
+        // Check if player has reached plot limit
         List<Plot> playerPlots = plotManager.getStorage().getPlayerPlots(player.getUniqueId());
         if (playerPlots.size() >= 4) {
             player.sendMessage("§cDu kannst maximal 4 Plots besitzen!");
             return true;
         }
         
-        // Claim the plot and generate path
+        // Claim the plot (transitions from UNCLAIMED to CLAIMED)
         plotManager.getStorage().claimPlot(plot.getPlotId(), player.getUniqueId());
         
         // Generate and build path
@@ -138,7 +161,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         
         if (plot == null) {
-            player.sendMessage("§cDu stehst auf keinem Plot!");
+            player.sendMessage("§cDu stehst in keinem Plot!");
             return true;
         }
         
@@ -146,7 +169,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§eID: §f" + plot.getPlotId());
         player.sendMessage("§ePosition: §f" + plot.getCenterX() + ", " + plot.getCenterZ());
         player.sendMessage("§eGröße: §f" + plot.getSize() + "x" + plot.getSize());
-        player.sendMessage("§eEigentümer: §f" + plot.getOwner());
+        player.sendMessage("§eZustand: §f" + (plot.getState() == Plot.PlotState.UNCLAIMED ? "§eUNBEANSPRUCHT" : "§aBEANSPRUCHT"));
+        player.sendMessage("§eEigentümer: §f" + (plot.getOwner() != null ? plot.getOwner() : "Niemand"));
         player.sendMessage("§eVertraut: §f" + plot.getTrustedPlayers().size() + " Spieler");
         
         return true;
@@ -161,11 +185,11 @@ public class PlotCommandExecutor implements CommandExecutor {
         Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         
         if (plot == null) {
-            player.sendMessage("§cDu stehst auf keinem Plot!");
+            player.sendMessage("§cDu stehst in keinem Plot!");
             return true;
         }
         
-        if (!plot.getOwner().equals(player.getUniqueId())) {
+        if (plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
             player.sendMessage("§cDu besitzt diesen Plot nicht!");
             return true;
         }
@@ -193,11 +217,11 @@ public class PlotCommandExecutor implements CommandExecutor {
         Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         
         if (plot == null) {
-            player.sendMessage("§cDu stehst auf keinem Plot!");
+            player.sendMessage("§cDu stehst in keinem Plot!");
             return true;
         }
         
-        if (!plot.getOwner().equals(player.getUniqueId())) {
+        if (plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
             player.sendMessage("§cDu besitzt diesen Plot nicht!");
             return true;
         }
@@ -278,8 +302,8 @@ public class PlotCommandExecutor implements CommandExecutor {
     
     private void showHelp(Player player) {
         player.sendMessage("§6=== Streuland Plot Befehle ===");
-        player.sendMessage("§e/plot create§f - Erstelle einen neuen Plot");
-        player.sendMessage("§e/plot claim§f - Beanspruche einen Plot unter deinen Füßen");
+        player.sendMessage("§e/plot create§f - Generiere und beanspruche einen neuen Plot");
+        player.sendMessage("§e/plot claim§f - Beanspruche einen ungeclaimten Plot unter deinen Füßen");
         player.sendMessage("§e/plot info§f - Zeige Informationen zum aktuellen Plot");
         player.sendMessage("§e/plot trust <Spieler>§f - Vertraue einem Spieler");
         player.sendMessage("§e/plot untrust <Spieler>§f - Entferne Vertrauen von einem Spieler");
