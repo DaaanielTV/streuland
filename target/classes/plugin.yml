@@ -1,0 +1,14 @@
+name: Streuland
+version: 1.0.0
+main: de.streuland.StreulandPlugin
+description: Random plot system with vanilla world generation
+authors:
+  - Developer
+api-version: 1.13
+
+commands:
+  plot:
+    description: Main plot command
+    usage: /plot <create|info|trust|untrust|home>
+    aliases:
+      - p

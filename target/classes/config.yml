@@ -1,0 +1,64 @@
+# Streuland Plot System Configuration
+
+# World settings
+world:
+  name: "world"
+
+# Plot settings
+plot:
+  # Size of each plot (in blocks, square)
+  size: 64
+  
+  # Minimum distance between plot centers
+  min-distance: 100
+  
+  # Maximum search radius for plot creation (in blocks from center of candidate location)
+  max-search-radius: 5000
+  
+  # Default y-level for plots (will find terrain above this)
+  base-height: 64
+
+# Path settings
+path:
+  # Width of paths in blocks
+  width: 4
+  
+  # Whether to use simple straight paths or try to curve slightly
+  use-curves: true
+
+# Protection settings
+protection:
+  # Allow visitors to interact with plots (doors, buttons, etc)
+  allow-visitor-interact: false
+  
+  # List of allowed blocks for visitors to interact with (empty = none)
+  # visitor-interact-whitelist:
+  #   - DOOR
+  #   - BUTTON
+
+# Performance settings
+async:
+  # Run plot creation validation async before block changes
+  validate-async: true
+  
+  # Run path generation async
+  path-generation-async: true
+
+# Terrain validation
+terrain:
+  # Blocks that indicate water (reject plot)
+  water-rejection: true
+  
+  # Blocks that indicate lava (reject plot)
+  lava-rejection: true
+  
+  # Adjacent water block count threshold (reject if >= this number)
+  adjacent-water-threshold: 3
+
+# Storage
+storage:
+  # File format: yaml or json
+  format: yaml
+  
+  # Folder where plot data is stored
+  data-folder: "plots"
