@@ -19,14 +19,12 @@ public class PlotStorage {
     private final File dataFolder;
     private final File indexFile;
     private Map<String, Plot> cachedPlots;
-    private Map<UUID, String> ownerToPlotId;  // Fast lookup: owner UUID -> plot IDs
     
     public PlotStorage(JavaPlugin plugin) {
         this.plugin = plugin;
         this.dataFolder = new File(plugin.getDataFolder(), "plots");
         this.indexFile = new File(dataFolder, "index.yml");
         this.cachedPlots = new HashMap<>();
-        this.ownerToPlotId = new HashMap<>();
         
         // Create folders if they don't exist
         if (!dataFolder.exists()) {
@@ -63,10 +61,6 @@ public class PlotStorage {
         
         // Update cache and index
         cachedPlots.put(plot.getPlotId(), plot);
-        if (plot.getOwner() != null) {
-            ownerToPlotId.putIfAbsent(plot.getOwner(), plot.getPlotId());
-        }
-        
         saveIndex();
     }
     
@@ -75,7 +69,6 @@ public class PlotStorage {
      */
     private void loadAllPlots() {
         cachedPlots.clear();
-        ownerToPlotId.clear();
         
         if (!dataFolder.exists()) {
             return;
@@ -90,7 +83,6 @@ public class PlotStorage {
             Plot plot = loadPlotFromFile(file);
             if (plot != null) {
                 cachedPlots.put(plot.getPlotId(), plot);
-                ownerToPlotId.putIfAbsent(plot.getOwner(), plot.getPlotId());
             }
         }
         
@@ -149,7 +141,7 @@ public class PlotStorage {
     public List<Plot> getPlayerPlots(UUID player) {
         List<Plot> plots = new ArrayList<>();
         for (Plot plot : cachedPlots.values()) {
-            if (plot.getOwner().equals(player)) {
+            if (player.equals(plot.getOwner())) {
                 plots.add(plot);
             }
         }
@@ -173,7 +165,7 @@ public class PlotStorage {
     /**
      * Claims an unclaimed plot for a player, transitioning it from UNCLAIMED to CLAIMED state
      */
-    public void claimPlot(String plotId, UUID player) {
+    public Plot claimPlot(String plotId, UUID player) {
         Plot plot = cachedPlots.get(plotId);
         if (plot != null && plot.getState() == Plot.PlotState.UNCLAIMED) {
             // Transition from UNCLAIMED to CLAIMED state
@@ -189,10 +181,12 @@ public class PlotStorage {
             // Update cache and save
             cachedPlots.put(plotId, claimedPlot);
             savePlot(claimedPlot);
-            saveIndex();
             
             plugin.getLogger().info("Plot " + plotId + " claimed by " + player + " (transitioned to CLAIMED state)");
+            return claimedPlot;
         }
+
+        return plot;
     }
     
     /**

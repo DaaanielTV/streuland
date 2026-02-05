@@ -43,6 +43,9 @@ public class StreulandPlugin extends JavaPlugin {
             
             // Register command
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator);
+            if (getCommand("plot") == null) {
+                throw new IllegalStateException("Command 'plot' is not defined in plugin.yml");
+            }
             getCommand("plot").setExecutor(commandExecutor);
             getLogger().info("✓ Commands registered");
             

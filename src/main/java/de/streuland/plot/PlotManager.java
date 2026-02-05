@@ -3,7 +3,6 @@ package de.streuland.plot;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -26,8 +25,6 @@ public class PlotManager {
     private final int plotSize;
     private final int minDistance;
     private final int maxSearchRadius;
-    private final int baseHeight;
-    private final boolean validateAsync;
     private final SpatialGrid spatialGrid;
     
     private int plotCounter = 0;  // Simple counter for plot IDs
@@ -48,8 +45,6 @@ public class PlotManager {
         this.plotSize = config.getInt("plot.size", 64);
         this.minDistance = config.getInt("plot.min-distance", 100);
         this.maxSearchRadius = config.getInt("plot.max-search-radius", 5000);
-        this.baseHeight = config.getInt("plot.base-height", 64);
-        this.validateAsync = config.getBoolean("async.validate-async", true);
         
         // Rebuild spatial grid from loaded plots
         spatialGrid.rebuild(storage.getAllPlots());
@@ -68,11 +63,11 @@ public class PlotManager {
         return CompletableFuture.supplyAsync(() -> {
             // First, try to find an unclaimed plot
             for (Plot plot : storage.getAllPlots()) {
-                if (plot.getOwner() == null) {
+                if (plot.getState() == Plot.PlotState.UNCLAIMED) {
                     // Found an unclaimed plot, claim it for the player
-                    storage.claimPlot(plot.getPlotId(), playerUUID);
+                    Plot claimedPlot = claimPlotForPlayer(plot, playerUUID);
                     plugin.getLogger().info("Player " + playerUUID + " claimed existing unclaimed plot " + plot.getPlotId());
-                    return plot;
+                    return claimedPlot;
                 }
             }
             
@@ -245,11 +240,23 @@ public class PlotManager {
     }
     
     /**
+     * Claims an unclaimed plot and updates both storage and spatial index.
+     */
+    public Plot claimPlotForPlayer(Plot plot, UUID player) {
+        Plot claimedPlot = storage.claimPlot(plot.getPlotId(), player);
+        if (claimedPlot != null && claimedPlot != plot) {
+            spatialGrid.removePlot(plot);
+            spatialGrid.addPlot(claimedPlot);
+        }
+        return claimedPlot;
+    }
+
+    /**
      * Trusts a player on a plot (if caller is owner)
      */
     public boolean trustPlayer(String plotId, UUID owner, UUID playerToTrust) {
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || !plot.getOwner().equals(owner)) {
+        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(owner)) {
             return false;
         }
         
@@ -263,7 +270,7 @@ public class PlotManager {
      */
     public boolean untrustPlayer(String plotId, UUID owner, UUID playerToUntrust) {
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || !plot.getOwner().equals(owner)) {
+        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(owner)) {
             return false;
         }
         

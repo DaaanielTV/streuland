@@ -2,10 +2,8 @@ package de.streuland.listener;
 
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
-import de.streuland.path.PathGenerator;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -13,7 +11,6 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import java.util.Set;
 
 /**
  * Handles protection of plots, paths, and unclaimed areas with three-zone logic.
@@ -25,27 +22,13 @@ import java.util.Set;
  * 4. WILDERNESS: No building allowed outside all above zones
  */
 public class ProtectionListener implements Listener {
-    private final JavaPlugin plugin;
     private final PlotManager plotManager;
-    private final Set<Material> pathBlocks;
     private final boolean allowVisitorInteract;
     
     public ProtectionListener(JavaPlugin plugin, PlotManager plotManager) {
-        this.plugin = plugin;
         this.plotManager = plotManager;
         this.allowVisitorInteract = plugin.getConfig().getBoolean("protection.allow-visitor-interact", false);
-        this.pathBlocks = new java.util.HashSet<>(java.util.Arrays.asList(
-            Material.STONE,
-            Material.GRANITE,
-            Material.DIORITE,
-            Material.ANDESITE,
-            Material.MOSSY_COBBLESTONE,
-            Material.COBBLESTONE,
-            Material.DIRT,
-            Material.GRAVEL,
-            Material.STONE_BRICKS
-        ));
-        
+
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
     
