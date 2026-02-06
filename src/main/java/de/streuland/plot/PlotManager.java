@@ -110,6 +110,7 @@ public class PlotManager {
         Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, () -> {
             storage.savePlot(plot);
             spatialGrid.addPlot(plot);
+            Bukkit.getPluginManager().callEvent(new de.streuland.event.PlotCreatedEvent(plot));
             plugin.getLogger().info("Created plot " + plotId + " at (" + centerX + "," + centerZ + ") for " + playerUUID + " with spawn Y=" + spawnY);
         });
         

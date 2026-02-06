@@ -12,3 +12,8 @@ commands:
     usage: /plot <create|info|trust|untrust|home>
     aliases:
       - p
+  district:
+    description: District command
+    usage: /district <info|progress|list>
+    aliases:
+      - city

@@ -62,3 +62,8 @@ storage:
   
   # Folder where plot data is stored
   data-folder: "plots"
+
+# District development
+districts:
+  # Interval (ticks) for sampling active players in districts
+  active-player-interval-ticks: 200
