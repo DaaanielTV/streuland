@@ -5,6 +5,12 @@ import de.streuland.listener.ProtectionListener;
 import de.streuland.path.PathGenerator;
 import de.streuland.plot.PlotManager;
 import de.streuland.plot.PlotStorage;
+import de.streuland.plot.snapshot.SnapshotManager;
+import de.streuland.plot.snapshot.SnapshotStorage;
+import de.streuland.rules.DefaultPlotLevelProvider;
+import de.streuland.rules.ExampleRules;
+import de.streuland.rules.RuleEngine;
+import de.streuland.rules.listener.RuleListener;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -17,6 +23,10 @@ public class StreulandPlugin extends JavaPlugin {
     private PlotStorage plotStorage;
     private PathGenerator pathGenerator;
     private ProtectionListener protectionListener;
+    private SnapshotStorage snapshotStorage;
+    private SnapshotManager snapshotManager;
+    private RuleEngine ruleEngine;
+    private RuleListener ruleListener;
     
     @Override
     public void onEnable() {
@@ -34,15 +44,29 @@ public class StreulandPlugin extends JavaPlugin {
             
             plotManager = new PlotManager(this, plotStorage);
             getLogger().info("✓ PlotManager initialized");
-            
+
             pathGenerator = new PathGenerator(this, plotManager);
             getLogger().info("✓ PathGenerator initialized");
-            
+
+            snapshotStorage = new SnapshotStorage(this);
+            getLogger().info("✓ SnapshotStorage initialized");
+
+            snapshotManager = new SnapshotManager(this, plotManager, snapshotStorage);
+            getLogger().info("✓ SnapshotManager initialized");
+
+            ruleEngine = new RuleEngine(plotManager, new DefaultPlotLevelProvider());
+            ruleEngine.registerProvider(new ExampleRules());
+            ruleEngine.reload();
+            getLogger().info("✓ RuleEngine initialized");
+
             protectionListener = new ProtectionListener(this, plotManager);
             getLogger().info("✓ ProtectionListener registered");
+
+            ruleListener = new RuleListener(this, ruleEngine);
+            getLogger().info("✓ RuleListener registered");
             
             // Register command
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine);
             getCommand("plot").setExecutor(commandExecutor);
             getLogger().info("✓ Commands registered");
             
