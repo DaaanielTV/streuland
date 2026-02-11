@@ -3,6 +3,10 @@ package de.streuland.command;
 import de.streuland.path.PathGenerator;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
+import de.streuland.path.PathGenerator;
+import de.streuland.plot.snapshot.SnapshotManager;
+import de.streuland.plot.snapshot.SnapshotMeta;
+import de.streuland.rules.RuleEngine;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -11,6 +15,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.List;
 import java.util.*;
 
 /**
@@ -30,6 +35,16 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final JavaPlugin plugin;
     private final PlotManager plotManager;
     private final PathGenerator pathGenerator;
+    private final SnapshotManager snapshotManager;
+    private final RuleEngine ruleEngine;
+    
+    public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator,
+                               SnapshotManager snapshotManager, RuleEngine ruleEngine) {
+        this.plugin = plugin;
+        this.plotManager = plotManager;
+        this.pathGenerator = pathGenerator;
+        this.snapshotManager = snapshotManager;
+        this.ruleEngine = ruleEngine;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
 
@@ -71,6 +86,10 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleHome(player, args);
             case "list":
                 return handleList(player);
+            case "snapshot":
+                return handleSnapshot(player, args);
+            case "rules":
+                return handleRules(player, args);
             case "unclaim":
                 return handleUnclaim(player, args);
             case "delete":
@@ -400,6 +419,79 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot untrust <Spieler>§f - Entferne Vertrauen von einem Spieler");
         player.sendMessage("§e/plot home [Nummer]§f - Teleportiere dich zu einem eigenen Plot");
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
+        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle");
+        player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
+    }
+
+    private boolean handleSnapshot(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage("§cVerwendung: /plot snapshot <create|list|restore>");
+            return true;
+        }
+        String action = args[1].toLowerCase();
+        boolean isAdmin = player.hasPermission(SnapshotManager.PERMISSION_ADMIN_RESTORE);
+        if (!player.hasPermission(SnapshotManager.PERMISSION_SNAPSHOT) && !isAdmin) {
+            player.sendMessage("§cKeine Berechtigung für Snapshots!");
+            return true;
+        }
+        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        if (plot == null) {
+            player.sendMessage("§cDu stehst in keinem Plot!");
+            return true;
+        }
+        boolean isOwner = plot.getOwner() != null && plot.getOwner().equals(player.getUniqueId());
+        if (!isOwner && !isAdmin) {
+            player.sendMessage("§cDu kannst diesen Plot nicht sichern!");
+            return true;
+        }
+        if ("create".equals(action)) {
+            player.sendMessage("§eSnapshot wird erstellt...");
+            snapshotManager.createSnapshot(plot, player.getUniqueId()).thenAccept(snapshot -> {
+                player.sendMessage("§aSnapshot erstellt: §f" + snapshot.getId());
+            });
+            return true;
+        }
+        if ("list".equals(action)) {
+            List<SnapshotMeta> snapshots = snapshotManager.listSnapshots(plot.getPlotId());
+            if (snapshots.isEmpty()) {
+                player.sendMessage("§cKeine Snapshots vorhanden!");
+                return true;
+            }
+            player.sendMessage("§6=== Snapshots ===");
+            for (SnapshotMeta meta : snapshots) {
+                player.sendMessage("§e" + meta.getId() + "§f - " + meta.getCreatedAt());
+            }
+            return true;
+        }
+        if ("restore".equals(action)) {
+            if (args.length < 3) {
+                player.sendMessage("§cVerwendung: /plot snapshot restore <id> [instant]");
+                return true;
+            }
+            String snapshotId = args[2];
+            boolean delayed = args.length < 4 || !args[3].equalsIgnoreCase("instant");
+            player.sendMessage("§eSnapshot wird wiederhergestellt...");
+            snapshotManager.restoreSnapshot(plot.getPlotId(), snapshotId, delayed).thenRun(() -> {
+                player.sendMessage("§aSnapshot wiederhergestellt!");
+            });
+            return true;
+        }
+        player.sendMessage("§cVerwendung: /plot snapshot <create|list|restore>");
+        return true;
+    }
+
+    private boolean handleRules(Player player, String[] args) {
+        if (args.length < 2 || !"reload".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§cVerwendung: /plot rules reload");
+            return true;
+        }
+        if (!player.hasPermission("streuland.rules.reload")) {
+            player.sendMessage("§cKeine Berechtigung!");
+            return true;
+        }
+        ruleEngine.reload();
+        player.sendMessage("§aRegeln neu geladen!");
+        return true;
         player.sendMessage("§e/plot unclaim [plotId]§f - Gibt einen Plot zurück in den Pool");
         player.sendMessage("§e/plot delete [plotId]§f - Löscht einen Plot (mit Bestätigung)");
         player.sendMessage("§e/plot confirm | /plot cancel§f - Bestätigt/abbricht Löschung");

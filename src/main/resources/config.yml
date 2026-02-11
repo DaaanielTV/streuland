@@ -69,6 +69,19 @@ storage:
   # Folder where plot data is stored
   data-folder: "plots"
 
+# Snapshot settings
+snapshot:
+  # Max snapshots per plot
+  max-per-plot: 5
+
+  # Chunks processed per tick when capturing
+  chunk-batch: 2
+
+  # Blocks per tick when restoring
+  restore-batch-size: 500
+
+  # Delay in ticks between restore batches
+  restore-batch-delay: 1
 # District development
 districts:
   # Interval (ticks) for sampling active players in districts
