@@ -50,7 +50,12 @@ Streuland enabled successfully!
 | `/plot untrust <player>` | Remove player from trusted list |
 | `/plot home` | Teleport to your plot |
 | `/plot list` | List all your plots |
-| `/plot ` | Show help message |
+| `/plot unclaim [plotId]` | Release your claimed plot back to unclaimed |
+| `/plot delete [plotId]` | Delete a plot (requires `/plot confirm`) |
+| `/plot confirm` / `/plot cancel` | Confirm or cancel a pending delete |
+| `/plot stats` | Show claim/unclaim/grid statistics |
+| `/plot generate <gridSize> <spacing>` | OP-only: pre-generate unclaimed plot pool |
+| `/plot help` | Show help message |
 
 ## Configuration
 
@@ -66,6 +71,8 @@ plot:
   size: 64                    # Size of each plot (blocks)
   min-distance: 100           # Minimum distance between plot centers
   max-search-radius: 5000     # Search radius from spawn
+  max-plots-per-player: 4      # Per-player claimed plot cap
+  delete-confirm-timeout-seconds: 30 # Seconds before delete confirmation expires
 
 # Path settings
 path:
