@@ -1,6 +1,9 @@
 package de.streuland;
 
 import de.streuland.command.PlotCommandExecutor;
+import de.streuland.command.DistrictCommandExecutor;
+import de.streuland.district.DistrictManager;
+import de.streuland.district.DistrictProgressService;
 import de.streuland.listener.ProtectionListener;
 import de.streuland.path.PathGenerator;
 import de.streuland.plot.PlotManager;
@@ -27,6 +30,8 @@ public class StreulandPlugin extends JavaPlugin {
     private SnapshotManager snapshotManager;
     private RuleEngine ruleEngine;
     private RuleListener ruleListener;
+    private DistrictManager districtManager;
+    private DistrictProgressService districtProgressService;
     
     @Override
     public void onEnable() {
@@ -67,7 +72,19 @@ public class StreulandPlugin extends JavaPlugin {
             
             // Register command
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine);
+            districtManager = new DistrictManager(this, plotManager);
+            districtProgressService = new DistrictProgressService(this, plotManager, districtManager);
+            getServer().getPluginManager().registerEvents(districtManager, this);
+            getServer().getPluginManager().registerEvents(districtProgressService, this);
+            getLogger().info("✓ District system initialized");
+            
+            // Register command
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator);
+            if (getCommand("plot") == null) {
+                throw new IllegalStateException("Command 'plot' is not defined in plugin.yml");
+            }
             getCommand("plot").setExecutor(commandExecutor);
+            getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager));
             getLogger().info("✓ Commands registered");
             
             getLogger().info("===============================================");

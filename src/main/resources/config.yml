@@ -18,6 +18,12 @@ plot:
   # Default y-level for plots (will find terrain above this)
   base-height: 64
 
+  # Maximum number of claimed plots a player can own
+  max-plots-per-player: 4
+
+  # Confirmation timeout in seconds for /plot delete
+  delete-confirm-timeout-seconds: 30
+
 # Path settings
 path:
   # Width of paths in blocks
@@ -76,3 +82,7 @@ snapshot:
 
   # Delay in ticks between restore batches
   restore-batch-delay: 1
+# District development
+districts:
+  # Interval (ticks) for sampling active players in districts
+  active-player-interval-ticks: 200
