@@ -55,7 +55,7 @@ public class PlotManager {
     public CompletableFuture<Plot> createPlotAsync(UUID playerUUID) {
         return CompletableFuture.supplyAsync(() -> {
             for (Plot plot : storage.getAllPlots()) {
-                if (plot.getState() == Plot.PlotState.UNCLAIMED) {
+                if (plot.getAreaType() == AreaType.PLOT_UNCLAIMED) {
                     // Found an unclaimed plot, claim it for the player
                     Plot claimedPlot = claimPlotForPlayer(plot, playerUUID);
                     plugin.getLogger().info("Player " + playerUUID + " claimed existing unclaimed plot " + plot.getPlotId());
@@ -223,15 +223,15 @@ public class PlotManager {
 
     public Plot claimPlotAt(UUID player, int x, int z) {
         Plot plot = getPlotAt(x, z);
-        if (plot == null || plot.getState() != Plot.PlotState.UNCLAIMED) {
+        if (plot == null || plot.getAreaType() != AreaType.PLOT_UNCLAIMED) {
             return null;
         }
-        return storage.claimPlot(plot.getPlotId(), player);
+        return claimPlotForPlayer(plot, player);
     }
 
     public boolean unclaimPlot(String plotId, UUID requester, boolean force) {
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || plot.getState() != Plot.PlotState.CLAIMED) {
+        if (plot == null || plot.getAreaType() != AreaType.PLOT_CLAIMED) {
             return false;
         }
         if (!force && (plot.getOwner() == null || !plot.getOwner().equals(requester))) {
@@ -255,6 +255,36 @@ public class PlotManager {
             return true;
         }
         return false;
+    }
+
+    public AreaType resolveAreaTypeAt(int x, int y, int z) {
+        if (isPathCoordinate(x, y, z)) {
+            return AreaType.PATH;
+        }
+
+        Plot plot = getPlotAt(x, z);
+        if (plot == null) {
+            return AreaType.WILDERNESS;
+        }
+
+        return plot.getAreaType();
+    }
+
+    private boolean isPathCoordinate(int x, int y, int z) {
+        if (y < 63 || y > 67) {
+            return false;
+        }
+
+        if (y > 63) {
+            return true;
+        }
+
+        Plot plot = getPlotAt(x, z);
+        if (plot != null) {
+            return false;
+        }
+
+        return true;
     }
 
     public Collection<Plot> getAllPlots() {
