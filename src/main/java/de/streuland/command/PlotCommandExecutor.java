@@ -3,7 +3,6 @@ package de.streuland.command;
 import de.streuland.path.PathGenerator;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
-import de.streuland.path.PathGenerator;
 import de.streuland.plot.snapshot.SnapshotManager;
 import de.streuland.plot.snapshot.SnapshotMeta;
 import de.streuland.rules.RuleEngine;
@@ -133,16 +132,9 @@ public class PlotCommandExecutor implements CommandExecutor {
             return true;
         }
 
-        Plot claimed = plotManager.claimPlotAt(player.getUniqueId(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-        if (claimed == null) {
-            player.sendMessage("§cHier gibt es keinen beanspruchbaren Plot!");
-            return true;
-        }
-
-        // Claim the plot (transitions from UNCLAIMED to CLAIMED)
-        Plot claimedPlot = plotManager.claimPlotForPlayer(claimed, player.getUniqueId());
+        Plot claimedPlot = plotManager.claimPlotAt(player.getUniqueId(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (claimedPlot == null) {
-            player.sendMessage("§cDer Plot konnte nicht beansprucht werden. Versuche es erneut.");
+            player.sendMessage("§cHier gibt es keinen beanspruchbaren Plot!");
             return true;
         }
 

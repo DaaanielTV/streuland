@@ -2,11 +2,11 @@
 
 # Streuland Plot Plugin
 
-A **random plot system** for Paper 1.16.5 Minecraft servers with vanilla world generation.
+A plot system for Paper 1.16.5 Minecraft servers with vanilla world generation and explicit area typing (PATH / PLOT_UNCLAIMED / PLOT_CLAIMED).
 
 ## Features
 
-✅ **Random Plot Distribution** - Plots spawn randomly in the world (not grid-based)
+✅ **AreaType-based Protection** - Protection is driven by explicit area categories
 ✅ **Automatic Path Generation** - New plots auto-connect via paths to nearest plots
 ✅ **Vanilla World Preservation** - Uses default world generation, no custom terrain
 ✅ **Plot Protection** - Only owner/trusted players can build
@@ -44,7 +44,7 @@ Streuland enabled successfully!
 ### Player Commands
 | Command | Description |
 |---------|-------------|
-| `/plot create` | Create a new plot at random location |
+| `/plot create` | Create a new claimed plot at a generated location |
 | `/plot info` | Show details about your current plot |
 | `/plot trust <player>` | Allow player to build on your plot |
 | `/plot untrust <player>` | Remove player from trusted list |
@@ -115,6 +115,12 @@ When a player runs `/plot create`:
    - Plot data saved to `plugins/Streuland/plots/`
    - Survives server restarts
 
+
+## Claim Semantics
+
+- `/plot claim` is **position-based**: the player must stand inside an existing `PLOT_UNCLAIMED` area.
+- Protection checks use `AreaType` first, then ownership/trust checks only for `PLOT_CLAIMED`.
+
 ## Plot Protection Rules
 
 | Action | Owner | Trusted | Visitor |
@@ -184,7 +190,7 @@ mvn clean package
 - Plot creation is async to prevent lag
 - Path generation uses simple Bresenham algorithm
 - In-memory cache keeps all plots loaded
-- Each plot query is O(n) - fine for <500 plots
+- Each plot query is near O(1) using the SpatialGrid cell index
 - Paths are built as GRAVEL blocks (cheap to place)
 
 ## Future Plans

@@ -17,7 +17,11 @@ public class Plot {
      */
     public enum PlotState {
         UNCLAIMED,
-        CLAIMED
+        CLAIMED;
+
+        public AreaType toAreaType() {
+            return this == UNCLAIMED ? AreaType.PLOT_UNCLAIMED : AreaType.PLOT_CLAIMED;
+        }
     }
     
     private final String plotId;
@@ -102,6 +106,13 @@ public class Plot {
         return state;
     }
     
+    /**
+     * Resolves the current area type represented by this plot.
+     */
+    public AreaType getAreaType() {
+        return state.toAreaType();
+    }
+
     /**
      * Adds a trusted player to the plot
      */
