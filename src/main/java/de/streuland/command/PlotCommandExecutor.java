@@ -37,6 +37,8 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PathGenerator pathGenerator;
     private final SnapshotManager snapshotManager;
     private final RuleEngine ruleEngine;
+    private final Map<UUID, DeleteConfirmation> pendingDeletes;
+    private final long deleteConfirmTimeoutMs;
     
     public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator,
                                SnapshotManager snapshotManager, RuleEngine ruleEngine) {
@@ -45,13 +47,6 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.pathGenerator = pathGenerator;
         this.snapshotManager = snapshotManager;
         this.ruleEngine = ruleEngine;
-    private final Map<UUID, DeleteConfirmation> pendingDeletes;
-    private final long deleteConfirmTimeoutMs;
-
-    public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator) {
-        this.plugin = plugin;
-        this.plotManager = plotManager;
-        this.pathGenerator = pathGenerator;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
     }
@@ -144,10 +139,8 @@ public class PlotCommandExecutor implements CommandExecutor {
             return true;
         }
 
-        List<PathGenerator.BlockPosition> pathBlocks = pathGenerator.generatePath(claimed);
-        
         // Claim the plot (transitions from UNCLAIMED to CLAIMED)
-        Plot claimedPlot = plotManager.claimPlotForPlayer(plot, player.getUniqueId());
+        Plot claimedPlot = plotManager.claimPlotForPlayer(claimed, player.getUniqueId());
         if (claimedPlot == null) {
             player.sendMessage("§cDer Plot konnte nicht beansprucht werden. Versuche es erneut.");
             return true;
@@ -492,10 +485,5 @@ public class PlotCommandExecutor implements CommandExecutor {
         ruleEngine.reload();
         player.sendMessage("§aRegeln neu geladen!");
         return true;
-        player.sendMessage("§e/plot unclaim [plotId]§f - Gibt einen Plot zurück in den Pool");
-        player.sendMessage("§e/plot delete [plotId]§f - Löscht einen Plot (mit Bestätigung)");
-        player.sendMessage("§e/plot confirm | /plot cancel§f - Bestätigt/abbricht Löschung");
-        player.sendMessage("§e/plot stats§f - Zeigt Plot-Statistik");
-        player.sendMessage("§cOP: /plot generate <gridSize> <spacing>");
     }
 }

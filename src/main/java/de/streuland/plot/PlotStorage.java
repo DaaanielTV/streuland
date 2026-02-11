@@ -24,8 +24,6 @@ public class PlotStorage {
     private final File indexFile;
     private final Map<String, Plot> cachedPlots;
     private final Map<UUID, Set<String>> ownerToPlotIds;
-
-    private Map<String, Plot> cachedPlots;
     
     public PlotStorage(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -145,8 +143,6 @@ public class PlotStorage {
         for (String id : ids) {
             Plot plot = cachedPlots.get(id);
             if (plot != null) {
-        for (Plot plot : cachedPlots.values()) {
-            if (player.equals(plot.getOwner())) {
                 plots.add(plot);
             }
         }
@@ -199,29 +195,6 @@ public class PlotStorage {
         savePlot(unclaimedPlot);
         plugin.getLogger().info("Plot " + plotId + " released and is now UNCLAIMED");
         return unclaimedPlot;
-    public Plot claimPlot(String plotId, UUID player) {
-        Plot plot = cachedPlots.get(plotId);
-        if (plot != null && plot.getState() == Plot.PlotState.UNCLAIMED) {
-            // Transition from UNCLAIMED to CLAIMED state
-            Plot claimedPlot = new Plot(plot.getPlotId(), plot.getCenterX(), plot.getCenterZ(), 
-                                       plot.getSize(), player, System.currentTimeMillis(), plot.getSpawnY(), 
-                                       Plot.PlotState.CLAIMED);
-            
-            // Transfer trusted players if any
-            for (UUID trusted : plot.getTrustedPlayers()) {
-                claimedPlot.addTrusted(trusted);
-            }
-            
-            // Update cache and save
-            cachedPlots.put(plotId, claimedPlot);
-            savePlot(claimedPlot);
-            
-            plugin.getLogger().info("Plot " + plotId + " claimed by " + player + " (transitioned to CLAIMED state)");
-            org.bukkit.Bukkit.getPluginManager().callEvent(new de.streuland.event.PlotClaimedEvent(claimedPlot));
-            return claimedPlot;
-        }
-
-        return plot;
     }
 
     /**

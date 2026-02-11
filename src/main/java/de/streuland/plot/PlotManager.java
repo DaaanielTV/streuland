@@ -56,7 +56,6 @@ public class PlotManager {
         return CompletableFuture.supplyAsync(() -> {
             for (Plot plot : storage.getAllPlots()) {
                 if (plot.getState() == Plot.PlotState.UNCLAIMED) {
-                    return storage.claimPlot(plot.getPlotId(), playerUUID);
                     // Found an unclaimed plot, claim it for the player
                     Plot claimedPlot = claimPlotForPlayer(plot, playerUUID);
                     plugin.getLogger().info("Player " + playerUUID + " claimed existing unclaimed plot " + plot.getPlotId());

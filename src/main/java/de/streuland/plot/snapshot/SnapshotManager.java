@@ -57,7 +57,7 @@ public class SnapshotManager {
         Set<ChunkKey> chunks = getPlotChunks(plot);
         Queue<ChunkKey> queue = new ArrayDeque<>(chunks);
         Map<ChunkKey, ChunkSnapshot> chunkSnapshots = new HashMap<>();
-        Map<Vector, Map<String, Object>> tileEntities = new HashMap<>();
+        Map<Vector, BlockState> tileEntities = new HashMap<>();
         CompletableFuture<PlotSnapshot> future = new CompletableFuture<>();
         AtomicInteger taskId = new AtomicInteger(-1);
 
@@ -71,7 +71,7 @@ public class SnapshotManager {
                     if (state instanceof TileState) {
                         Block block = state.getBlock();
                         if (plot.contains(block.getX(), block.getZ())) {
-                            tileEntities.put(new Vector(block.getX(), block.getY(), block.getZ()), state.serialize());
+                            tileEntities.put(new Vector(block.getX(), block.getY(), block.getZ()), state);
                         }
                     }
                 }
@@ -90,7 +90,7 @@ public class SnapshotManager {
     }
 
     private PlotSnapshot buildSnapshot(Plot plot, UUID creator, Map<ChunkKey, ChunkSnapshot> chunkSnapshots,
-                                      Map<Vector, Map<String, Object>> tileEntities) {
+                                      Map<Vector, BlockState> tileEntities) {
         List<BlockSnapshot> blocks = new ArrayList<>();
         int minX = plot.getMinX();
         int maxX = plot.getMaxX();
@@ -116,7 +116,11 @@ public class SnapshotManager {
                         Material type = snapshot.getBlockType(relX, y, relZ);
                         String blockData = snapshot.getBlockData(relX, y, relZ).getAsString();
                         Vector keyVec = new Vector(x, y, z);
-                        Map<String, Object> tileData = tileEntities.get(keyVec);
+                        BlockState state = tileEntities.get(keyVec);
+                        Map<String, Object> tileData = null;
+                        if (state instanceof org.bukkit.configuration.serialization.ConfigurationSerializable) {
+                            tileData = ((org.bukkit.configuration.serialization.ConfigurationSerializable) state).serialize();
+                        }
                         blocks.add(new BlockSnapshot(x, y, z, type.name(), blockData, tileData));
                     }
                 }

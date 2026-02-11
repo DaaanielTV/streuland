@@ -18,6 +18,12 @@ plot:
   # Default y-level for plots (will find terrain above this)
   base-height: 64
 
+  # Maximum number of claimed plots a player can own
+  max-plots-per-player: 4
+
+  # Confirmation timeout in seconds for /plot delete
+  delete-confirm-timeout-seconds: 30
+
 # Path settings
 path:
   # Width of paths in blocks
@@ -62,3 +68,102 @@ storage:
   
   # Folder where plot data is stored
   data-folder: "plots"
+
+# Biome-dependent plot effects
+biomes:
+  # Enable biome logic globally
+  enabled: true
+  # Base effects per biome (keys should match Bukkit biome enum names)
+  effects:
+    PLAINS:
+      enabled: true
+      priority: 0
+      build-rules:
+        - "ALLOW_REDSTONE"
+      resource-multipliers:
+        crop-growth: 1.1
+        mob-loot: 1.0
+      environment-constraints:
+        max-build-height: 200
+      stacked-effects:
+        - "spring_festival"
+    DESERT:
+      enabled: true
+      priority: 0
+      build-rules:
+        - "LIMIT_WATER"
+      resource-multipliers:
+        crop-growth: 0.8
+        mining: 1.1
+      environment-constraints:
+        max-build-height: 160
+  # Stackable global effects that can be referenced by id
+  stacked-effects:
+    spring_festival:
+      enabled: true
+      priority: 100
+      build-rules:
+        - "ALLOW_DECORATIVE_FLOWERS"
+      resource-multipliers:
+        crop-growth: 1.25
+      environment-constraints:
+        max-build-height: 210
+
+# Plot upgrades and progression
+plot-upgrades:
+  max-level: 10
+  levels:
+    "1":
+      plot-size: 64
+      feature-slots: 1
+      special-mechanics:
+        - "BASIC_WARP"
+    "2":
+      plot-size: 80
+      feature-slots: 2
+      special-mechanics:
+        - "BASIC_WARP"
+        - "DECOR_BONUS"
+  upgrades:
+    level-1-2:
+      from-level: 1
+      to-level: 2
+      vault-cost: 2500
+      item-costs:
+        DIAMOND: 4
+        GOLD_INGOT: 16
+      cooldown-seconds: 3600
+      required-unlocks:
+        - "PLOT_VISITS_10"
+
+# Intelligent plot distribution weights
+plot-distribution:
+  weights:
+    terrain: 0.35
+    biome: 0.2
+    infrastructure: 0.3
+    player-density: 0.15
+  terrain-avoid:
+    - "OCEAN"
+    - "BADLANDS"
+  async-batch-size: 128
+  debug:
+    enabled: false
+    heatmap: false
+# Snapshot settings
+snapshot:
+  # Max snapshots per plot
+  max-per-plot: 5
+
+  # Chunks processed per tick when capturing
+  chunk-batch: 2
+
+  # Blocks per tick when restoring
+  restore-batch-size: 500
+
+  # Delay in ticks between restore batches
+  restore-batch-delay: 1
+# District development
+districts:
+  # Interval (ticks) for sampling active players in districts
+  active-player-interval-ticks: 200
