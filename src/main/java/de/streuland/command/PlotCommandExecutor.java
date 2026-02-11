@@ -9,7 +9,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -145,10 +144,14 @@ public class PlotCommandExecutor implements CommandExecutor {
         }
         
         // Claim the plot (transitions from UNCLAIMED to CLAIMED)
-        plotManager.getStorage().claimPlot(plot.getPlotId(), player.getUniqueId());
-        
+        Plot claimedPlot = plotManager.claimPlotForPlayer(plot, player.getUniqueId());
+        if (claimedPlot == null) {
+            player.sendMessage("§cDer Plot konnte nicht beansprucht werden. Versuche es erneut.");
+            return true;
+        }
+
         // Generate and build path
-        List<PathGenerator.BlockPosition> pathBlocks = pathGenerator.generatePath(plot);
+        List<PathGenerator.BlockPosition> pathBlocks = pathGenerator.generatePath(claimedPlot);
         plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
             pathGenerator.buildPathBlocks(pathBlocks);
             player.sendMessage("§aPlot beansprucht! Verwende /plot info für mehr Informationen.");

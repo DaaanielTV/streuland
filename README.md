@@ -87,7 +87,7 @@ The plugin is modular with clear separation of concerns:
 - **ProtectionListener** - Event-based plot protection
 - **PlotCommandExecutor** - Command handler
 
-📖 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation.
+📖 Siehe [docs/README.md](docs/README.md) für die neue, strukturierte Dokumentation.
 
 ## Plot Creation Process
 
