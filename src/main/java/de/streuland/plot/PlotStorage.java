@@ -217,6 +217,7 @@ public class PlotStorage {
             savePlot(claimedPlot);
             
             plugin.getLogger().info("Plot " + plotId + " claimed by " + player + " (transitioned to CLAIMED state)");
+            org.bukkit.Bukkit.getPluginManager().callEvent(new de.streuland.event.PlotClaimedEvent(claimedPlot));
             return claimedPlot;
         }
 
