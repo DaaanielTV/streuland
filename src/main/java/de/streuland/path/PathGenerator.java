@@ -6,7 +6,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -25,38 +24,15 @@ public class PathGenerator {
     private final JavaPlugin plugin;
     private final PlotManager plotManager;
     private final int pathWidth;
-    private final boolean useCurves;
-    private final Set<Material> pathBlockReplacements;
     private final List<Material> pathStoneBlocks;
-    private final int PATH_DEPTH_OFFSET = 60;  // Place paths 60 blocks deeper
     
     public PathGenerator(JavaPlugin plugin, PlotManager plotManager) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         
         FileConfiguration config = plugin.getConfig();
-        this.pathWidth = config.getInt("path.width", 4);
-        this.useCurves = config.getBoolean("path.use-curves", true);
-        this.pathBlockReplacements = new HashSet<>(Arrays.asList(
-            Material.GRASS_BLOCK,
-            Material.DIRT,
-            Material.OAK_LOG,
-            Material.BIRCH_LOG,
-            Material.SPRUCE_LOG,
-            Material.JUNGLE_LOG,
-            Material.ACACIA_LOG,
-            Material.DARK_OAK_LOG,
-            Material.OAK_LEAVES,
-            Material.BIRCH_LEAVES,
-            Material.SPRUCE_LEAVES,
-            Material.JUNGLE_LEAVES,
-            Material.ACACIA_LEAVES,
-            Material.DARK_OAK_LEAVES,
-            Material.TALL_GRASS,
-            Material.SEAGRASS,
-            Material.TALL_SEAGRASS
-        ));
-        
+        this.pathWidth = Math.max(1, config.getInt("path.width", 4));
+
         // Stone blocks for paths
         this.pathStoneBlocks = Arrays.asList(
             Material.STONE,
@@ -114,11 +90,11 @@ public class PathGenerator {
         
         plugin.getLogger().info("Path height fixed at Y=" + FIXED_PATH_Y);
         
-        // Expand line to path width (5x5 area), all at Y=63
+        // Expand line to configured path width, all at Y=63
+        int radius = pathWidth / 2;
         for (BlockPosition pos : line) {
-            // Expand around center - 5x5 area (±2 blocks)
-            for (int dx2 = -2; dx2 <= 2; dx2++) {
-                for (int dz2 = -2; dz2 <= 2; dz2++) {
+            for (int dx2 = -radius; dx2 <= radius; dx2++) {
+                for (int dz2 = -radius; dz2 <= radius; dz2++) {
                     int x = pos.x + dx2;
                     int z = pos.z + dz2;
                     
@@ -143,7 +119,6 @@ public class PathGenerator {
         World world = plotManager.getWorld();
         java.util.Random random = new java.util.Random();
         final int FIXED_PATH_Y = 63;
-        final int CLEARANCE_ABOVE = 5;
         int batchSize = 500;
         int totalBlocks = pathBlocks.size();
         final int[] blocksPlaced = {0};  // Track total blocks placed
@@ -162,7 +137,7 @@ public class PathGenerator {
                     
                     // Place cobblestone or mossy cobblestone at fixed Y=63
                     Block pathBlock = world.getBlockAt(pos.x, FIXED_PATH_Y, pos.z);
-                    Material stoneType = random.nextBoolean() ? Material.COBBLESTONE : Material.MOSSY_COBBLESTONE;
+                    Material stoneType = pathStoneBlocks.get(random.nextInt(pathStoneBlocks.size()));
                     pathBlock.setType(stoneType);
                     
                     blocksPlaced[0]++;
@@ -218,12 +193,6 @@ public class PathGenerator {
         return line;
     }
     
-    /**
-     * Checks if a material can be removed (part of path-building)
-     */
-    private boolean isRemovable(Material mat) {
-        return pathBlockReplacements.contains(mat);
-    }
     
     /**
      * Simple 3D coordinate holder
