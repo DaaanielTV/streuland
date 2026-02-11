@@ -25,6 +25,8 @@ public class PlotStorage {
     private final Map<String, Plot> cachedPlots;
     private final Map<UUID, Set<String>> ownerToPlotIds;
 
+    private Map<String, Plot> cachedPlots;
+    
     public PlotStorage(JavaPlugin plugin) {
         this.plugin = plugin;
         this.dataFolder = new File(plugin.getDataFolder(), "plots");
@@ -32,6 +34,8 @@ public class PlotStorage {
         this.cachedPlots = new HashMap<>();
         this.ownerToPlotIds = new HashMap<>();
 
+        
+        // Create folders if they don't exist
         if (!dataFolder.exists()) {
             dataFolder.mkdirs();
         }
@@ -66,6 +70,9 @@ public class PlotStorage {
 
         Plot oldPlot = cachedPlots.put(plot.getPlotId(), plot);
         updateOwnerIndexForPlotReplacement(oldPlot, plot);
+        
+        // Update cache and index
+        cachedPlots.put(plot.getPlotId(), plot);
         saveIndex();
     }
 
@@ -73,6 +80,7 @@ public class PlotStorage {
         cachedPlots.clear();
         ownerToPlotIds.clear();
 
+        
         if (!dataFolder.exists()) {
             return;
         }
@@ -137,6 +145,8 @@ public class PlotStorage {
         for (String id : ids) {
             Plot plot = cachedPlots.get(id);
             if (plot != null) {
+        for (Plot plot : cachedPlots.values()) {
+            if (player.equals(plot.getOwner())) {
                 plots.add(plot);
             }
         }
@@ -189,6 +199,28 @@ public class PlotStorage {
         savePlot(unclaimedPlot);
         plugin.getLogger().info("Plot " + plotId + " released and is now UNCLAIMED");
         return unclaimedPlot;
+    public Plot claimPlot(String plotId, UUID player) {
+        Plot plot = cachedPlots.get(plotId);
+        if (plot != null && plot.getState() == Plot.PlotState.UNCLAIMED) {
+            // Transition from UNCLAIMED to CLAIMED state
+            Plot claimedPlot = new Plot(plot.getPlotId(), plot.getCenterX(), plot.getCenterZ(), 
+                                       plot.getSize(), player, System.currentTimeMillis(), plot.getSpawnY(), 
+                                       Plot.PlotState.CLAIMED);
+            
+            // Transfer trusted players if any
+            for (UUID trusted : plot.getTrustedPlayers()) {
+                claimedPlot.addTrusted(trusted);
+            }
+            
+            // Update cache and save
+            cachedPlots.put(plotId, claimedPlot);
+            savePlot(claimedPlot);
+            
+            plugin.getLogger().info("Plot " + plotId + " claimed by " + player + " (transitioned to CLAIMED state)");
+            return claimedPlot;
+        }
+
+        return plot;
     }
 
     /**

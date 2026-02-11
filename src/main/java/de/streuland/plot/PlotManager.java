@@ -42,6 +42,8 @@ public class PlotManager {
         this.maxPlotsPerPlayer = config.getInt("plot.max-plots-per-player", 4);
 
         this.plotCounter = storage.getNextPlotNumber();
+        
+        // Rebuild spatial grid from loaded plots
         spatialGrid.rebuild(storage.getAllPlots());
 
         plugin.getLogger().info("PlotManager initialized: world=" + worldName + ", size=" + plotSize + ", minDist=" + minDistance);
@@ -55,6 +57,10 @@ public class PlotManager {
             for (Plot plot : storage.getAllPlots()) {
                 if (plot.getState() == Plot.PlotState.UNCLAIMED) {
                     return storage.claimPlot(plot.getPlotId(), playerUUID);
+                    // Found an unclaimed plot, claim it for the player
+                    Plot claimedPlot = claimPlotForPlayer(plot, playerUUID);
+                    plugin.getLogger().info("Player " + playerUUID + " claimed existing unclaimed plot " + plot.getPlotId());
+                    return claimedPlot;
                 }
             }
 
@@ -177,6 +183,22 @@ public class PlotManager {
         return nearest;
     }
 
+    
+    /**
+     * Claims an unclaimed plot and updates both storage and spatial index.
+     */
+    public Plot claimPlotForPlayer(Plot plot, UUID player) {
+        Plot claimedPlot = storage.claimPlot(plot.getPlotId(), player);
+        if (claimedPlot != null && claimedPlot != plot) {
+            spatialGrid.removePlot(plot);
+            spatialGrid.addPlot(claimedPlot);
+        }
+        return claimedPlot;
+    }
+
+    /**
+     * Trusts a player on a plot (if caller is owner)
+     */
     public boolean trustPlayer(String plotId, UUID owner, UUID playerToTrust) {
         Plot plot = storage.getPlot(plotId);
         if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(owner)) {
