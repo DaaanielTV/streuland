@@ -6,6 +6,7 @@ E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\district\DistrictNpcA
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\RuleContext.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\api\event\PlotBiomeEffectAppliedEvent.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\conditions\BiomeCondition.java
+E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\AreaType.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\conditions\PlayerRankCondition.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\PlotLevelProvider.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\actions\ModifyBlockAction.java

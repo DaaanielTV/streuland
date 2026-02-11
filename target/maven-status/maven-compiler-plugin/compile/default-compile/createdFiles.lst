@@ -34,6 +34,7 @@ de\streuland\rules\conditions\NotCondition.class
 de\streuland\rules\Rule.class
 de\streuland\rules\DefaultPlotLevelProvider.class
 de\streuland\plot\snapshot\SnapshotMeta.class
+de\streuland\listener\ProtectionListener$1.class
 de\streuland\plot\snapshot\PlotSnapshot.class
 de\streuland\plot\upgrade\PlotUpgradeDefinition.class
 de\streuland\rules\RuleEngine.class
@@ -55,6 +56,7 @@ de\streuland\plot\SpatialGrid.class
 de\streuland\StreulandPlugin.class
 de\streuland\plot\snapshot\SnapshotManager.class
 de\streuland\rules\PlotLevelProvider.class
+de\streuland\plot\AreaType.class
 de\streuland\command\PlotCommandExecutor$1.class
 de\streuland\api\PlotApi.class
 de\streuland\command\PlotCommandExecutor$DeleteConfirmation.class
