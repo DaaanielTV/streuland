@@ -203,3 +203,22 @@ dashboard:
   port: 8080
   websocket-port: 8081
   heatmap-cell-size: 64
+
+# Dynamic seasonal weather system
+weather:
+  # Number of in-game days per season
+  season-duration-days: 7
+  # Number of ticks that represent a full in-game day for season progression
+  day-length-ticks: 24000
+  effects:
+    spring:
+      jungle-harvest-yield-multiplier: 1.3
+      crop-growth-multiplier: 1.2
+    summer:
+      desert-speed-amplifier: 1
+      crop-water-need-multiplier: 1.35
+    fall:
+      plains-auto-harvest: true
+    winter:
+      snowy-decay-rate-multiplier: 0.5
+      snowy-mob-spawn-multiplier: 0.7

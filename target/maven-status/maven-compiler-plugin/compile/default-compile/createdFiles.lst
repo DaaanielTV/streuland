@@ -9,6 +9,7 @@ de\streuland\plot\market\PlotMarketService$1.class
 de\streuland\path\PathGenerator.class
 de\streuland\plot\snapshot\ChunkKey.class
 de\streuland\rules\conditions\CooldownActiveCondition.class
+de\streuland\weather\ParticleEffectScheduler$1.class
 de\streuland\plot\upgrade\PlotUpgradeCost.class
 de\streuland\plot\biome\BiomeRuleSet.class
 de\streuland\plot\upgrade\PlotUpgradeTree.class
@@ -17,12 +18,15 @@ de\streuland\analytics\PlotAnalyticsRecord.class
 de\streuland\plot\distribution\PlotLocationScorer.class
 de\streuland\plot\market\PlotMarketService.class
 de\streuland\dashboard\RestApiController$DistrictHeatmapHandler.class
+de\streuland\weather\SeasonalWeatherService$Season.class
+de\streuland\weather\SeasonalEffectListener.class
 de\streuland\district\DistrictLevel.class
 de\streuland\rules\conditions\NotCondition.class
 de\streuland\rules\Rule.class
 de\streuland\plot\skin\PlotTheme.class
 de\streuland\quest\QuestDefinition.class
 de\streuland\rules\DefaultPlotLevelProvider.class
+de\streuland\weather\ParticleEffectScheduler.class
 de\streuland\plot\biome\BiomeBonusService.class
 de\streuland\listener\ProtectionListener$1.class
 de\streuland\plot\upgrade\PlotUpgradeDefinition.class
@@ -126,3 +130,4 @@ de\streuland\admin\AdminPlotService.class
 de\streuland\district\DistrictNpcAdapter.class
 de\streuland\listener\BlockChangeListener.class
 de\streuland\rules\RuleAction.class
+de\streuland\weather\SeasonalWeatherService.class
