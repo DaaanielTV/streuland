@@ -73,6 +73,15 @@ public class BiomeConfigLoader {
             multipliers,
             constraints
         );
+        ConfigurationSection bonusSection = section.getConfigurationSection("bonuses");
+        if (bonusSection != null) {
+            ruleSet.setFarmlandAreaMultiplier(bonusSection.getDouble("farmland-area-multiplier", 1.0));
+            ruleSet.setMobSpawnRateMultiplier(bonusSection.getDouble("mob-spawn-rate-multiplier", 1.0));
+            ruleSet.setJungleRainHarvestMultiplier(bonusSection.getDouble("rain-harvest-multiplier", 1.0));
+            ruleSet.setSnowyDecayRateMultiplier(bonusSection.getDouble("snowy-decay-rate-multiplier", 1.0));
+            ruleSet.setGrantsNightVision(bonusSection.getBoolean("night-vision", false));
+            ruleSet.setGrantsHeatResistanceOnSpawn(bonusSection.getBoolean("heat-resistance-on-spawn", false));
+        }
         return new BiomeEffect(id, enabled, priority, ruleSet);
     }
 

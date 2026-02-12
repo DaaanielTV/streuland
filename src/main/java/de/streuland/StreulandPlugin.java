@@ -10,6 +10,9 @@ import de.streuland.plot.PlotManager;
 import de.streuland.plot.PlotStorage;
 import de.streuland.plot.snapshot.SnapshotManager;
 import de.streuland.plot.snapshot.SnapshotStorage;
+import de.streuland.plot.skin.PlotSkinService;
+import de.streuland.plot.biome.BiomeEffectScheduler;
+import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
@@ -30,6 +33,9 @@ public class StreulandPlugin extends JavaPlugin {
     private SnapshotManager snapshotManager;
     private RuleEngine ruleEngine;
     private RuleListener ruleListener;
+    private PlotSkinService plotSkinService;
+    private BiomeBonusService biomeBonusService;
+    private BiomeEffectScheduler biomeEffectScheduler;
     private DistrictManager districtManager;
     private DistrictProgressService districtProgressService;
     
@@ -61,17 +67,27 @@ public class StreulandPlugin extends JavaPlugin {
 
             ruleEngine = new RuleEngine(plotManager, new DefaultPlotLevelProvider());
             ruleEngine.registerProvider(new ExampleRules());
+            biomeBonusService = new BiomeBonusService(plotManager, getConfig());
+            ruleEngine.setBiomeBonusService(biomeBonusService);
             ruleEngine.reload();
             getLogger().info("✓ RuleEngine initialized");
+
+            plotSkinService = new PlotSkinService(this, plotStorage);
+            plotSkinService.start();
+            getLogger().info("✓ PlotSkinService initialized");
+
+            biomeEffectScheduler = new BiomeEffectScheduler(this, plotManager, biomeBonusService);
+            biomeEffectScheduler.start();
+            getLogger().info("✓ BiomeEffectScheduler initialized");
 
             protectionListener = new ProtectionListener(this, plotManager);
             getLogger().info("✓ ProtectionListener registered");
 
-            ruleListener = new RuleListener(this, ruleEngine);
+            ruleListener = new RuleListener(this, ruleEngine, biomeBonusService);
             getLogger().info("✓ RuleListener registered");
             
             // Register plot command
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService);
             if (getCommand("plot") == null) {
                 throw new IllegalStateException("Command 'plot' is not defined in plugin.yml");
             }
@@ -102,6 +118,12 @@ public class StreulandPlugin extends JavaPlugin {
     
     @Override
     public void onDisable() {
+        if (plotSkinService != null) {
+            plotSkinService.stop();
+        }
+        if (biomeEffectScheduler != null) {
+            biomeEffectScheduler.stop();
+        }
         getLogger().info("Streuland disabled");
     }
     
