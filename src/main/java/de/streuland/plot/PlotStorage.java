@@ -1,6 +1,7 @@
 package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
+import de.streuland.quest.QuestProgress;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -64,6 +65,18 @@ public class PlotStorage {
                 .collect(java.util.stream.Collectors.toList()));
         PlotData data = plotData.getOrDefault(plot.getPlotId(), new PlotData());
         config.set("theme", data.getTheme().name());
+        config.set("rewards.storageSlots", data.getBonusStorageSlots());
+        config.set("rewards.abilities", new ArrayList<>(data.getUnlockedAbilities()));
+        config.set("rewards.cosmetics", new ArrayList<>(data.getCosmeticInventory()));
+        config.set("rewards.stats", new HashMap<>(data.getStatBonuses()));
+
+        for (Map.Entry<String, QuestProgress> entry : data.getQuestProgress().entrySet()) {
+            String base = "quests.progress." + entry.getKey();
+            QuestProgress progress = entry.getValue();
+            config.set(base + ".value", progress.getValue());
+            config.set(base + ".completed", progress.isCompleted());
+            config.set(base + ".completedAt", progress.getCompletedAt());
+        }
 
         try {
             config.save(plotFile);
@@ -99,7 +112,25 @@ public class PlotStorage {
                 FileConfiguration config = YamlConfiguration.loadConfiguration(file);
                 String themeRaw = config.getString("theme", PlotTheme.NATURE.name());
                 PlotTheme theme = PlotTheme.fromInput(themeRaw);
-                plotData.put(plot.getPlotId(), new PlotData(theme));
+                PlotData data = new PlotData(theme);
+                data.setBonusStorageSlots(config.getInt("rewards.storageSlots", 0));
+                data.getUnlockedAbilities().addAll(config.getStringList("rewards.abilities"));
+                data.getCosmeticInventory().addAll(config.getStringList("rewards.cosmetics"));
+                if (config.isConfigurationSection("rewards.stats")) {
+                    for (String key : config.getConfigurationSection("rewards.stats").getKeys(false)) {
+                        data.getStatBonuses().put(key, config.getDouble("rewards.stats." + key));
+                    }
+                }
+                if (config.isConfigurationSection("quests.progress")) {
+                    for (String questId : config.getConfigurationSection("quests.progress").getKeys(false)) {
+                        QuestProgress progress = new QuestProgress();
+                        progress.setValue(config.getInt("quests.progress." + questId + ".value", 0));
+                        progress.setCompleted(config.getBoolean("quests.progress." + questId + ".completed", false));
+                        progress.setCompletedAt(config.getLong("quests.progress." + questId + ".completedAt", 0L));
+                        data.getQuestProgress().put(questId, progress);
+                    }
+                }
+                plotData.put(plot.getPlotId(), data);
                 addToOwnerIndex(plot);
             }
         }

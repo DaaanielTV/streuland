@@ -1,6 +1,7 @@
 package de.streuland.rules;
 
 import de.streuland.plot.Plot;
+import de.streuland.plot.PlotData;
 import de.streuland.plot.PlotManager;
 import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.plot.biome.BiomeRuleSet;
@@ -81,6 +82,21 @@ public class RuleEngine {
         this.biomeBonusService = biomeBonusService;
     }
 
+
+    public void notifyQuestCompleted(Player player, Plot plot, de.streuland.quest.QuestDefinition quest, PlotData plotData) {
+        if (player == null || plot == null || quest == null) {
+            return;
+        }
+        player.sendMessage("§bRuleEngine: Quest-Belohnung ausgelöst für " + quest.getTitle());
+        Location location = player.getLocation();
+        RuleContext context = new RuleContext(RuleTrigger.ENTITY_SPAWN, null, player, plot, location,
+                plotLevelProvider.getPlotLevel(plot), location.getBlock().getBiome(), this);
+        for (Rule rule : rules) {
+            if (rule.getTrigger() == RuleTrigger.ENTITY_SPAWN && rule.matches(context)) {
+                rule.execute(context);
+            }
+        }
+    }
     private void enforceBiomeConstraints(RuleContext context) {
         if (biomeBonusService == null || context.getPlot() == null || context.getLocation() == null) {
             return;
