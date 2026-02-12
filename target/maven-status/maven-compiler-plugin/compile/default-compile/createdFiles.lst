@@ -6,6 +6,7 @@ de\streuland\plot\biome\BiomeEffect.class
 de\streuland\plot\snapshot\BlockSnapshot.class
 de\streuland\plot\snapshot\SnapshotStorage.class
 de\streuland\path\PathGenerator$BlockPosition.class
+de\streuland\neighborhood\SharedResourcePool.class
 de\streuland\district\DistrictManager.class
 de\streuland\district\DistrictProgress.class
 de\streuland\plot\distribution\CandidatePlotLocation.class
@@ -29,6 +30,7 @@ de\streuland\plot\distribution\PlotLocationScorer.class
 de\streuland\rules\DefaultRule.class
 de\streuland\command\DistrictCommandExecutor.class
 de\streuland\plot\biome\BiomeConfigLoader.class
+de\streuland\neighborhood\NeighborhoodStorage.class
 de\streuland\district\District.class
 de\streuland\district\DistrictLevel.class
 de\streuland\rules\conditions\NotCondition.class
@@ -52,6 +54,7 @@ de\streuland\plot\skin\PlotSkinService.class
 de\streuland\rules\actions\CooldownAction.class
 de\streuland\district\DistrictGoalCatalog$1.class
 de\streuland\plot\biome\BiomeProfile.class
+de\streuland\analytics\InMemoryPlotAnalyticsService.class
 de\streuland\district\DistrictStorage.class
 de\streuland\plot\upgrade\PlotProgressionState.class
 de\streuland\plot\PlotStorage.class
@@ -73,9 +76,12 @@ de\streuland\district\DistrictProgressService.class
 de\streuland\listener\ProtectionListener.class
 de\streuland\rules\RuleTrigger.class
 de\streuland\rules\ExampleRules.class
+de\streuland\neighborhood\NeighborhoodMapRenderer.class
 de\streuland\rules\conditions\BiomeCondition.class
 de\streuland\district\DistrictGoal.class
 de\streuland\district\DistrictNpcAdapter.class
 de\streuland\rules\RuleAction.class
+de\streuland\neighborhood\ResourceSyncScheduler.class
 de\streuland\district\DistrictGoalCatalog$BuiltBlocksGoal.class
+de\streuland\neighborhood\NeighborhoodService.class
 de\streuland\plot\distribution\WeightedPlotDistributor.class
