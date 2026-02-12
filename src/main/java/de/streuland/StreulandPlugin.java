@@ -10,7 +10,7 @@ import de.streuland.district.DistrictClusterService;
 import de.streuland.district.DistrictManager;
 import de.streuland.district.DistrictProgressService;
 import de.streuland.district.TraderNpcService;
-import de.streuland.dashboard.PlotAnalyticsExporter;
+import de.streuland.dashboard.DashboardDataExporter;
 import de.streuland.quest.QuestService;
 import de.streuland.quest.QuestTracker;
 import de.streuland.weather.ParticleEffectScheduler;
@@ -175,8 +175,8 @@ public class StreulandPlugin extends JavaPlugin {
             dailyPlotBackupService.start();
             getLogger().info("✓ Daily backup scheduler initialized");
 
-            PlotAnalyticsExporter analyticsExporter = new PlotAnalyticsExporter(analyticsService);
-            restApiController = new RestApiController(this, plotManager, districtManager, analyticsService, analyticsExporter);
+            DashboardDataExporter dataExporter = new DashboardDataExporter(plotManager.getStorage());
+            restApiController = new RestApiController(this, plotManager, neighborhoodService, analyticsService, dataExporter, plotMarketService);
             restApiController.start();
             getLogger().info("✓ Dashboard API initialized");
             

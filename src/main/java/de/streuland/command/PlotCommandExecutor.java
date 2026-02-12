@@ -159,6 +159,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return adminPlotService.handleInspect(player, args);
             case "admin":
                 return adminPlotService.handleAdmin(player, args);
+            case "dashboard":
+                return handleDashboardUrl(player, args);
             default:
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
@@ -652,8 +654,28 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot teleport <world> <plot_id>§f - Teleportiere weltenübergreifend");
         player.sendMessage("§e/plot inspect <x> <z>§f - Zeige Block-Änderungslog für Koordinaten");
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
+        player.sendMessage("§e/plot dashboard url§f - Zeige den Web-Dashboard Link");
     }
 
+
+
+    private boolean handleDashboardUrl(Player player, String[] args) {
+        if (args.length < 2 || !"url".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§cVerwendung: /plot dashboard url");
+            return true;
+        }
+
+        int port = plugin.getConfig().getInt("dashboard.port", 8080);
+        String host = plugin.getConfig().getString("dashboard.public-host", "localhost");
+        String link = "http://" + host + ":" + port + "/streuland-dashboard";
+        player.sendMessage("§aDashboard: §b" + link);
+        if (!player.hasPermission("streuland.admin")) {
+            player.sendMessage("§7Hinweis: Du hast nur Lesezugriff auf das Dashboard.");
+        } else {
+            player.sendMessage("§7Admin-Modus aktiv: volle Dashboard-Steuerung verfügbar.");
+        }
+        return true;
+    }
 
     private boolean handleMarket(Player player, String[] args) {
         return plotMarketService.handleMarketCommand(player, args);

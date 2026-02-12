@@ -1,21 +1,26 @@
 package de.streuland.dashboard;
 
+import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.analytics.PlotAnalyticsRecord;
 import de.streuland.api.event.PlotUpgradedEvent;
-import de.streuland.district.District;
-import de.streuland.district.DistrictManager;
 import de.streuland.event.PlotCreatedEvent;
+import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
+import de.streuland.plot.market.MarketListing;
+import de.streuland.plot.market.MarketSale;
+import de.streuland.plot.market.PlotMarketService;
 import org.bukkit.World;
+import org.bukkit.block.Biome;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -25,38 +30,43 @@ import java.time.Instant;
 import java.util.*;
 
 /**
- * Hosts REST endpoints and dashboard assets.
+ * Hosts dashboard REST endpoints and static assets.
  */
 public class RestApiController implements Listener {
     private final JavaPlugin plugin;
     private final PlotManager plotManager;
-    private final DistrictManager districtManager;
+    private final NeighborhoodService neighborhoodService;
     private final InMemoryPlotAnalyticsService analyticsService;
-    private final PlotAnalyticsExporter analyticsExporter;
+    private final DashboardDataExporter dataExporter;
+    private final PlotMarketService marketService;
+    private final Gson gson;
     private HttpServer httpServer;
     private DashboardWebSocketServer webSocketServer;
 
     public RestApiController(JavaPlugin plugin,
                              PlotManager plotManager,
-                             DistrictManager districtManager,
+                             NeighborhoodService neighborhoodService,
                              InMemoryPlotAnalyticsService analyticsService,
-                             PlotAnalyticsExporter analyticsExporter) {
+                             DashboardDataExporter dataExporter,
+                             PlotMarketService marketService) {
         this.plugin = plugin;
         this.plotManager = plotManager;
-        this.districtManager = districtManager;
+        this.neighborhoodService = neighborhoodService;
         this.analyticsService = analyticsService;
-        this.analyticsExporter = analyticsExporter;
+        this.dataExporter = dataExporter;
+        this.marketService = marketService;
+        this.gson = new Gson();
     }
 
     public void start() throws IOException {
         int port = plugin.getConfig().getInt("dashboard.port", 8080);
         int wsPort = plugin.getConfig().getInt("dashboard.websocket-port", 8081);
         httpServer = HttpServer.create(new InetSocketAddress(port), 0);
-        httpServer.createContext("/api/plots", exchange -> writeJson(exchange, buildPlotsJson()));
-        httpServer.createContext("/api/biomes", exchange -> writeJson(exchange, buildBiomeBreakdownJson()));
-        httpServer.createContext("/api/upgrades", exchange -> writeJson(exchange, buildUpgradeStatsJson()));
-        httpServer.createContext("/api/plots/geojson", exchange -> writeJson(exchange, analyticsExporter.toGeoJson(plotManager.getAllPlots())));
-        httpServer.createContext("/api/districts", new DistrictHeatmapHandler());
+        httpServer.createContext("/api/map/plots", exchange -> writeJson(exchange, dataExporter.toGeoJson(plotManager.getAllPlots(), plotManager.getWorld())));
+        httpServer.createContext("/api/map/heatmap", exchange -> writeJson(exchange, buildLiveHeatmapJson()));
+        httpServer.createContext("/api/neighborhoods", new NeighborhoodHandler());
+        httpServer.createContext("/api/market/listings", exchange -> writeJson(exchange, buildMarketListingsJson()));
+        httpServer.createContext("/api/biomes/stats", exchange -> writeJson(exchange, buildBiomeStatsJson()));
         httpServer.createContext("/streuland-dashboard", new DashboardStaticHandler());
         httpServer.start();
 
@@ -84,138 +94,109 @@ public class RestApiController implements Listener {
     public void onPlotCreated(PlotCreatedEvent event) {
         Plot plot = event.getPlot();
         analyticsService.record(new PlotAnalyticsRecord(plot.getPlotId(), plot.getOwner(), "plot_created", Instant.now(), 1));
-        if (webSocketServer != null) {
-            webSocketServer.broadcastJson("{\"type\":\"plot_created\",\"plotId\":\"" + plot.getPlotId() + "\",\"x\":" + plot.getCenterX() + ",\"z\":" + plot.getCenterZ() + "}");
-        }
+        broadcast("plot_created", plot.getPlotId());
     }
 
     @EventHandler
     public void onPlotUpgraded(PlotUpgradedEvent event) {
         analyticsService.record(new PlotAnalyticsRecord(event.getPlotId(), null, "plot_upgraded", Instant.now(), event.getToLevel()));
-        if (webSocketServer != null) {
-            webSocketServer.broadcastJson("{\"type\":\"plot_upgraded\",\"plotId\":\"" + event.getPlotId() + "\",\"fromLevel\":" + event.getFromLevel() + ",\"toLevel\":" + event.getToLevel() + "}");
-        }
+        broadcast("plot_upgraded", event.getPlotId());
     }
 
-    private String buildPlotsJson() {
-        Collection<Plot> plots = plotManager.getAllPlots();
+    private void broadcast(String type, String plotId) {
+        if (webSocketServer == null) {
+            return;
+        }
+        Map<String, Object> event = new HashMap<>();
+        event.put("type", type);
+        event.put("plotId", plotId);
+        event.put("ts", System.currentTimeMillis());
+        webSocketServer.broadcastJson(gson.toJson(event));
+    }
+
+    private String buildLiveHeatmapJson() {
         List<PlotAnalyticsRecord> records = analyticsService.getRecordsSnapshot();
-        int claimed = 0;
-        StringBuilder json = new StringBuilder("{\"total\":").append(plots.size()).append(",\"claimed\":");
-        for (Plot plot : plots) {
-            if (plot.getOwner() != null) {
-                claimed++;
-            }
-        }
-        json.append(claimed).append(",\"unclaimed\":").append(plots.size() - claimed).append(",\"plots\":[");
-        boolean first = true;
-        for (Plot plot : plots) {
-            if (!first) {
-                json.append(',');
-            }
-            first = false;
-            int eventCount = 0;
-            for (PlotAnalyticsRecord record : records) {
-                if (plot.getPlotId().equals(record.getPlotId())) {
-                    eventCount++;
-                }
-            }
-            json.append("{\"plotId\":\"").append(plot.getPlotId()).append("\",\"x\":").append(plot.getCenterX())
-                .append(",\"z\":").append(plot.getCenterZ()).append(",\"size\":").append(plot.getSize())
-                .append(",\"state\":\"").append(plot.getState().name()).append("\",\"analyticsEvents\":").append(eventCount).append("}");
-        }
-        json.append("]}");
-        return json.toString();
-    }
-
-    private String buildBiomeBreakdownJson() {
-        World world = plotManager.getWorld();
-        Map<String, Integer> counts = new HashMap<>();
-        for (Plot plot : plotManager.getAllPlots()) {
-            String biome = world.getBiome(plot.getCenterX(), plot.getCenterZ()).name();
-            counts.put(biome, counts.getOrDefault(biome, 0) + 1);
-        }
-        StringBuilder json = new StringBuilder("{\"biomes\":[");
-        boolean first = true;
-        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
-            if (!first) {
-                json.append(',');
-            }
-            first = false;
-            json.append("{\"biome\":\"").append(entry.getKey()).append("\",\"plots\":").append(entry.getValue()).append("}");
-        }
-        json.append("]}");
-        return json.toString();
-    }
-
-    private String buildUpgradeStatsJson() {
-        List<PlotAnalyticsRecord> records = analyticsService.getRecordsSnapshot();
-        int totalUpgrades = 0;
-        double averageLevel = 0;
+        long cutoff = Instant.now().minusSeconds(15 * 60).toEpochMilli();
+        Map<String, Integer> byPlot = new HashMap<>();
         for (PlotAnalyticsRecord record : records) {
-            if ("plot_upgraded".equals(record.getEventType())) {
-                totalUpgrades++;
-                averageLevel += record.getValue();
+            if (record.getTimestamp().toEpochMilli() >= cutoff && record.getPlotId() != null) {
+                byPlot.put(record.getPlotId(), byPlot.getOrDefault(record.getPlotId(), 0) + 1);
             }
         }
-        if (totalUpgrades > 0) {
-            averageLevel /= totalUpgrades;
+
+        List<Map<String, Object>> points = new ArrayList<>();
+        for (Plot plot : plotManager.getAllPlots()) {
+            int intensity = byPlot.getOrDefault(plot.getPlotId(), 0);
+            if (intensity > 0) {
+                Map<String, Object> point = new HashMap<>();
+                point.put("plotId", plot.getPlotId());
+                point.put("x", plot.getCenterX());
+                point.put("z", plot.getCenterZ());
+                point.put("intensity", intensity);
+                points.add(point);
+            }
         }
-        return "{\"totalUpgrades\":" + totalUpgrades + ",\"averageUpgradeLevel\":" + String.format(Locale.US, "%.2f", averageLevel) + "}";
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("windowMinutes", 15);
+        payload.put("points", points);
+        return gson.toJson(payload);
     }
 
-    private String buildDistrictHeatmapJson(String districtId) {
-        District district = districtManager.getDistrictById(districtId);
-        if (district == null || district.getPlotIds().isEmpty()) {
-            return "{\"districtId\":\"" + districtId + "\",\"grid\":[],\"cellSize\":64}";
-        }
+    private String buildMarketListingsJson() {
+        List<MarketListing> listings = marketService.getActiveListingsSnapshot();
+        List<MarketSale> sales = marketService.getSalesHistorySnapshot();
 
-        List<Plot> districtPlots = new ArrayList<>();
-        for (String plotId : district.getPlotIds()) {
-            for (Plot plot : plotManager.getAllPlots()) {
-                if (plotId.equals(plot.getPlotId())) {
-                    districtPlots.add(plot);
-                    break;
+        List<Map<String, Object>> payload = new ArrayList<>();
+        for (MarketListing listing : listings) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("plotId", listing.getPlotId());
+            row.put("price", listing.getPrice());
+            row.put("biome", listing.getBiome());
+            row.put("level", listing.getLevel());
+            row.put("districtTier", listing.getDistrictTier());
+            row.put("valuation", listing.getValuation());
+            row.put("listedAt", listing.getTimestamp());
+            List<Map<String, Object>> history = new ArrayList<>();
+            for (MarketSale sale : sales) {
+                if (listing.getPlotId().equalsIgnoreCase(sale.getPlotId())) {
+                    Map<String, Object> p = new HashMap<>();
+                    p.put("price", sale.getPrice());
+                    p.put("timestamp", sale.getTimestamp());
+                    history.add(p);
                 }
             }
+            row.put("priceHistory", history);
+            payload.add(row);
         }
+        return gson.toJson(Collections.singletonMap("listings", payload));
+    }
 
-        int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
-        for (Plot plot : districtPlots) {
-            minX = Math.min(minX, plot.getCenterX());
-            maxX = Math.max(maxX, plot.getCenterX());
-            minZ = Math.min(minZ, plot.getCenterZ());
-            maxZ = Math.max(maxZ, plot.getCenterZ());
-        }
-
-        int cellSize = plugin.getConfig().getInt("dashboard.heatmap-cell-size", 64);
-        int width = ((maxX - minX) / cellSize) + 1;
-        int height = ((maxZ - minZ) / cellSize) + 1;
-        int[][] grid = new int[height][width];
-
-        for (Plot plot : districtPlots) {
-            int x = (plot.getCenterX() - minX) / cellSize;
-            int z = (plot.getCenterZ() - minZ) / cellSize;
-            grid[z][x] += 1;
-        }
-
-        StringBuilder json = new StringBuilder("{\"districtId\":\"").append(districtId)
-                .append("\",\"origin\":{\"x\":").append(minX).append(",\"z\":").append(minZ).append("},\"cellSize\":").append(cellSize).append(",\"grid\":[");
-        for (int z = 0; z < height; z++) {
-            if (z > 0) {
-                json.append(',');
+    private String buildBiomeStatsJson() {
+        World world = plotManager.getWorld();
+        Map<String, Map<String, Object>> data = new TreeMap<>();
+        for (Plot plot : plotManager.getAllPlots()) {
+            Biome biome = world.getBlockAt(plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ()).getBiome();
+            Map<String, Object> aggregate = data.computeIfAbsent(biome.name(), ignored -> {
+                Map<String, Object> init = new HashMap<>();
+                init.put("biome", biome.name());
+                init.put("totalArea", 0);
+                init.put("playerCount", 0);
+                init.put("owners", new HashSet<String>());
+                return init;
+            });
+            aggregate.put("totalArea", (Integer) aggregate.get("totalArea") + (plot.getSize() * plot.getSize()));
+            if (plot.getOwner() != null) {
+                ((Set<String>) aggregate.get("owners")).add(plot.getOwner().toString());
             }
-            json.append('[');
-            for (int x = 0; x < width; x++) {
-                if (x > 0) {
-                    json.append(',');
-                }
-                json.append(grid[z][x]);
-            }
-            json.append(']');
         }
-        json.append("]}");
-        return json.toString();
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map<String, Object> aggregate : data.values()) {
+            Set<String> owners = (Set<String>) aggregate.remove("owners");
+            aggregate.put("playerCount", owners.size());
+            rows.add(aggregate);
+        }
+        return gson.toJson(Collections.singletonMap("biomes", rows));
     }
 
     private void writeJson(HttpExchange exchange, String json) throws IOException {
@@ -236,16 +217,17 @@ public class RestApiController implements Listener {
         }
     }
 
-    private class DistrictHeatmapHandler implements HttpHandler {
+    private class NeighborhoodHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String path = exchange.getRequestURI().getPath();
             String[] parts = path.split("/");
-            if (parts.length == 5 && "api".equals(parts[1]) && "districts".equals(parts[2]) && "heatmap".equals(parts[4])) {
-                writeJson(exchange, buildDistrictHeatmapJson(parts[3]));
-            } else {
-                exchange.sendResponseHeaders(404, -1);
+            if (parts.length == 4) {
+                String plotId = parts[3];
+                writeJson(exchange, gson.toJson(neighborhoodService.buildNeighborhoodGraph(plotId)));
+                return;
             }
+            exchange.sendResponseHeaders(404, -1);
         }
     }
 
@@ -290,7 +272,7 @@ public class RestApiController implements Listener {
         private byte[] readAllBytes(InputStream input) throws IOException {
             byte[] buffer = new byte[4096];
             int read;
-            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
             while ((read = input.read(buffer)) != -1) {
                 out.write(buffer, 0, read);
             }
