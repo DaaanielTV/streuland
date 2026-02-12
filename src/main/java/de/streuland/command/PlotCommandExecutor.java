@@ -1,5 +1,8 @@
 package de.streuland.command;
 
+import de.streuland.admin.AdminPlotService;
+import de.streuland.analytics.PlotAnalyticsService;
+import de.streuland.analytics.PlayerEditStats;
 import de.streuland.path.PathGenerator;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
@@ -52,13 +55,16 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final QuestService questService;
     private final QuestTracker questTracker;
     private final PlotMarketService plotMarketService;
+    private final AdminPlotService adminPlotService;
+    private final PlotAnalyticsService plotAnalyticsService;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     
     public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator,
                                SnapshotManager snapshotManager, RuleEngine ruleEngine, PlotSkinService plotSkinService,
                                BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
-                               QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService) {
+                               QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
+                               AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -70,6 +76,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.questService = questService;
         this.questTracker = questTracker;
         this.plotMarketService = plotMarketService;
+        this.adminPlotService = adminPlotService;
+        this.plotAnalyticsService = plotAnalyticsService;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
     }
@@ -130,6 +138,10 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleQuest(player, args);
             case "market":
                 return handleMarket(player, args);
+            case "inspect":
+                return adminPlotService.handleInspect(player, args);
+            case "admin":
+                return adminPlotService.handleAdmin(player, args);
             default:
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
@@ -415,6 +427,26 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§eBeansprucht: §f" + claimed);
         player.sendMessage("§eUnbeansprucht: §f" + unclaimed);
         player.sendMessage("§eGrid-Zellen: §f" + plotManager.getSpatialGrid().getCellCount());
+
+        Plot currentPlot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        if (currentPlot != null) {
+            player.sendMessage("§6=== Edit-Statistik für " + currentPlot.getPlotId() + " ===");
+            List<PlayerEditStats> editStats = plotAnalyticsService.getEditStatsForPlot(currentPlot.getPlotId());
+            if (editStats.isEmpty()) {
+                player.sendMessage("§7Noch keine Edit-Statistik vorhanden.");
+            } else {
+                int shown = 0;
+                for (PlayerEditStats stat : editStats) {
+                    if (shown >= 5) {
+                        break;
+                    }
+                    OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(stat.getPlayerId());
+                    String name = offlinePlayer.getName() == null ? stat.getPlayerId().toString() : offlinePlayer.getName();
+                    player.sendMessage("§e" + name + "§f: Place=" + stat.getPlaces() + ", Break=" + stat.getBreaks() + ", Burn=" + stat.getBurns() + ", Total=" + stat.getTotalEdits());
+                    shown++;
+                }
+            }
+        }
         return true;
     }
 
@@ -535,6 +567,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
         player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
         player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots");
+        player.sendMessage("§e/plot inspect <x> <z>§f - Zeige Block-Änderungslog für Koordinaten");
+        player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
     }
 
 

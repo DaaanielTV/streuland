@@ -1,5 +1,8 @@
 package de.streuland;
 
+import de.streuland.admin.AdminPlotService;
+import de.streuland.admin.BlockChangeLogger;
+import de.streuland.admin.DailyPlotBackupService;
 import de.streuland.command.PlotCommandExecutor;
 import de.streuland.command.DistrictCommandExecutor;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
@@ -10,6 +13,7 @@ import de.streuland.dashboard.PlotAnalyticsExporter;
 import de.streuland.quest.QuestService;
 import de.streuland.quest.QuestTracker;
 import de.streuland.dashboard.RestApiController;
+import de.streuland.listener.BlockChangeListener;
 import de.streuland.listener.ProtectionListener;
 import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.neighborhood.ResourceSyncScheduler;
@@ -40,6 +44,7 @@ public class StreulandPlugin extends JavaPlugin {
     private PlotStorage plotStorage;
     private PathGenerator pathGenerator;
     private ProtectionListener protectionListener;
+    private BlockChangeListener blockChangeListener;
     private SnapshotStorage snapshotStorage;
     private SnapshotManager snapshotManager;
     private RuleEngine ruleEngine;
@@ -57,6 +62,9 @@ public class StreulandPlugin extends JavaPlugin {
     private QuestTracker questTracker;
     private PlotMarketService plotMarketService;
     private Economy economy;
+    private BlockChangeLogger blockChangeLogger;
+    private AdminPlotService adminPlotService;
+    private DailyPlotBackupService dailyPlotBackupService;
     
     @Override
     public void onEnable() {
@@ -99,13 +107,16 @@ public class StreulandPlugin extends JavaPlugin {
             biomeEffectScheduler.start();
             getLogger().info("✓ BiomeEffectScheduler initialized");
 
+            analyticsService = new InMemoryPlotAnalyticsService();
+            blockChangeLogger = new BlockChangeLogger(this, plotManager);
+            adminPlotService = new AdminPlotService(plotManager, snapshotManager, blockChangeLogger);
+
             protectionListener = new ProtectionListener(this, plotManager);
-            getLogger().info("✓ ProtectionListener registered");
+            blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService);
+            getLogger().info("✓ Protection/BlockChange listeners registered");
 
             ruleListener = new RuleListener(this, ruleEngine, biomeBonusService);
             getLogger().info("✓ RuleListener registered");
-            
-            analyticsService = new InMemoryPlotAnalyticsService();
 
             setupEconomy();
             if (economy == null) {
@@ -136,12 +147,16 @@ public class StreulandPlugin extends JavaPlugin {
 
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
 
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService);
             getCommand("plot").setExecutor(commandExecutor);
 
             // Register district command
             getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager));
             getLogger().info("✓ Commands registered");
+
+            dailyPlotBackupService = new DailyPlotBackupService(this, plotManager, snapshotManager);
+            dailyPlotBackupService.start();
+            getLogger().info("✓ Daily backup scheduler initialized");
 
             PlotAnalyticsExporter analyticsExporter = new PlotAnalyticsExporter(analyticsService);
             restApiController = new RestApiController(this, plotManager, districtManager, analyticsService, analyticsExporter);
@@ -182,6 +197,9 @@ public class StreulandPlugin extends JavaPlugin {
         }
         if (restApiController != null) {
             restApiController.stop();
+        }
+        if (dailyPlotBackupService != null) {
+            dailyPlotBackupService.stop();
         }
         getLogger().info("Streuland disabled");
     }
