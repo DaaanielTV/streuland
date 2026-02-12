@@ -21,11 +21,14 @@ import de.streuland.plot.snapshot.SnapshotStorage;
 import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.biome.BiomeEffectScheduler;
 import de.streuland.plot.biome.BiomeBonusService;
+import de.streuland.plot.market.PlotMarketService;
 import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
 import de.streuland.rules.listener.RuleListener;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
+import net.milkbowl.vault.economy.Economy;
 
 /**
  * Streuland Main Plugin Class
@@ -52,6 +55,8 @@ public class StreulandPlugin extends JavaPlugin {
     private RestApiController restApiController;
     private QuestService questService;
     private QuestTracker questTracker;
+    private PlotMarketService plotMarketService;
+    private Economy economy;
     
     @Override
     public void onEnable() {
@@ -101,6 +106,13 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ RuleListener registered");
             
             analyticsService = new InMemoryPlotAnalyticsService();
+
+            setupEconomy();
+            if (economy == null) {
+                getLogger().warning("Vault Economy provider not found. Plot market will be disabled.");
+            } else {
+                getLogger().info("✓ Vault economy connected: " + economy.getName());
+            }
             questService = new QuestService(this, plotStorage, ruleEngine);
             getLogger().info("✓ QuestService initialized");
             neighborhoodService = new NeighborhoodService(this, plotManager, new DistrictClusterService(), analyticsService);
@@ -121,8 +133,10 @@ public class StreulandPlugin extends JavaPlugin {
             questTracker = new QuestTracker(plotManager, districtManager, questService);
             getServer().getPluginManager().registerEvents(questTracker, this);
             getLogger().info("✓ District system initialized");
-            
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker);
+
+            plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
+
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService);
             getCommand("plot").setExecutor(commandExecutor);
 
             // Register district command
@@ -146,6 +160,15 @@ public class StreulandPlugin extends JavaPlugin {
         }
     }
     
+    private void setupEconomy() {
+        if (getServer().getPluginManager().getPlugin("Vault") == null) {
+            economy = null;
+            return;
+        }
+        RegisteredServiceProvider<Economy> rsp = getServer().getServicesManager().getRegistration(Economy.class);
+        economy = rsp == null ? null : rsp.getProvider();
+    }
+
     @Override
     public void onDisable() {
         if (plotSkinService != null) {

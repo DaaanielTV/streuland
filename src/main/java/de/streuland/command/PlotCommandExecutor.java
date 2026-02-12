@@ -10,6 +10,7 @@ import de.streuland.plot.skin.PlotTheme;
 import de.streuland.plot.snapshot.SnapshotManager;
 import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.plot.snapshot.SnapshotMeta;
+import de.streuland.plot.market.PlotMarketService;
 import de.streuland.rules.RuleEngine;
 import de.streuland.quest.QuestDefinition;
 import de.streuland.quest.QuestProgress;
@@ -50,13 +51,14 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final NeighborhoodService neighborhoodService;
     private final QuestService questService;
     private final QuestTracker questTracker;
+    private final PlotMarketService plotMarketService;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     
     public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator,
                                SnapshotManager snapshotManager, RuleEngine ruleEngine, PlotSkinService plotSkinService,
                                BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
-                               QuestService questService, QuestTracker questTracker) {
+                               QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -67,6 +69,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.neighborhoodService = neighborhoodService;
         this.questService = questService;
         this.questTracker = questTracker;
+        this.plotMarketService = plotMarketService;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
     }
@@ -125,6 +128,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleNeighbor(player, args);
             case "quest":
                 return handleQuest(player, args);
+            case "market":
+                return handleMarket(player, args);
             default:
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
@@ -529,6 +534,12 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
         player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
+        player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots");
+    }
+
+
+    private boolean handleMarket(Player player, String[] args) {
+        return plotMarketService.handleMarketCommand(player, args);
     }
 
 

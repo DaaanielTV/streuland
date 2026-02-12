@@ -240,6 +240,18 @@ public class PlotManager {
         return storage.unclaimPlot(plotId) != null;
     }
 
+
+    public boolean transferPlotOwnership(String plotId, UUID currentOwner, UUID newOwner) {
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || plot.getState() != Plot.PlotState.CLAIMED || plot.getOwner() == null) {
+            return false;
+        }
+        if (!plot.getOwner().equals(currentOwner)) {
+            return false;
+        }
+        return storage.transferOwnership(plotId, currentOwner, newOwner) != null;
+    }
+
     public boolean deletePlot(String plotId, UUID requester, boolean force) {
         Plot plot = storage.getPlot(plotId);
         if (plot == null) {
