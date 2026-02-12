@@ -17,7 +17,6 @@ de\streuland\rules\RuleProvider.class
 de\streuland\analytics\PlotAnalyticsRecord.class
 de\streuland\plot\distribution\PlotLocationScorer.class
 de\streuland\plot\market\PlotMarketService.class
-de\streuland\dashboard\RestApiController$DistrictHeatmapHandler.class
 de\streuland\weather\SeasonalWeatherService$Season.class
 de\streuland\weather\SeasonalEffectListener.class
 de\streuland\district\DistrictLevel.class
@@ -93,7 +92,9 @@ de\streuland\admin\BlockChangeLogger.class
 de\streuland\command\DistrictCommandExecutor.class
 de\streuland\plot\biome\BiomeConfigLoader.class
 de\streuland\neighborhood\NeighborhoodStorage.class
+de\streuland\dashboard\DashboardDataExporter.class
 de\streuland\district\District.class
+de\streuland\dashboard\RestApiController$NeighborhoodHandler.class
 de\streuland\analytics\PlayerEditStats.class
 de\streuland\plot\snapshot\SnapshotMeta.class
 de\streuland\plot\snapshot\PlotSnapshot.class
