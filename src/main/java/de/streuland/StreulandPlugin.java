@@ -9,6 +9,7 @@ import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.district.DistrictClusterService;
 import de.streuland.district.DistrictManager;
 import de.streuland.district.DistrictProgressService;
+import de.streuland.district.TraderNpcService;
 import de.streuland.dashboard.PlotAnalyticsExporter;
 import de.streuland.quest.QuestService;
 import de.streuland.quest.QuestTracker;
@@ -64,6 +65,7 @@ public class StreulandPlugin extends JavaPlugin {
     private BlockChangeLogger blockChangeLogger;
     private AdminPlotService adminPlotService;
     private DailyPlotBackupService dailyPlotBackupService;
+    private TraderNpcService traderNpcService;
     
     @Override
     public void onEnable() {
@@ -137,13 +139,16 @@ public class StreulandPlugin extends JavaPlugin {
             districtProgressService = new DistrictProgressService(this, plotManager, districtManager);
             getServer().getPluginManager().registerEvents(districtManager, this);
             getServer().getPluginManager().registerEvents(districtProgressService, this);
+            traderNpcService = new TraderNpcService(this, plotManager, districtManager, analyticsService, economy);
+            traderNpcService.start();
+            getServer().getPluginManager().registerEvents(traderNpcService, this);
             questTracker = new QuestTracker(plotManager, districtManager, questService);
             getServer().getPluginManager().registerEvents(questTracker, this);
             getLogger().info("✓ District system initialized");
 
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
 
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService);
             getCommand("plot").setExecutor(commandExecutor);
 
             // Register district command
