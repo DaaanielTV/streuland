@@ -237,6 +237,27 @@ public class PlotStorage {
     }
 
     /**
+     * Transfers ownership to a new owner and resets trust/plot data for a fresh start.
+     */
+    public synchronized Plot transferOwnership(String plotId, UUID expectedOwner, UUID newOwner) {
+        Plot plot = cachedPlots.get(plotId);
+        if (plot == null || plot.getState() != Plot.PlotState.CLAIMED || plot.getOwner() == null) {
+            return null;
+        }
+        if (expectedOwner != null && !expectedOwner.equals(plot.getOwner())) {
+            return null;
+        }
+
+        Plot transferred = new Plot(plot.getPlotId(), plot.getCenterX(), plot.getCenterZ(),
+                plot.getSize(), newOwner, System.currentTimeMillis(), plot.getSpawnY(),
+                Plot.PlotState.CLAIMED);
+
+        plotData.put(plotId, new PlotData());
+        savePlot(transferred);
+        return transferred;
+    }
+
+    /**
      * Deletes a plot from storage and returns the removed plot if present.
      */
     public synchronized Plot deletePlot(String plotId) {
