@@ -1,0 +1,16 @@
+plot:
+  size: 72
+  min-distance: 140
+  max-search-radius: 3500
+  max-plots-per-player: 2
+biome-rules:
+  allowed:
+    - THE_END
+    - END_HIGHLANDS
+upgrades:
+  tree:
+    - base
+    - void-bridges
+metadata:
+  plot-count-cap: 500
+  biome-distribution: {}

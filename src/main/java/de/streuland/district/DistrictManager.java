@@ -69,9 +69,18 @@ public class DistrictManager implements Listener {
     }
 
     public CompletableFuture<Void> rebuildClustersAsync() {
-        Collection<Plot> plotsSnapshot = new ArrayList<>(plotManager.getAllPlots());
-        return CompletableFuture.supplyAsync(() -> clusterService.clusterPlots(plotsSnapshot))
-                .thenAccept(clusters -> Bukkit.getScheduler().runTask(plugin, () -> applyClusters(clusters)));
+        return CompletableFuture.supplyAsync(() -> {
+            List<Set<Plot>> allClusters = new ArrayList<>();
+            for (String worldName : plotManager.getManagedWorlds()) {
+                org.bukkit.World world = Bukkit.getWorld(worldName);
+                if (world == null) {
+                    continue;
+                }
+                Collection<Plot> plotsSnapshot = new ArrayList<>(plotManager.getAllPlots(world));
+                allClusters.addAll(clusterService.clusterPlots(plotsSnapshot));
+            }
+            return allClusters;
+        }).thenAccept(clusters -> Bukkit.getScheduler().runTask(plugin, () -> applyClusters(clusters)));
     }
 
     private void applyClusters(List<Set<Plot>> clusters) {

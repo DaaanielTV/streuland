@@ -24,13 +24,15 @@ public class PlotStorage {
     private final JavaPlugin plugin;
     private final File dataFolder;
     private final File indexFile;
+    private final String worldName;
     private final Map<String, Plot> cachedPlots;
     private final Map<String, PlotData> plotData;
     private final Map<UUID, Set<String>> ownerToPlotIds;
     
-    public PlotStorage(JavaPlugin plugin) {
+    public PlotStorage(JavaPlugin plugin, String worldName, PlotStoragePartitioner partitioner) {
         this.plugin = plugin;
-        this.dataFolder = new File(plugin.getDataFolder(), "plots");
+        this.worldName = worldName;
+        this.dataFolder = partitioner.resolveWorldFolder(worldName);
         this.indexFile = new File(dataFolder, "index.yml");
         this.cachedPlots = new HashMap<>();
         this.plotData = new HashMap<>();
@@ -135,7 +137,7 @@ public class PlotStorage {
             }
         }
 
-        plugin.getLogger().info("Loaded " + cachedPlots.size() + " plots from disk");
+        plugin.getLogger().info("Loaded " + cachedPlots.size() + " plots from disk for world " + worldName);
     }
 
     private Plot loadPlotFromFile(File file) {
@@ -309,6 +311,7 @@ public class PlotStorage {
 
     private void saveIndex() {
         FileConfiguration config = new YamlConfiguration();
+        config.set("world", worldName);
         config.set("plots", new ArrayList<>(cachedPlots.keySet()));
         config.set("count", cachedPlots.size());
         config.set("last-updated", System.currentTimeMillis());
@@ -333,6 +336,11 @@ public class PlotStorage {
             return;
         }
         ownerToPlotIds.computeIfAbsent(owner, ignored -> new HashSet<>()).add(plot.getPlotId());
+    }
+
+
+    public String getWorldName() {
+        return worldName;
     }
 
     private void removeFromOwnerIndex(Plot plot) {

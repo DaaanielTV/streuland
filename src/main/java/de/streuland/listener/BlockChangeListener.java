@@ -80,7 +80,7 @@ public class BlockChangeListener implements Listener {
     }
 
     private void recordEditMetric(UUID playerId, int x, int z, String eventType) {
-        Plot plot = plotManager.getPlotAt(x, z);
+        Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
         if (plot == null) {
             return;
         }

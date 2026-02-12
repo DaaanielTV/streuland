@@ -46,7 +46,7 @@ public class RuleEngine {
     }
 
     public void handle(RuleTrigger trigger, Event event, Player player, Location location) {
-        Plot plot = location != null ? plotManager.getPlotAt(location.getBlockX(), location.getBlockZ()) : null;
+        Plot plot = location != null ? plotManager.getPlotAt(location.getWorld(), location.getBlockX(), location.getBlockZ()) : null;
         int plotLevel = plot != null ? plotLevelProvider.getPlotLevel(plot) : 0;
         Biome biome = location != null ? location.getBlock().getBiome() : null;
         RuleContext context = new RuleContext(trigger, event, player, plot, location, plotLevel, biome, this);
