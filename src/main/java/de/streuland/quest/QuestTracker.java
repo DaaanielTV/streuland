@@ -23,7 +23,7 @@ public class QuestTracker implements Listener {
 
     @EventHandler
     public void onBlockPlace(BlockPlaceEvent event) {
-        Plot plot = plotManager.getPlotAt(event.getBlock().getX(), event.getBlock().getZ());
+        Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), event.getBlock().getX(), event.getBlock().getZ());
         if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(event.getPlayer().getUniqueId())) {
             return;
         }
@@ -37,7 +37,7 @@ public class QuestTracker implements Listener {
     }
 
     public void onNeighborAdded(Player player) {
-        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
             return;
         }

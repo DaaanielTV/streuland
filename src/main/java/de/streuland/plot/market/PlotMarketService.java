@@ -158,7 +158,7 @@ public class PlotMarketService {
             return true;
         }
 
-        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
             player.sendMessage("§cDu musst auf deinem eigenen Plot stehen.");
             return true;
@@ -268,7 +268,7 @@ public class PlotMarketService {
         if (args.length >= 3) {
             plotId = args[2];
         } else {
-            Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+            Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
             if (plot == null) {
                 player.sendMessage("§cVerwendung: /plot market history <plot_id> (oder auf einem Plot stehen)");
                 return true;

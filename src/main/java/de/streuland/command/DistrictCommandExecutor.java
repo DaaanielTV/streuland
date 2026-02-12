@@ -49,7 +49,7 @@ public class DistrictCommandExecutor implements CommandExecutor {
     }
 
     private boolean handleInfo(Player player) {
-        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         District district = districtManager.getDistrictForPlot(plot);
         if (district == null) {
             player.sendMessage("§cDu stehst in keinem Stadtteil!");
@@ -65,7 +65,7 @@ public class DistrictCommandExecutor implements CommandExecutor {
     }
 
     private boolean handleProgress(Player player) {
-        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         District district = districtManager.getDistrictForPlot(plot);
         if (district == null) {
             player.sendMessage("§cDu stehst in keinem Stadtteil!");

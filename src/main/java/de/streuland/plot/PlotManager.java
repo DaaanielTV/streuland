@@ -9,146 +9,149 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Central orchestrator for plot management.
- */
 public class PlotManager {
-    private final JavaPlugin plugin;
-    private final PlotStorage storage;
-    private final World world;
-    private final int plotSize;
-    private final int minDistance;
-    private final int maxSearchRadius;
-    private final int maxPlotsPerPlayer;
-    private final SpatialGrid spatialGrid;
+    private static class WorldContext {
+        private final World world;
+        private final PlotStorage storage;
+        private final SpatialGrid spatialGrid;
+        private final WorldConfig.WorldSettings settings;
+        private int plotCounter;
 
-    private int plotCounter;
-
-    public PlotManager(JavaPlugin plugin, PlotStorage storage) {
-        this.plugin = plugin;
-        this.storage = storage;
-        this.spatialGrid = new SpatialGrid(plugin);
-
-        FileConfiguration config = plugin.getConfig();
-        String worldName = config.getString("world.name", "world");
-        this.world = Bukkit.getWorld(worldName);
-        if (this.world == null) {
-            throw new IllegalStateException("World '" + worldName + "' not found!");
+        private WorldContext(JavaPlugin plugin, World world, PlotStorage storage, WorldConfig.WorldSettings settings) {
+            this.world = world;
+            this.storage = storage;
+            this.spatialGrid = new SpatialGrid(plugin);
+            this.settings = settings;
+            this.plotCounter = storage.getNextPlotNumber();
+            this.spatialGrid.rebuild(storage.getAllPlots());
         }
-
-        this.plotSize = config.getInt("plot.size", 64);
-        this.minDistance = config.getInt("plot.min-distance", 100);
-        this.maxSearchRadius = config.getInt("plot.max-search-radius", 5000);
-        this.maxPlotsPerPlayer = config.getInt("plot.max-plots-per-player", 4);
-
-        this.plotCounter = storage.getNextPlotNumber();
-        
-        // Rebuild spatial grid from loaded plots
-        spatialGrid.rebuild(storage.getAllPlots());
-
-        plugin.getLogger().info("PlotManager initialized: world=" + worldName + ", size=" + plotSize + ", minDist=" + minDistance);
     }
 
-    /**
-     * Creates or claims a plot for a player.
-     */
-    public CompletableFuture<Plot> createPlotAsync(UUID playerUUID) {
+    private final JavaPlugin plugin;
+    private final WorldConfig worldConfig;
+    private final Map<String, WorldContext> contexts = new HashMap<>();
+    private final String primaryWorldName;
+
+    public PlotManager(JavaPlugin plugin) {
+        this.plugin = plugin;
+        this.worldConfig = new WorldConfig(plugin);
+        PlotStoragePartitioner partitioner = new PlotStoragePartitioner(plugin);
+
+        for (WorldConfig.WorldSettings settings : worldConfig.getAllWorlds()) {
+            World world = Bukkit.getWorld(settings.getWorldName());
+            if (world == null) {
+                plugin.getLogger().warning("Configured plot world not loaded: " + settings.getWorldName());
+                continue;
+            }
+            PlotStorage storage = new PlotStorage(plugin, settings.getWorldName(), partitioner);
+            contexts.put(settings.getWorldName(), new WorldContext(plugin, world, storage, settings));
+        }
+
+        FileConfiguration config = plugin.getConfig();
+        this.primaryWorldName = config.getString("world.name", "world_main");
+        if (!contexts.containsKey(primaryWorldName) && !contexts.isEmpty()) {
+            plugin.getLogger().warning("Primary world " + primaryWorldName + " unavailable, using fallback world");
+        }
+    }
+
+    private WorldContext contextFor(World world) {
+        if (world != null && contexts.containsKey(world.getName())) {
+            return contexts.get(world.getName());
+        }
+        if (contexts.containsKey(primaryWorldName)) {
+            return contexts.get(primaryWorldName);
+        }
+        return contexts.values().stream().findFirst().orElseThrow(() -> new IllegalStateException("No plot world available"));
+    }
+
+    public CompletableFuture<Plot> createPlotAsync(UUID playerUUID, World world) {
+        WorldContext ctx = contextFor(world);
         return CompletableFuture.supplyAsync(() -> {
-            for (Plot plot : storage.getAllPlots()) {
+            for (Plot plot : ctx.storage.getAllPlots()) {
                 if (plot.getAreaType() == AreaType.PLOT_UNCLAIMED) {
-                    // Found an unclaimed plot, claim it for the player
-                    Plot claimedPlot = claimPlotForPlayer(plot, playerUUID);
-                    plugin.getLogger().info("Player " + playerUUID + " claimed existing unclaimed plot " + plot.getPlotId());
-                    return claimedPlot;
+                    return claimPlotForPlayer(ctx, plot, playerUUID);
                 }
             }
 
             for (int attempts = 0; attempts < 10; attempts++) {
-                int x = random(-maxSearchRadius, maxSearchRadius);
-                int z = random(-maxSearchRadius, maxSearchRadius);
-                if (isValidPlotLocation(x, z)) {
-                    return createPlotAtLocation(playerUUID, x, z);
+                int x = random(-ctx.settings.getMaxSearchRadius(), ctx.settings.getMaxSearchRadius());
+                int z = random(-ctx.settings.getMaxSearchRadius(), ctx.settings.getMaxSearchRadius());
+                if (isValidPlotLocation(ctx, x, z)) {
+                    return createPlotAtLocation(ctx, playerUUID, x, z);
                 }
             }
-
-            plugin.getLogger().warning("Failed to find valid plot location for " + playerUUID + " after 10 attempts");
             return null;
         });
     }
 
-    private Plot createPlotAtLocation(UUID playerUUID, int centerX, int centerZ) {
-        String plotId = "plot_" + plotCounter++;
-        int spawnY = findSafeSpawnY(centerX, centerZ);
+    public CompletableFuture<Plot> createPlotAsync(UUID playerUUID) {
+        return createPlotAsync(playerUUID, getWorld());
+    }
 
-        Plot plot = new Plot(plotId, centerX, centerZ, plotSize, playerUUID, System.currentTimeMillis(), spawnY, Plot.PlotState.CLAIMED);
+    private Plot createPlotAtLocation(WorldContext ctx, UUID playerUUID, int centerX, int centerZ) {
+        String plotId = ctx.world.getName() + "_plot_" + ctx.plotCounter++;
+        int spawnY = findSafeSpawnY(ctx, centerX, centerZ);
+        Plot plot = new Plot(plotId, centerX, centerZ, ctx.settings.getPlotSize(), playerUUID, System.currentTimeMillis(), spawnY, Plot.PlotState.CLAIMED);
         Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, () -> {
-            storage.savePlot(plot);
-            spatialGrid.addPlot(plot);
+            ctx.storage.savePlot(plot);
+            ctx.spatialGrid.addPlot(plot);
             Bukkit.getPluginManager().callEvent(new de.streuland.event.PlotCreatedEvent(plot));
-            plugin.getLogger().info("Created plot " + plotId + " at (" + centerX + "," + centerZ + ") for " + playerUUID + " with spawn Y=" + spawnY);
         });
-
         return plot;
     }
 
-    private int findSafeSpawnY(int centerX, int centerZ) {
-        Block highestBlock = world.getHighestBlockAt(centerX, centerZ);
+    private int findSafeSpawnY(WorldContext ctx, int centerX, int centerZ) {
+        Block highestBlock = ctx.world.getHighestBlockAt(centerX, centerZ);
         int y = highestBlock.getY() + 1;
-
-        Block below = world.getBlockAt(centerX, y - 1, centerZ);
+        Block below = ctx.world.getBlockAt(centerX, y - 1, centerZ);
         if (below.isLiquid()) {
             for (int i = y; i < 256; i++) {
-                Block current = world.getBlockAt(centerX, i, centerZ);
-                Block belowCurrent = world.getBlockAt(centerX, i - 1, centerZ);
+                Block current = ctx.world.getBlockAt(centerX, i, centerZ);
+                Block belowCurrent = ctx.world.getBlockAt(centerX, i - 1, centerZ);
                 if (!current.isLiquid() && !belowCurrent.isLiquid() && !belowCurrent.getType().name().contains("AIR")) {
                     return i;
                 }
             }
         }
-
         return y;
     }
 
-    private boolean isValidPlotLocation(int x, int z) {
-        if (!spatialGrid.isLocationAvailable(x, z, plotSize)) {
+    private boolean isValidPlotLocation(WorldContext ctx, int x, int z) {
+        if (!ctx.spatialGrid.isLocationAvailable(x, z, ctx.settings.getPlotSize())) {
             return false;
         }
-
-        for (Plot plot : storage.getAllPlots()) {
+        for (Plot plot : ctx.storage.getAllPlots()) {
             double distance = Math.sqrt(Math.pow(x - plot.getCenterX(), 2) + Math.pow(z - plot.getCenterZ(), 2));
-            if (distance < minDistance) {
+            if (distance < ctx.settings.getMinDistance()) {
                 return false;
             }
         }
-
-        return isValidTerrain(x, z);
+        return isValidTerrain(ctx, x, z);
     }
 
-    private boolean isValidTerrain(int x, int z) {
+    private boolean isValidTerrain(WorldContext ctx, int x, int z) {
         FileConfiguration config = plugin.getConfig();
         boolean rejectWater = config.getBoolean("terrain.water-rejection", true);
         boolean rejectLava = config.getBoolean("terrain.lava-rejection", true);
         int waterThreshold = config.getInt("terrain.adjacent-water-threshold", 3);
 
-        Block block = world.getHighestBlockAt(x, z);
+        Block block = ctx.world.getHighestBlockAt(x, z);
         int y = block.getY();
 
         if (block.isLiquid()) {
             return !rejectWater;
         }
-
         if (rejectLava) {
-            Block belowBlock = world.getBlockAt(x, y - 1, z);
+            Block belowBlock = ctx.world.getBlockAt(x, y - 1, z);
             if (belowBlock.getType().toString().contains("LAVA")) {
                 return false;
             }
         }
-
         if (rejectWater && waterThreshold > 0) {
             int waterCount = 0;
             for (int dx = -2; dx <= 2; dx++) {
                 for (int dz = -2; dz <= 2; dz++) {
-                    Block adjacent = world.getBlockAt(x + dx, y, z + dz);
+                    Block adjacent = ctx.world.getBlockAt(x + dx, y, z + dz);
                     if (adjacent.isLiquid()) {
                         waterCount++;
                     }
@@ -158,19 +161,21 @@ public class PlotManager {
                 return false;
             }
         }
-
         return true;
     }
 
-    public Plot getPlotAt(int x, int z) {
-        return spatialGrid.getPlotAt(x, z);
+    public Plot getPlotAt(World world, int x, int z) {
+        return contextFor(world).spatialGrid.getPlotAt(x, z);
     }
 
-    public Plot getNearestPlot(int x, int z) {
+    public Plot getPlotAt(int x, int z) {
+        return getPlotAt(getWorld(), x, z);
+    }
+
+    public Plot getNearestPlot(World world, int x, int z) {
         double minDist = Double.MAX_VALUE;
         Plot nearest = null;
-
-        for (Plot plot : storage.getAllPlots()) {
+        for (Plot plot : contextFor(world).storage.getAllPlots()) {
             double dx = x - plot.getCenterX();
             double dz = z - plot.getCenterZ();
             double dist = Math.sqrt(dx * dx + dz * dz);
@@ -179,176 +184,173 @@ public class PlotManager {
                 nearest = plot;
             }
         }
-
         return nearest;
     }
 
-    
-    /**
-     * Claims an unclaimed plot and updates both storage and spatial index.
-     */
-    public Plot claimPlotForPlayer(Plot plot, UUID player) {
-        Plot claimedPlot = storage.claimPlot(plot.getPlotId(), player);
+    public Plot getNearestPlot(int x, int z) {
+        return getNearestPlot(getWorld(), x, z);
+    }
+
+    private Plot claimPlotForPlayer(WorldContext ctx, Plot plot, UUID player) {
+        Plot claimedPlot = ctx.storage.claimPlot(plot.getPlotId(), player);
         if (claimedPlot != null && claimedPlot != plot) {
-            spatialGrid.removePlot(plot);
-            spatialGrid.addPlot(claimedPlot);
+            ctx.spatialGrid.removePlot(plot);
+            ctx.spatialGrid.addPlot(claimedPlot);
         }
         return claimedPlot;
     }
 
-    /**
-     * Trusts a player on a plot (if caller is owner)
-     */
+    public Plot claimPlotForPlayer(Plot plot, UUID player) {
+        return claimPlotForPlayer(contextFor(getWorldForPlot(plot.getPlotId())), plot, player);
+    }
+
     public boolean trustPlayer(String plotId, UUID owner, UUID playerToTrust) {
+        PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);
         if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(owner)) {
             return false;
         }
-
         plot.addTrusted(playerToTrust);
         storage.savePlot(plot);
         return true;
     }
 
     public boolean untrustPlayer(String plotId, UUID owner, UUID playerToUntrust) {
+        PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);
         if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(owner)) {
             return false;
         }
-
         plot.removeTrusted(playerToUntrust);
         storage.savePlot(plot);
         return true;
     }
 
-    public Plot claimPlotAt(UUID player, int x, int z) {
-        Plot plot = getPlotAt(x, z);
+    public Plot claimPlotAt(UUID player, World world, int x, int z) {
+        Plot plot = getPlotAt(world, x, z);
         if (plot == null || plot.getAreaType() != AreaType.PLOT_UNCLAIMED) {
             return null;
         }
-        return claimPlotForPlayer(plot, player);
+        return claimPlotForPlayer(contextFor(world), plot, player);
     }
 
+    public Plot claimPlotAt(UUID player, int x, int z) { return claimPlotAt(player, getWorld(), x, z); }
+
     public boolean unclaimPlot(String plotId, UUID requester, boolean force) {
+        PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || plot.getAreaType() != AreaType.PLOT_CLAIMED) {
-            return false;
-        }
-        if (!force && (plot.getOwner() == null || !plot.getOwner().equals(requester))) {
-            return false;
-        }
+        if (plot == null || plot.getAreaType() != AreaType.PLOT_CLAIMED) return false;
+        if (!force && (plot.getOwner() == null || !plot.getOwner().equals(requester))) return false;
         return storage.unclaimPlot(plotId) != null;
     }
 
-
     public boolean transferPlotOwnership(String plotId, UUID currentOwner, UUID newOwner) {
+        PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || plot.getState() != Plot.PlotState.CLAIMED || plot.getOwner() == null) {
-            return false;
-        }
-        if (!plot.getOwner().equals(currentOwner)) {
-            return false;
-        }
+        if (plot == null || plot.getState() != Plot.PlotState.CLAIMED || plot.getOwner() == null) return false;
+        if (!plot.getOwner().equals(currentOwner)) return false;
         return storage.transferOwnership(plotId, currentOwner, newOwner) != null;
     }
 
     public boolean deletePlot(String plotId, UUID requester, boolean force) {
-        Plot plot = storage.getPlot(plotId);
-        if (plot == null) {
-            return false;
-        }
-        if (!force && plot.getOwner() != null && !plot.getOwner().equals(requester)) {
-            return false;
-        }
-
-        Plot removed = storage.deletePlot(plotId);
+        WorldContext ctx = contextFor(getWorldForPlot(plotId));
+        Plot plot = ctx.storage.getPlot(plotId);
+        if (plot == null) return false;
+        if (!force && plot.getOwner() != null && !plot.getOwner().equals(requester)) return false;
+        Plot removed = ctx.storage.deletePlot(plotId);
         if (removed != null) {
-            spatialGrid.removePlot(removed);
+            ctx.spatialGrid.removePlot(removed);
             return true;
         }
         return false;
     }
 
-    public AreaType resolveAreaTypeAt(int x, int y, int z) {
-        if (isPathCoordinate(x, y, z)) {
+    public AreaType resolveAreaTypeAt(World world, int x, int y, int z) {
+        if (isPathCoordinate(world, x, y, z)) {
             return AreaType.PATH;
         }
+        Plot plot = getPlotAt(world, x, z);
+        return plot == null ? AreaType.WILDERNESS : plot.getAreaType();
+    }
 
-        Plot plot = getPlotAt(x, z);
-        if (plot == null) {
-            return AreaType.WILDERNESS;
+    public AreaType resolveAreaTypeAt(int x, int y, int z) { return resolveAreaTypeAt(getWorld(), x, y, z); }
+
+    private boolean isPathCoordinate(World world, int x, int y, int z) {
+        if (y < 63 || y > 67) return false;
+        if (y > 63) return true;
+        return getPlotAt(world, x, z) == null;
+    }
+
+    public List<Plot> getAllPlots(World world) { return new ArrayList<>(contextFor(world).storage.getAllPlots()); }
+
+    public List<Plot> getAllPlots() {
+        List<Plot> all = new ArrayList<>();
+        for (WorldContext c : contexts.values()) {
+            all.addAll(c.storage.getAllPlots());
         }
-
-        return plot.getAreaType();
+        return all;
     }
 
-    private boolean isPathCoordinate(int x, int y, int z) {
-        if (y < 63 || y > 67) {
-            return false;
-        }
+    public World getWorld() { return contextFor(null).world; }
 
-        if (y > 63) {
-            return true;
-        }
+    public int getPlotSize() { return contextFor(null).settings.getPlotSize(); }
 
-        Plot plot = getPlotAt(x, z);
-        if (plot != null) {
-            return false;
-        }
+    public int getMaxPlotsPerPlayer(World world) { return contextFor(world).settings.getMaxPlotsPerPlayer(); }
+    public int getMaxPlotsPerPlayer() { return getMaxPlotsPerPlayer(getWorld()); }
 
-        return true;
-    }
+    public PlotStorage getStorage(World world) { return contextFor(world).storage; }
+    public PlotStorage getStorage() { return getStorage(getWorld()); }
 
-    public Collection<Plot> getAllPlots() {
-        return storage.getAllPlots();
-    }
+    public SpatialGrid getSpatialGrid(World world) { return contextFor(world).spatialGrid; }
+    public SpatialGrid getSpatialGrid() { return getSpatialGrid(getWorld()); }
 
-    public World getWorld() {
-        return world;
-    }
+    public Collection<String> getManagedWorlds() { return new ArrayList<>(contexts.keySet()); }
 
-    public int getPlotSize() {
-        return plotSize;
-    }
-
-    public int getMaxPlotsPerPlayer() {
-        return maxPlotsPerPlayer;
-    }
-
-    public PlotStorage getStorage() {
-        return storage;
-    }
-
-    public SpatialGrid getSpatialGrid() {
-        return spatialGrid;
-    }
-
-    public void generateUnclaimedPlots(int gridSize, int spacing) {
-        plugin.getLogger().info("Generating " + (gridSize * gridSize) + " unclaimed plots in grid...");
+    public void generateUnclaimedPlots(World world, int gridSize, int spacing) {
+        WorldContext ctx = contextFor(world);
         int generated = 0;
-
         for (int i = -gridSize; i <= gridSize; i++) {
             for (int j = -gridSize; j <= gridSize; j++) {
                 int centerX = i * spacing;
                 int centerZ = j * spacing;
-
-                if (!isValidPlotLocation(centerX, centerZ)) {
-                    continue;
-                }
-
-                String plotId = "unclaimed_" + plotCounter++;
-                int spawnY = findSafeSpawnY(centerX, centerZ);
-                Plot unclaimedPlot = new Plot(plotId, centerX, centerZ, plotSize, null, System.currentTimeMillis(), spawnY, Plot.PlotState.UNCLAIMED);
-                storage.savePlot(unclaimedPlot);
-                spatialGrid.addPlot(unclaimedPlot);
+                if (!isValidPlotLocation(ctx, centerX, centerZ)) continue;
+                String plotId = "unclaimed_" + ctx.world.getName() + "_" + ctx.plotCounter++;
+                int spawnY = findSafeSpawnY(ctx, centerX, centerZ);
+                Plot unclaimedPlot = new Plot(plotId, centerX, centerZ, ctx.settings.getPlotSize(), null, System.currentTimeMillis(), spawnY, Plot.PlotState.UNCLAIMED);
+                ctx.storage.savePlot(unclaimedPlot);
+                ctx.spatialGrid.addPlot(unclaimedPlot);
                 generated++;
             }
         }
 
-        plugin.getLogger().info("Generated " + generated + " unclaimed plots successfully!");
+        Map<String, Integer> biomeDist = new HashMap<>();
+        for (Plot plot : ctx.storage.getAllPlots()) {
+            String biome = ctx.world.getBlockAt(plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ()).getBiome().name();
+            biomeDist.merge(biome, 1, Integer::sum);
+        }
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("plot-count", ctx.storage.getAllPlots().size());
+        metadata.put("plot-count-cap", ctx.settings.getPlotCountCap());
+        metadata.put("biome-distribution", biomeDist);
+        worldConfig.saveMetadata(ctx.world.getName(), metadata);
+
+        plugin.getLogger().info("Generated " + generated + " unclaimed plots in world " + ctx.world.getName());
     }
 
-    private int random(int min, int max) {
-        return min + (int) (Math.random() * (max - min + 1));
+    public void generateUnclaimedPlots(int gridSize, int spacing) { generateUnclaimedPlots(getWorld(), gridSize, spacing); }
+
+    public World getWorldForPlot(String plotId) {
+        for (WorldContext ctx : contexts.values()) {
+            if (ctx.storage.exists(plotId)) {
+                return ctx.world;
+            }
+        }
+        return getWorld();
     }
+
+    private PlotStorage storageForPlot(String plotId) {
+        return contextFor(getWorldForPlot(plotId)).storage;
+    }
+
+    private int random(int min, int max) { return min + (int) (Math.random() * (max - min + 1)); }
 }

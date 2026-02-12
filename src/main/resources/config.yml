@@ -2,7 +2,7 @@
 
 # World settings
 world:
-  name: "world"
+  name: "world_main"
 
 # Plot settings
 plot:
@@ -23,6 +23,9 @@ plot:
 
   # Confirmation timeout in seconds for /plot delete
   delete-confirm-timeout-seconds: 30
+
+  # Cooldown in seconds for /plot teleport <world> <plot_id>
+  world-teleport-cooldown-seconds: 15
 
 # Path settings
 path:

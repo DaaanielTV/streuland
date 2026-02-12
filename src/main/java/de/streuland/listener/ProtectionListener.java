@@ -34,7 +34,7 @@ public class ProtectionListener implements Listener {
         int y = event.getBlock().getY();
         int z = event.getBlock().getZ();
 
-        AreaType areaType = plotManager.resolveAreaTypeAt(x, y, z);
+        AreaType areaType = plotManager.resolveAreaTypeAt(event.getBlock().getWorld(), x, y, z);
         switch (areaType) {
             case PATH:
                 event.setCancelled(true);
@@ -43,7 +43,7 @@ public class ProtectionListener implements Listener {
             case PLOT_UNCLAIMED:
                 return;
             case PLOT_CLAIMED:
-                Plot plot = plotManager.getPlotAt(x, z);
+                Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
                 if (plot != null && !plot.isAllowed(player.getUniqueId())) {
                     event.setCancelled(true);
                     player.sendMessage("§cDieser Plot ist geschützt!");
@@ -63,7 +63,7 @@ public class ProtectionListener implements Listener {
         int y = event.getBlock().getY();
         int z = event.getBlock().getZ();
 
-        AreaType areaType = plotManager.resolveAreaTypeAt(x, y, z);
+        AreaType areaType = plotManager.resolveAreaTypeAt(event.getBlock().getWorld(), x, y, z);
         switch (areaType) {
             case PATH:
                 event.setCancelled(true);
@@ -72,7 +72,7 @@ public class ProtectionListener implements Listener {
             case PLOT_UNCLAIMED:
                 return;
             case PLOT_CLAIMED:
-                Plot plot = plotManager.getPlotAt(x, z);
+                Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
                 if (plot != null && !plot.isAllowed(player.getUniqueId())) {
                     event.setCancelled(true);
                     player.sendMessage("§cDieser Plot ist geschützt!");
@@ -96,12 +96,12 @@ public class ProtectionListener implements Listener {
         int y = event.getClickedBlock().getY();
         int z = event.getClickedBlock().getZ();
 
-        AreaType areaType = plotManager.resolveAreaTypeAt(x, y, z);
+        AreaType areaType = plotManager.resolveAreaTypeAt(event.getClickedBlock().getWorld(), x, y, z);
         if (areaType != AreaType.PLOT_CLAIMED) {
             return;
         }
 
-        Plot plot = plotManager.getPlotAt(x, z);
+        Plot plot = plotManager.getPlotAt(event.getClickedBlock().getWorld(), x, z);
         if (plot == null || plot.isAllowed(player.getUniqueId())) {
             return;
         }

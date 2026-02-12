@@ -50,7 +50,7 @@ public class AdminPlotService {
             return true;
         }
 
-        Plot plot = plotManager.getPlotAt(x, z);
+        Plot plot = plotManager.getPlotAt(player.getWorld(), x, z);
         if (plot == null) {
             player.sendMessage("§cKein Plot an diesen Koordinaten gefunden.");
             return true;

@@ -59,6 +59,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
+    private final Map<UUID, Long> worldTeleportCooldowns;
     
     public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator,
                                SnapshotManager snapshotManager, RuleEngine ruleEngine, PlotSkinService plotSkinService,
@@ -80,6 +81,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
+        this.worldTeleportCooldowns = new HashMap<>();
     }
 
     @Override
@@ -138,6 +140,10 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleQuest(player, args);
             case "market":
                 return handleMarket(player, args);
+            case "world":
+                return handleWorld(player, args);
+            case "teleport":
+                return handleTeleportWorld(player, args);
             case "inspect":
                 return adminPlotService.handleInspect(player, args);
             case "admin":
@@ -149,14 +155,14 @@ public class PlotCommandExecutor implements CommandExecutor {
     }
 
     private boolean handleCreate(Player player) {
-        List<Plot> playerPlots = plotManager.getStorage().getPlayerPlots(player.getUniqueId());
-        if (playerPlots.size() >= plotManager.getMaxPlotsPerPlayer()) {
-            player.sendMessage("§cDu kannst maximal " + plotManager.getMaxPlotsPerPlayer() + " Plots besitzen!");
+        List<Plot> playerPlots = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId());
+        if (playerPlots.size() >= plotManager.getMaxPlotsPerPlayer(player.getWorld())) {
+            player.sendMessage("§cDu kannst maximal " + plotManager.getMaxPlotsPerPlayer(player.getWorld()) + " Plots besitzen!");
             return true;
         }
 
         player.sendMessage("§eSuche nach einem Plot-Ort...");
-        plotManager.createPlotAsync(player.getUniqueId()).thenAccept(plot -> {
+        plotManager.createPlotAsync(player.getUniqueId(), player.getWorld()).thenAccept(plot -> {
             if (plot != null) {
                 List<PathGenerator.BlockPosition> pathBlocks = pathGenerator.generatePath(plot);
                 plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
@@ -172,13 +178,13 @@ public class PlotCommandExecutor implements CommandExecutor {
     }
 
     private boolean handleClaim(Player player) {
-        List<Plot> playerPlots = plotManager.getStorage().getPlayerPlots(player.getUniqueId());
-        if (playerPlots.size() >= plotManager.getMaxPlotsPerPlayer()) {
-            player.sendMessage("§cDu kannst maximal " + plotManager.getMaxPlotsPerPlayer() + " Plots besitzen!");
+        List<Plot> playerPlots = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId());
+        if (playerPlots.size() >= plotManager.getMaxPlotsPerPlayer(player.getWorld())) {
+            player.sendMessage("§cDu kannst maximal " + plotManager.getMaxPlotsPerPlayer(player.getWorld()) + " Plots besitzen!");
             return true;
         }
 
-        Plot claimedPlot = plotManager.claimPlotAt(player.getUniqueId(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot claimedPlot = plotManager.claimPlotAt(player.getUniqueId(), player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (claimedPlot == null) {
             player.sendMessage("§cHier gibt es keinen beanspruchbaren Plot!");
             return true;
@@ -194,7 +200,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     }
 
     private boolean handleInfo(Player player) {
-        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (plot == null) {
             player.sendMessage("§cDu stehst in keinem Plot!");
             return true;
@@ -217,7 +223,7 @@ public class PlotCommandExecutor implements CommandExecutor {
             return true;
         }
 
-        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
             player.sendMessage("§cDu besitzt diesen Plot nicht!");
             return true;
@@ -245,7 +251,7 @@ public class PlotCommandExecutor implements CommandExecutor {
             return true;
         }
 
-        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
             player.sendMessage("§cDu besitzt diesen Plot nicht!");
             return true;
@@ -263,7 +269,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     }
 
     private boolean handleHome(Player player, String[] args) {
-        List<Plot> plots = plotManager.getStorage().getPlayerPlots(player.getUniqueId());
+        List<Plot> plots = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId());
         if (plots.isEmpty()) {
             player.sendMessage("§cDu besitzt keinen Plot!");
             return true;
@@ -298,7 +304,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     }
 
     private boolean handleList(Player player) {
-        List<Plot> plots = plotManager.getStorage().getPlayerPlots(player.getUniqueId());
+        List<Plot> plots = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId());
         if (plots.isEmpty()) {
             player.sendMessage("§cDu besitzt keinen Plot!");
             return true;
@@ -400,7 +406,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return true;
             }
 
-            plotManager.generateUnclaimedPlots(gridSize, spacing);
+            plotManager.generateUnclaimedPlots(player.getWorld(), gridSize, spacing);
             player.sendMessage("§aGenerierung gestartet/abgeschlossen. Prüfe Konsole für Details.");
             return true;
         } catch (NumberFormatException e) {
@@ -410,7 +416,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     }
 
     private boolean handleStats(Player player) {
-        Collection<Plot> allPlots = plotManager.getAllPlots();
+        Collection<Plot> allPlots = plotManager.getAllPlots(player.getWorld());
         int claimed = 0;
         int unclaimed = 0;
 
@@ -426,9 +432,9 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§eGesamt: §f" + allPlots.size());
         player.sendMessage("§eBeansprucht: §f" + claimed);
         player.sendMessage("§eUnbeansprucht: §f" + unclaimed);
-        player.sendMessage("§eGrid-Zellen: §f" + plotManager.getSpatialGrid().getCellCount());
+        player.sendMessage("§eGrid-Zellen: §f" + plotManager.getSpatialGrid(player.getWorld()).getCellCount());
 
-        Plot currentPlot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot currentPlot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (currentPlot != null) {
             player.sendMessage("§6=== Edit-Statistik für " + currentPlot.getPlotId() + " ===");
             List<PlayerEditStats> editStats = plotAnalyticsService.getEditStatsForPlot(currentPlot.getPlotId());
@@ -456,7 +462,7 @@ public class PlotCommandExecutor implements CommandExecutor {
             player.sendMessage("§cVerwendung: /plot style set <theme>");
             return true;
         }
-        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
             player.sendMessage("§cDu musst auf deinem eigenen Plot stehen.");
             return true;
@@ -523,7 +529,7 @@ public class PlotCommandExecutor implements CommandExecutor {
             player.sendMessage("§cVerwendung: /plot biome bonus");
             return true;
         }
-        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (plot == null) {
             player.sendMessage("§cDu stehst in keinem Plot!");
             return true;
@@ -539,15 +545,60 @@ public class PlotCommandExecutor implements CommandExecutor {
         return true;
     }
 
+
+    private boolean handleWorld(Player player, String[] args) {
+        if (args.length < 2 || !"list".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§cVerwendung: /plot world list");
+            return true;
+        }
+        List<Plot> plots = plotManager.getAllPlots(player.getWorld());
+        long claimed = plots.stream().filter(p -> p.getState() == Plot.PlotState.CLAIMED).count();
+        player.sendMessage("§6=== Welt-Plotstatistik: " + player.getWorld().getName() + " ===");
+        player.sendMessage("§eGesamt: §f" + plots.size());
+        player.sendMessage("§eBeansprucht: §f" + claimed);
+        player.sendMessage("§eUnbeansprucht: §f" + (plots.size() - claimed));
+        player.sendMessage("§eGrid-Zellen: §f" + plotManager.getSpatialGrid(player.getWorld()).getCellCount());
+        return true;
+    }
+
+    private boolean handleTeleportWorld(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage("§cVerwendung: /plot teleport <world> <plot_id>");
+            return true;
+        }
+        long now = System.currentTimeMillis();
+        long cooldown = plugin.getConfig().getLong("plot.world-teleport-cooldown-seconds", 15L) * 1000L;
+        long readyAt = worldTeleportCooldowns.getOrDefault(player.getUniqueId(), 0L);
+        if (readyAt > now) {
+            player.sendMessage("§cTeleport-Cooldown aktiv: " + ((readyAt - now) / 1000L) + "s");
+            return true;
+        }
+        org.bukkit.World targetWorld = Bukkit.getWorld(args[1]);
+        if (targetWorld == null) {
+            player.sendMessage("§cWelt nicht gefunden: " + args[1]);
+            return true;
+        }
+        Plot plot = plotManager.getStorage(targetWorld).getPlot(args[2]);
+        if (plot == null) {
+            player.sendMessage("§cPlot nicht gefunden in Welt " + targetWorld.getName());
+            return true;
+        }
+        player.teleport(targetWorld.getBlockAt(plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ()).getLocation());
+        worldTeleportCooldowns.put(player.getUniqueId(), now + cooldown);
+        player.sendMessage("§aTeleportiert zu " + plot.getPlotId() + " in " + targetWorld.getName());
+        return true;
+    }
+
     private Plot resolvePlotFromArgsOrLocation(Player player, String[] args, int index) {
         if (args.length > index) {
-            return plotManager.getStorage().getPlot(args[index]);
+            return plotManager.getStorage(player.getWorld()).getPlot(args[index]);
         }
-        return plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        return plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
     }
 
     private void teleportToPlot(Player player, Plot plot, String message) {
-        player.teleport(plotManager.getWorld().getBlockAt(plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ()).getLocation());
+        org.bukkit.World world = plotManager.getWorldForPlot(plot.getPlotId());
+        player.teleport(world.getBlockAt(plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ()).getLocation());
         player.sendMessage(message);
     }
 
@@ -567,6 +618,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
         player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
         player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots");
+        player.sendMessage("§e/plot world list§f - Statistiken der aktuellen Welt");
+        player.sendMessage("§e/plot teleport <world> <plot_id>§f - Teleportiere weltenübergreifend");
         player.sendMessage("§e/plot inspect <x> <z>§f - Zeige Block-Änderungslog für Koordinaten");
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
     }
@@ -594,14 +647,14 @@ public class PlotCommandExecutor implements CommandExecutor {
         }
 
         if ("progress".equalsIgnoreCase(args[1])) {
-            Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+            Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
             if (plot == null) {
                 player.sendMessage("§cDu stehst in keinem Plot!");
                 return true;
             }
             player.sendMessage("§6=== Quest Fortschritt (" + plot.getPlotId() + ") ===");
             questTracker.syncDistrictQuest(player, plot);
-            de.streuland.plot.PlotData data = plotManager.getStorage().getPlotData(plot.getPlotId());
+            de.streuland.plot.PlotData data = plotManager.getStorage(plotManager.getWorldForPlot(plot.getPlotId())).getPlotData(plot.getPlotId());
             for (QuestDefinition quest : questService.getActiveQuests()) {
                 QuestProgress progress = questService.getOrCreateProgress(data, quest.getId());
                 int value = Math.min(progress.getValue(), quest.getTarget());
@@ -640,7 +693,7 @@ public class PlotCommandExecutor implements CommandExecutor {
             player.sendMessage("§cKeine Berechtigung für Snapshots!");
             return true;
         }
-        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (plot == null) {
             player.sendMessage("§cDu stehst in keinem Plot!");
             return true;

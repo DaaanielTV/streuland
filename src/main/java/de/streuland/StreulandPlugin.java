@@ -41,7 +41,6 @@ import net.milkbowl.vault.economy.Economy;
  */
 public class StreulandPlugin extends JavaPlugin {
     private PlotManager plotManager;
-    private PlotStorage plotStorage;
     private PathGenerator pathGenerator;
     private ProtectionListener protectionListener;
     private BlockChangeListener blockChangeListener;
@@ -77,10 +76,7 @@ public class StreulandPlugin extends JavaPlugin {
         
         try {
             // Initialize components in dependency order
-            plotStorage = new PlotStorage(this);
-            getLogger().info("✓ PlotStorage initialized");
-            
-            plotManager = new PlotManager(this, plotStorage);
+            plotManager = new PlotManager(this);
             getLogger().info("✓ PlotManager initialized");
 
             pathGenerator = new PathGenerator(this, plotManager);
@@ -99,7 +95,7 @@ public class StreulandPlugin extends JavaPlugin {
             ruleEngine.reload();
             getLogger().info("✓ RuleEngine initialized");
 
-            plotSkinService = new PlotSkinService(this, plotStorage);
+            plotSkinService = new PlotSkinService(this, plotManager.getStorage());
             plotSkinService.start();
             getLogger().info("✓ PlotSkinService initialized");
 
@@ -124,7 +120,7 @@ public class StreulandPlugin extends JavaPlugin {
             } else {
                 getLogger().info("✓ Vault economy connected: " + economy.getName());
             }
-            questService = new QuestService(this, plotStorage, ruleEngine);
+            questService = new QuestService(this, plotManager.getStorage(), ruleEngine);
             getLogger().info("✓ QuestService initialized");
             neighborhoodService = new NeighborhoodService(this, plotManager, new DistrictClusterService(), analyticsService);
             resourceSyncScheduler = new ResourceSyncScheduler(this, neighborhoodService);
@@ -165,7 +161,7 @@ public class StreulandPlugin extends JavaPlugin {
             
             getLogger().info("===============================================");
             getLogger().info("Streuland enabled successfully!");
-            getLogger().info("Loaded " + plotStorage.getAllPlots().size() + " plots");
+            getLogger().info("Loaded " + plotManager.getAllPlots().size() + " plots");
             getLogger().info("===============================================");
             
         } catch (Exception e) {
@@ -209,7 +205,7 @@ public class StreulandPlugin extends JavaPlugin {
     }
     
     public PlotStorage getPlotStorage() {
-        return plotStorage;
+        return plotManager.getStorage();
     }
     
     public PathGenerator getPathGenerator() {
