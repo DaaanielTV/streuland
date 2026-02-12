@@ -161,6 +161,59 @@ public class NeighborhoodService {
 
 
 
+
+    public synchronized Map<String, Object> buildNeighborhoodGraph(String plotId) {
+        Plot source = null;
+        for (Plot plot : plotManager.getAllPlots()) {
+            if (plot.getPlotId().equals(plotId)) {
+                source = plot;
+                break;
+            }
+        }
+        if (source == null || source.getOwner() == null) {
+            return Collections.emptyMap();
+        }
+
+        Set<UUID> neighborOwners = new HashSet<>(getTrustedNeighbors(source.getOwner()));
+        neighborOwners.add(source.getOwner());
+
+        List<Map<String, Object>> nodes = new ArrayList<>();
+        for (Plot plot : plotManager.getAllPlots()) {
+            if (plot.getOwner() != null && neighborOwners.contains(plot.getOwner())) {
+                Map<String, Object> node = new HashMap<>();
+                node.put("plotId", plot.getPlotId());
+                node.put("owner", plot.getOwner().toString());
+                node.put("x", plot.getCenterX());
+                node.put("z", plot.getCenterZ());
+                nodes.add(node);
+            }
+        }
+
+        List<Map<String, Object>> edges = new ArrayList<>();
+        for (int i = 0; i < nodes.size(); i++) {
+            Map<String, Object> left = nodes.get(i);
+            for (int j = i + 1; j < nodes.size(); j++) {
+                Map<String, Object> right = nodes.get(j);
+                double dx = ((Number) left.get("x")).doubleValue() - ((Number) right.get("x")).doubleValue();
+                double dz = ((Number) left.get("z")).doubleValue() - ((Number) right.get("z")).doubleValue();
+                double distance = Math.sqrt(dx * dx + dz * dz);
+                if (distance <= CLUSTER_DISTANCE_BLOCKS * 1.5D) {
+                    Map<String, Object> edge = new HashMap<>();
+                    edge.put("from", left.get("plotId"));
+                    edge.put("to", right.get("plotId"));
+                    edge.put("resourceFlow", Math.max(1, (int) Math.round((CLUSTER_DISTANCE_BLOCKS * 2D) / Math.max(1D, distance))));
+                    edges.add(edge);
+                }
+            }
+        }
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("centerPlotId", plotId);
+        payload.put("nodes", nodes);
+        payload.put("edges", edges);
+        return payload;
+    }
+
     public String getAnalyticsSummary(String plotId) {
         return analyticsService.getNeighborhoodSummary(plotId);
     }

@@ -9,7 +9,7 @@ api-version: 1.13
 commands:
   plot:
     description: Main plot command
-    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard>
     aliases:
       - p
   district:
@@ -30,4 +30,8 @@ permissions:
     default: op
   streuland.plot.admin.rollback:
     description: Allows preparing and confirming plot rollback
+    default: op
+
+  streuland.admin:
+    description: Grants admin-level dashboard controls
     default: op

@@ -311,6 +311,15 @@ public class PlotMarketService {
         return true;
     }
 
+    public synchronized List<MarketListing> getActiveListingsSnapshot() {
+        pruneExpiredListings();
+        return new ArrayList<>(listings.values());
+    }
+
+    public synchronized List<MarketSale> getSalesHistorySnapshot() {
+        return new ArrayList<>(salesHistory);
+    }
+
     public void pruneExpiredListings() {
         long now = System.currentTimeMillis();
         boolean changed = listings.values().removeIf(listing -> (now - listing.getTimestamp()) > EXPIRY_MILLIS);
