@@ -19,6 +19,7 @@ de\streuland\district\DistrictLevel.class
 de\streuland\rules\conditions\NotCondition.class
 de\streuland\rules\Rule.class
 de\streuland\plot\skin\PlotTheme.class
+de\streuland\quest\QuestDefinition.class
 de\streuland\rules\DefaultPlotLevelProvider.class
 de\streuland\plot\biome\BiomeBonusService.class
 de\streuland\listener\ProtectionListener$1.class
@@ -31,14 +32,18 @@ de\streuland\rules\actions\CooldownAction.class
 de\streuland\plot\biome\BiomeProfile.class
 de\streuland\analytics\InMemoryPlotAnalyticsService.class
 de\streuland\plot\upgrade\PlotProgressionState.class
+de\streuland\quest\QuestTracker.class
 de\streuland\plot\PlotStorage.class
+de\streuland\quest\QuestType.class
 de\streuland\rules\RuleContext.class
+de\streuland\quest\QuestReward.class
 de\streuland\StreulandPlugin.class
 de\streuland\plot\PlotData.class
 de\streuland\plot\snapshot\SnapshotManager.class
 de\streuland\rules\RuleTrigger.class
 de\streuland\rules\conditions\BiomeCondition.class
 de\streuland\district\DistrictGoal.class
+de\streuland\quest\QuestService.class
 de\streuland\neighborhood\ResourceSyncScheduler.class
 de\streuland\district\DistrictGoalCatalog$BuiltBlocksGoal.class
 de\streuland\neighborhood\NeighborhoodService.class
@@ -69,6 +74,7 @@ de\streuland\rules\RuleEngine.class
 de\streuland\plot\biome\BiomeEffectStack.class
 de\streuland\rules\listener\RuleListener.class
 de\streuland\rules\actions\ModifyBlockAction.class
+de\streuland\quest\QuestProgress.class
 de\streuland\api\event\PlotUpgradedEvent.class
 de\streuland\command\PlotCommandExecutor.class
 de\streuland\district\DistrictGoalCatalog$1.class

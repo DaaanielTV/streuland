@@ -4,6 +4,7 @@ E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\ExampleRules.ja
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\neighborhood\NeighborhoodMapRenderer.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\upgrade\PlotProgressionState.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\district\DistrictNpcAdapter.java
+E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\quest\QuestType.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\RuleContext.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\api\event\PlotBiomeEffectAppliedEvent.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\PlotData.java
@@ -25,6 +26,7 @@ E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\Plot.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\conditions\PlotLevelCondition.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\api\event\PlotBiomeDetectedEvent.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\biome\BiomeRuleSet.java
+E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\quest\QuestReward.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\district\DistrictClusterService.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\PlotStorage.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\skin\PlotTheme.java
@@ -33,6 +35,7 @@ E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\storage\PlotRepositor
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\event\PlotClaimedEvent.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\RuleEngine.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\dashboard\PlotAnalyticsExporter.java
+E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\quest\QuestProgress.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\listener\RuleListener.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\biome\BiomeConfigLoader.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\biome\BiomeProfile.java
@@ -52,9 +55,11 @@ E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\SpatialGrid.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\upgrade\PlotUpgradeCost.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\conditions\NotCondition.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\api\PlotApi.java
+E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\quest\QuestDefinition.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\actions\CooldownAction.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\listener\ProtectionListener.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\RuleProvider.java
+E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\quest\QuestService.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\snapshot\SnapshotManager.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\RuleAction.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\event\PlotCreatedEvent.java
@@ -69,6 +74,7 @@ E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\Rule.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\snapshot\ChunkKey.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\neighborhood\ResourceSyncScheduler.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\analytics\PlotAnalyticsRecord.java
+E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\quest\QuestTracker.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\actions\CancelAction.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\district\DistrictGoal.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\command\DistrictCommandExecutor.java

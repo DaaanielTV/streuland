@@ -1,0 +1,39 @@
+quests:
+  build_houses:
+    title: Build 10 Houses
+    description: Platziere 10 Haustüren auf deinen Plots.
+    type: DAILY
+    objective: build_houses
+    target: 10
+    expiresAt: 0
+    rewards:
+      storageSlots: 2
+      cosmetics:
+        - Builder Banner
+      abilities:
+        - decor_preview
+  befriend_plots:
+    title: Befriend 3 Plots
+    description: Füge 3 Nachbarn zu deiner Liste hinzu.
+    type: WEEKLY
+    objective: befriend_plots
+    target: 3
+    expiresAt: 0
+    rewards:
+      cosmetics:
+        - Trading Emblem
+      abilities:
+        - cross_plot_trading
+  district_level_3:
+    title: Level District to 3
+    description: Bringe dein Viertel auf Level 3.
+    type: WEEKLY
+    objective: district_level
+    target: 3
+    expiresAt: 0
+    rewards:
+      cosmetics:
+        - District Laurels
+      stats:
+        xp_multiplier: 0.10
+history: {}
