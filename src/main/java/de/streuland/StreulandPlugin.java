@@ -6,6 +6,8 @@ import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.district.DistrictClusterService;
 import de.streuland.district.DistrictManager;
 import de.streuland.district.DistrictProgressService;
+import de.streuland.dashboard.PlotAnalyticsExporter;
+import de.streuland.dashboard.RestApiController;
 import de.streuland.listener.ProtectionListener;
 import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.neighborhood.ResourceSyncScheduler;
@@ -45,6 +47,7 @@ public class StreulandPlugin extends JavaPlugin {
     private InMemoryPlotAnalyticsService analyticsService;
     private NeighborhoodService neighborhoodService;
     private ResourceSyncScheduler resourceSyncScheduler;
+    private RestApiController restApiController;
     
     @Override
     public void onEnable() {
@@ -116,6 +119,11 @@ public class StreulandPlugin extends JavaPlugin {
             // Register district command
             getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager));
             getLogger().info("✓ Commands registered");
+
+            PlotAnalyticsExporter analyticsExporter = new PlotAnalyticsExporter(analyticsService);
+            restApiController = new RestApiController(this, plotManager, districtManager, analyticsService, analyticsExporter);
+            restApiController.start();
+            getLogger().info("✓ Dashboard API initialized");
             
             getLogger().info("===============================================");
             getLogger().info("Streuland enabled successfully!");
@@ -139,6 +147,9 @@ public class StreulandPlugin extends JavaPlugin {
         }
         if (resourceSyncScheduler != null) {
             resourceSyncScheduler.stop();
+        }
+        if (restApiController != null) {
+            restApiController.stop();
         }
         getLogger().info("Streuland disabled");
     }

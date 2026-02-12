@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Streuland Dashboard</title>
+  <link rel="stylesheet" href="/streuland-dashboard/style.css" />
+</head>
+<body>
+  <main>
+    <h1>Streuland Analytics Dashboard</h1>
+    <section class="stats">
+      <div id="plotStats"></div>
+      <div id="biomeStats"></div>
+      <div id="upgradeStats"></div>
+    </section>
+    <section>
+      <h2>Plot Density Heatmap</h2>
+      <label>District ID: <input id="districtId" value="district_1" /></label>
+      <button id="loadHeatmap">Load Heatmap</button>
+      <canvas id="heatmap" width="900" height="500"></canvas>
+    </section>
+  </main>
+  <script src="/streuland-dashboard/app.js"></script>
+</body>
+</html>

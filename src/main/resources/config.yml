@@ -193,3 +193,10 @@ snapshot:
 districts:
   # Interval (ticks) for sampling active players in districts
   active-player-interval-ticks: 200
+
+# Web dashboard
+dashboard:
+  enabled: true
+  port: 8080
+  websocket-port: 8081
+  heatmap-cell-size: 64
