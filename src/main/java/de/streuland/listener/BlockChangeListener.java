@@ -45,7 +45,7 @@ public class BlockChangeListener implements Listener {
         blockChangeLogger.logChange(player.getUniqueId(), BlockChangeAction.PLACE,
                 block.getX(), block.getY(), block.getZ(),
                 event.getBlockReplacedState().getType().name(), block.getType().name());
-        recordEditMetric(player.getUniqueId(), block.getX(), block.getZ(), "block_place");
+        recordEditMetric(player.getUniqueId(), block.getX(), block.getZ(), "block_place", block.getWorld());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -54,7 +54,7 @@ public class BlockChangeListener implements Listener {
         Player player = event.getPlayer();
         blockChangeLogger.logChange(player.getUniqueId(), BlockChangeAction.BREAK,
                 block.getX(), block.getY(), block.getZ(), block.getType().name(), Material.AIR.name());
-        recordEditMetric(player.getUniqueId(), block.getX(), block.getZ(), "block_break");
+        recordEditMetric(player.getUniqueId(), block.getX(), block.getZ(), "block_break", block.getWorld());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -76,11 +76,11 @@ public class BlockChangeListener implements Listener {
         }
         blockChangeLogger.logChange(actor, BlockChangeAction.BURN,
                 block.getX(), block.getY(), block.getZ(), block.getType().name(), Material.AIR.name());
-        recordEditMetric(actor, block.getX(), block.getZ(), "block_burn");
+        recordEditMetric(actor, block.getX(), block.getZ(), "block_burn", block.getWorld());
     }
 
-    private void recordEditMetric(UUID playerId, int x, int z, String eventType) {
-        Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
+    private void recordEditMetric(UUID playerId, int x, int z, String eventType, org.bukkit.World world) {
+        Plot plot = plotManager.getPlotAt(world, x, z);
         if (plot == null) {
             return;
         }

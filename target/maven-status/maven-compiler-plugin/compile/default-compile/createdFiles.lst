@@ -42,6 +42,7 @@ de\streuland\plot\PlotStorage.class
 de\streuland\quest\QuestType.class
 de\streuland\rules\RuleContext.class
 de\streuland\quest\QuestReward.class
+de\streuland\plot\PlotManager$WorldContext.class
 de\streuland\StreulandPlugin.class
 de\streuland\plot\PlotData.class
 de\streuland\plot\snapshot\SnapshotManager.class
@@ -63,6 +64,7 @@ de\streuland\plot\snapshot\BlockSnapshot.class
 de\streuland\dashboard\DashboardWebSocketServer.class
 de\streuland\admin\DailyPlotBackupService.class
 de\streuland\district\DistrictManager.class
+de\streuland\plot\PlotStoragePartitioner.class
 de\streuland\storage\PlotRepository.class
 de\streuland\plot\upgrade\PlotUpgradeService.class
 de\streuland\admin\AdminPlotService$PendingRollback.class
@@ -72,7 +74,9 @@ de\streuland\rules\RuleCondition.class
 de\streuland\listener\BlockChangeListener$IgniteTrace.class
 de\streuland\plot\Plot.class
 de\streuland\rules\actions\CancelAction.class
+de\streuland\plot\WorldConfig$WorldSettings.class
 de\streuland\analytics\PlotAnalyticsService.class
+de\streuland\plot\WorldConfig.class
 de\streuland\district\DistrictClusterService.class
 de\streuland\dashboard\RestApiController$1.class
 de\streuland\rules\DefaultRule.class
@@ -105,6 +109,7 @@ de\streuland\api\PlotApi.class
 de\streuland\command\PlotCommandExecutor$DeleteConfirmation.class
 de\streuland\event\PlotCreatedEvent.class
 de\streuland\plot\Plot$PlotState.class
+de\streuland\plot\PlotManager$1.class
 de\streuland\rules\conditions\PlayerRankCondition.class
 de\streuland\rules\conditions\PlotLevelCondition.class
 de\streuland\district\DistrictProgressService.class
