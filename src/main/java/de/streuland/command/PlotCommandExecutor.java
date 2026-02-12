@@ -3,6 +3,7 @@ package de.streuland.command;
 import de.streuland.admin.AdminPlotService;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.analytics.PlayerEditStats;
+import de.streuland.district.TraderNpcService;
 import de.streuland.path.PathGenerator;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
@@ -57,6 +58,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotMarketService plotMarketService;
     private final AdminPlotService adminPlotService;
     private final PlotAnalyticsService plotAnalyticsService;
+    private final TraderNpcService traderNpcService;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
@@ -65,7 +67,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                                SnapshotManager snapshotManager, RuleEngine ruleEngine, PlotSkinService plotSkinService,
                                BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
-                               AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService) {
+                               AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
+                               TraderNpcService traderNpcService) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -79,6 +82,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotMarketService = plotMarketService;
         this.adminPlotService = adminPlotService;
         this.plotAnalyticsService = plotAnalyticsService;
+        this.traderNpcService = traderNpcService;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
@@ -144,6 +148,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleWorld(player, args);
             case "teleport":
                 return handleTeleportWorld(player, args);
+            case "trader":
+                return traderNpcService.handleTraderCommand(player, args);
             case "inspect":
                 return adminPlotService.handleInspect(player, args);
             case "admin":
@@ -618,6 +624,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
         player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
         player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots");
+        player.sendMessage("§e/plot trader <nearest|buy|stock>§f - Distrikt-Händler nutzen/verwalten");
         player.sendMessage("§e/plot world list§f - Statistiken der aktuellen Welt");
         player.sendMessage("§e/plot teleport <world> <plot_id>§f - Teleportiere weltenübergreifend");
         player.sendMessage("§e/plot inspect <x> <z>§f - Zeige Block-Änderungslog für Koordinaten");
