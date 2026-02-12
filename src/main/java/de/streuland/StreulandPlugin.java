@@ -13,6 +13,9 @@ import de.streuland.district.TraderNpcService;
 import de.streuland.dashboard.PlotAnalyticsExporter;
 import de.streuland.quest.QuestService;
 import de.streuland.quest.QuestTracker;
+import de.streuland.weather.ParticleEffectScheduler;
+import de.streuland.weather.SeasonalEffectListener;
+import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.dashboard.RestApiController;
 import de.streuland.listener.BlockChangeListener;
 import de.streuland.listener.ProtectionListener;
@@ -66,6 +69,8 @@ public class StreulandPlugin extends JavaPlugin {
     private AdminPlotService adminPlotService;
     private DailyPlotBackupService dailyPlotBackupService;
     private TraderNpcService traderNpcService;
+    private SeasonalWeatherService seasonalWeatherService;
+    private ParticleEffectScheduler particleEffectScheduler;
     
     @Override
     public void onEnable() {
@@ -106,6 +111,14 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ BiomeEffectScheduler initialized");
 
             analyticsService = new InMemoryPlotAnalyticsService();
+            seasonalWeatherService = new SeasonalWeatherService(this, analyticsService);
+            seasonalWeatherService.start();
+            getLogger().info("✓ SeasonalWeatherService initialized");
+
+            particleEffectScheduler = new ParticleEffectScheduler(this, seasonalWeatherService);
+            particleEffectScheduler.start();
+            getLogger().info("✓ ParticleEffectScheduler initialized");
+
             blockChangeLogger = new BlockChangeLogger(this, plotManager);
             adminPlotService = new AdminPlotService(plotManager, snapshotManager, blockChangeLogger);
 
@@ -115,6 +128,9 @@ public class StreulandPlugin extends JavaPlugin {
 
             ruleListener = new RuleListener(this, ruleEngine, biomeBonusService);
             getLogger().info("✓ RuleListener registered");
+
+            getServer().getPluginManager().registerEvents(new SeasonalEffectListener(seasonalWeatherService, analyticsService), this);
+            getLogger().info("✓ SeasonalEffectListener registered");
 
             setupEconomy();
             if (economy == null) {
@@ -148,7 +164,7 @@ public class StreulandPlugin extends JavaPlugin {
 
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
 
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService);
             getCommand("plot").setExecutor(commandExecutor);
 
             // Register district command
@@ -195,6 +211,12 @@ public class StreulandPlugin extends JavaPlugin {
         }
         if (resourceSyncScheduler != null) {
             resourceSyncScheduler.stop();
+        }
+        if (particleEffectScheduler != null) {
+            particleEffectScheduler.stop();
+        }
+        if (seasonalWeatherService != null) {
+            seasonalWeatherService.stop();
         }
         if (restApiController != null) {
             restApiController.stop();
