@@ -32,6 +32,7 @@ E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\DefaultPlotLeve
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\storage\PlotRepository.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\event\PlotClaimedEvent.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\RuleEngine.java
+E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\dashboard\PlotAnalyticsExporter.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\listener\RuleListener.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\biome\BiomeConfigLoader.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\biome\BiomeProfile.java
@@ -43,6 +44,7 @@ E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\distribution\Can
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\RuleTrigger.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\biome\BiomeEffect.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\skin\PlotSkinService.java
+E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\dashboard\RestApiController.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\analytics\PlotAnalyticsService.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\neighborhood\NeighborhoodStorage.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\conditions\CooldownActiveCondition.java
@@ -62,6 +64,7 @@ E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\RuleCondition.j
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\district\District.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\PlotManager.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\upgrade\PlotUpgradeDefinition.java
+E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\dashboard\DashboardWebSocketServer.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\rules\Rule.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\plot\snapshot\ChunkKey.java
 E:\!Coding-Enviroment\Streuland\src\main\java\de\streuland\neighborhood\ResourceSyncScheduler.java
