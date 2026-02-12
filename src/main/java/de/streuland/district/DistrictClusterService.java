@@ -43,6 +43,37 @@ public class DistrictClusterService {
         return clusters;
     }
 
+
+
+    public List<Set<Plot>> clusterPlotsWithinDistance(Collection<Plot> plots, int distanceBlocks) {
+        List<Set<Plot>> clusters = new ArrayList<>();
+        Set<Plot> visited = new HashSet<>();
+
+        for (Plot plot : plots) {
+            if (visited.contains(plot)) {
+                continue;
+            }
+            Set<Plot> cluster = new HashSet<>();
+            Queue<Plot> queue = new ArrayDeque<>();
+            queue.add(plot);
+            visited.add(plot);
+
+            while (!queue.isEmpty()) {
+                Plot current = queue.poll();
+                cluster.add(current);
+                for (Plot other : plots) {
+                    if (!visited.contains(other) && withinDistance(current, other, distanceBlocks)) {
+                        visited.add(other);
+                        queue.add(other);
+                    }
+                }
+            }
+
+            clusters.add(cluster);
+        }
+        return clusters;
+    }
+
     private boolean areNeighbors(Plot a, Plot b) {
         boolean overlapZ = a.getMinZ() < b.getMaxZ() && a.getMaxZ() > b.getMinZ();
         boolean overlapX = a.getMinX() < b.getMaxX() && a.getMaxX() > b.getMinX();
@@ -52,4 +83,9 @@ public class DistrictClusterService {
 
         return (touchingX && overlapZ) || (touchingZ && overlapX);
     }
+
+    private boolean withinDistance(Plot a, Plot b, int distanceBlocks) {
+        return a.distance(b) <= distanceBlocks;
+    }
+
 }

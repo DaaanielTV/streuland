@@ -5,4 +5,9 @@ package de.streuland.analytics;
  */
 public interface PlotAnalyticsService {
     void record(PlotAnalyticsRecord record);
+
+    /**
+     * Returns a human-readable neighborhood/economy summary for a plot.
+     */
+    String getNeighborhoodSummary(String plotId);
 }

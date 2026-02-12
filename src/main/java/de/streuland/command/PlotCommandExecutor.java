@@ -8,6 +8,7 @@ import de.streuland.plot.biome.BiomeRuleSet;
 import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.skin.PlotTheme;
 import de.streuland.plot.snapshot.SnapshotManager;
+import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.plot.snapshot.SnapshotMeta;
 import de.streuland.rules.RuleEngine;
 import org.bukkit.Bukkit;
@@ -42,12 +43,13 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final RuleEngine ruleEngine;
     private final PlotSkinService plotSkinService;
     private final BiomeBonusService biomeBonusService;
+    private final NeighborhoodService neighborhoodService;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     
     public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator,
                                SnapshotManager snapshotManager, RuleEngine ruleEngine, PlotSkinService plotSkinService,
-                               BiomeBonusService biomeBonusService) {
+                               BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -55,6 +57,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.ruleEngine = ruleEngine;
         this.plotSkinService = plotSkinService;
         this.biomeBonusService = biomeBonusService;
+        this.neighborhoodService = neighborhoodService;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
     }
@@ -109,6 +112,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleStyle(player, args);
             case "biome":
                 return handleBiomeBonus(player, args);
+            case "neighbor":
+                return handleNeighbor(player, args);
             default:
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
@@ -174,6 +179,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§eZustand: §f" + (plot.getState() == Plot.PlotState.UNCLAIMED ? "§eUNBEANSPRUCHT" : "§aBEANSPRUCHT"));
         player.sendMessage("§eEigentümer: §f" + (plot.getOwner() != null ? plot.getOwner() : "Niemand"));
         player.sendMessage("§eVertraut: §f" + plot.getTrustedPlayers().size() + " Spieler");
+        player.sendMessage("§eNachbarschaft: §f" + neighborhoodService.getAnalyticsSummary(plot.getPlotId()));
         return true;
     }
 
@@ -417,6 +423,52 @@ public class PlotCommandExecutor implements CommandExecutor {
         return true;
     }
 
+
+
+    private boolean handleNeighbor(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage("§cVerwendung: /plot neighbor <add|list|map> [Spieler]");
+            return true;
+        }
+
+        if ("add".equalsIgnoreCase(args[1])) {
+            if (args.length < 3) {
+                player.sendMessage("§cVerwendung: /plot neighbor add <Spieler>");
+                return true;
+            }
+
+            OfflinePlayer target = Bukkit.getOfflinePlayer(args[2]);
+            if (target == null || target.getUniqueId() == null) {
+                player.sendMessage("§cSpieler nicht gefunden!");
+                return true;
+            }
+
+            boolean added = neighborhoodService.addTrustedNeighbor(player.getUniqueId(), target.getUniqueId());
+            if (!added) {
+                player.sendMessage("§cNachbar konnte nicht hinzugefügt werden.");
+                return true;
+            }
+
+            player.sendMessage("§a" + target.getName() + " als vertrauenswürdigen Nachbarn hinzugefügt.");
+            return true;
+        }
+
+        if ("list".equalsIgnoreCase(args[1])) {
+            for (String line : neighborhoodService.formatNeighborhoodList(player.getUniqueId())) {
+                player.sendMessage(line);
+            }
+            return true;
+        }
+
+        if ("map".equalsIgnoreCase(args[1])) {
+            neighborhoodService.showNeighborhoodMap(player);
+            return true;
+        }
+
+        player.sendMessage("§cVerwendung: /plot neighbor <add|list|map> [Spieler]");
+        return true;
+    }
+
     private boolean handleBiomeBonus(Player player, String[] args) {
         if (args.length < 2 || !"bonus".equalsIgnoreCase(args[1])) {
             player.sendMessage("§cVerwendung: /plot biome bonus");
@@ -463,6 +515,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
         player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
+        player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
     }
 
     private boolean handleSnapshot(Player player, String[] args) {

@@ -2,9 +2,13 @@ package de.streuland;
 
 import de.streuland.command.PlotCommandExecutor;
 import de.streuland.command.DistrictCommandExecutor;
+import de.streuland.analytics.InMemoryPlotAnalyticsService;
+import de.streuland.district.DistrictClusterService;
 import de.streuland.district.DistrictManager;
 import de.streuland.district.DistrictProgressService;
 import de.streuland.listener.ProtectionListener;
+import de.streuland.neighborhood.NeighborhoodService;
+import de.streuland.neighborhood.ResourceSyncScheduler;
 import de.streuland.path.PathGenerator;
 import de.streuland.plot.PlotManager;
 import de.streuland.plot.PlotStorage;
@@ -38,6 +42,9 @@ public class StreulandPlugin extends JavaPlugin {
     private BiomeEffectScheduler biomeEffectScheduler;
     private DistrictManager districtManager;
     private DistrictProgressService districtProgressService;
+    private InMemoryPlotAnalyticsService analyticsService;
+    private NeighborhoodService neighborhoodService;
+    private ResourceSyncScheduler resourceSyncScheduler;
     
     @Override
     public void onEnable() {
@@ -86,8 +93,14 @@ public class StreulandPlugin extends JavaPlugin {
             ruleListener = new RuleListener(this, ruleEngine, biomeBonusService);
             getLogger().info("✓ RuleListener registered");
             
+            analyticsService = new InMemoryPlotAnalyticsService();
+            neighborhoodService = new NeighborhoodService(this, plotManager, new DistrictClusterService(), analyticsService);
+            resourceSyncScheduler = new ResourceSyncScheduler(this, neighborhoodService);
+            resourceSyncScheduler.start();
+            getLogger().info("✓ Neighborhood system initialized");
+
             // Register plot command
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService);
             if (getCommand("plot") == null) {
                 throw new IllegalStateException("Command 'plot' is not defined in plugin.yml");
             }
@@ -123,6 +136,9 @@ public class StreulandPlugin extends JavaPlugin {
         }
         if (biomeEffectScheduler != null) {
             biomeEffectScheduler.stop();
+        }
+        if (resourceSyncScheduler != null) {
+            resourceSyncScheduler.stop();
         }
         getLogger().info("Streuland disabled");
     }
