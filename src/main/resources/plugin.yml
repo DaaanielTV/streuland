@@ -9,7 +9,7 @@ api-version: 1.13
 commands:
   plot:
     description: Main plot command
-    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|neighbor|quest|market|unclaim|delete|confirm|cancel|generate|stats>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|neighbor|quest|market|inspect|admin|unclaim|delete|confirm|cancel|generate|stats>
     aliases:
       - p
   district:
@@ -20,3 +20,14 @@ commands:
 
 softdepend:
   - Vault
+
+permissions:
+  streuland.plot.admin.inspect:
+    description: Allows inspection of block change history at coordinates
+    default: op
+  streuland.plot.admin.log:
+    description: Allows viewing block change logs for any player
+    default: op
+  streuland.plot.admin.rollback:
+    description: Allows preparing and confirming plot rollback
+    default: op
