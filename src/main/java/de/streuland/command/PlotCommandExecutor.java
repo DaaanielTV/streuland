@@ -4,6 +4,7 @@ import de.streuland.admin.AdminPlotService;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.analytics.PlayerEditStats;
 import de.streuland.district.TraderNpcService;
+import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.path.PathGenerator;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
@@ -59,6 +60,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final AdminPlotService adminPlotService;
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
+    private final SeasonalWeatherService seasonalWeatherService;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
@@ -68,7 +70,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                                BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
-                               TraderNpcService traderNpcService) {
+                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -83,6 +85,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.adminPlotService = adminPlotService;
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
+        this.seasonalWeatherService = seasonalWeatherService;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
@@ -138,6 +141,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleStyle(player, args);
             case "biome":
                 return handleBiomeBonus(player, args);
+            case "weather":
+                return handleWeather(player, args);
             case "neighbor":
                 return handleNeighbor(player, args);
             case "quest":
@@ -552,6 +557,23 @@ public class PlotCommandExecutor implements CommandExecutor {
     }
 
 
+
+    private boolean handleWeather(Player player, String[] args) {
+        if (args.length < 2 || !"current".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§cVerwendung: /plot weather current");
+            return true;
+        }
+
+        player.sendMessage("§6=== Saisonales Wetter ===");
+        player.sendMessage("§eAktive Saison: §f" + seasonalWeatherService.getActiveSeason().name());
+        player.sendMessage("§eTag: §f" + seasonalWeatherService.getDayInSeason() + " / " + seasonalWeatherService.getSeasonDurationDays());
+        player.sendMessage("§eEffekte:");
+        for (String line : seasonalWeatherService.getCurrentEffectsSummary()) {
+            player.sendMessage("§7- " + line);
+        }
+        return true;
+    }
+
     private boolean handleWorld(Player player, String[] args) {
         if (args.length < 2 || !"list".equalsIgnoreCase(args[1])) {
             player.sendMessage("§cVerwendung: /plot world list");
@@ -621,6 +643,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
         player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
+        player.sendMessage("§e/plot weather current§f - Zeigt aktuelle Saison-Effekte");
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
         player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
         player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots");
