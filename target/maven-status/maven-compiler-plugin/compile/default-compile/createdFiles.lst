@@ -5,6 +5,7 @@ de\streuland\path\PathGenerator$BlockPosition.class
 de\streuland\neighborhood\SharedResourcePool.class
 de\streuland\district\DistrictProgress.class
 de\streuland\plot\distribution\CandidatePlotLocation.class
+de\streuland\plot\market\PlotMarketService$1.class
 de\streuland\path\PathGenerator.class
 de\streuland\plot\snapshot\ChunkKey.class
 de\streuland\rules\conditions\CooldownActiveCondition.class
@@ -14,6 +15,7 @@ de\streuland\plot\upgrade\PlotUpgradeTree.class
 de\streuland\rules\RuleProvider.class
 de\streuland\analytics\PlotAnalyticsRecord.class
 de\streuland\plot\distribution\PlotLocationScorer.class
+de\streuland\plot\market\PlotMarketService.class
 de\streuland\dashboard\RestApiController$DistrictHeatmapHandler.class
 de\streuland\district\DistrictLevel.class
 de\streuland\rules\conditions\NotCondition.class
@@ -27,6 +29,7 @@ de\streuland\plot\upgrade\PlotUpgradeDefinition.class
 de\streuland\event\PlotClaimedEvent.class
 de\streuland\plot\upgrade\PlotLevelDefinition.class
 de\streuland\dashboard\RestApiController.class
+de\streuland\plot\market\PlotMarketService$MarketState.class
 de\streuland\plot\skin\PlotSkinService.class
 de\streuland\rules\actions\CooldownAction.class
 de\streuland\plot\biome\BiomeProfile.class
@@ -41,6 +44,7 @@ de\streuland\StreulandPlugin.class
 de\streuland\plot\PlotData.class
 de\streuland\plot\snapshot\SnapshotManager.class
 de\streuland\rules\RuleTrigger.class
+de\streuland\plot\market\MarketListing.class
 de\streuland\rules\conditions\BiomeCondition.class
 de\streuland\district\DistrictGoal.class
 de\streuland\quest\QuestService.class
@@ -48,6 +52,7 @@ de\streuland\neighborhood\ResourceSyncScheduler.class
 de\streuland\district\DistrictGoalCatalog$BuiltBlocksGoal.class
 de\streuland\neighborhood\NeighborhoodService.class
 de\streuland\plot\distribution\WeightedPlotDistributor.class
+de\streuland\plot\market\MarketSale.class
 de\streuland\plot\biome\BiomeEffectScheduler.class
 de\streuland\plot\PlotManager.class
 de\streuland\plot\biome\BiomeEffect.class
