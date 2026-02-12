@@ -11,6 +11,10 @@ import de.streuland.plot.snapshot.SnapshotManager;
 import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.plot.snapshot.SnapshotMeta;
 import de.streuland.rules.RuleEngine;
+import de.streuland.quest.QuestDefinition;
+import de.streuland.quest.QuestProgress;
+import de.streuland.quest.QuestService;
+import de.streuland.quest.QuestTracker;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -44,12 +48,15 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotSkinService plotSkinService;
     private final BiomeBonusService biomeBonusService;
     private final NeighborhoodService neighborhoodService;
+    private final QuestService questService;
+    private final QuestTracker questTracker;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     
     public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator,
                                SnapshotManager snapshotManager, RuleEngine ruleEngine, PlotSkinService plotSkinService,
-                               BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService) {
+                               BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
+                               QuestService questService, QuestTracker questTracker) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -58,6 +65,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotSkinService = plotSkinService;
         this.biomeBonusService = biomeBonusService;
         this.neighborhoodService = neighborhoodService;
+        this.questService = questService;
+        this.questTracker = questTracker;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
     }
@@ -114,6 +123,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleBiomeBonus(player, args);
             case "neighbor":
                 return handleNeighbor(player, args);
+            case "quest":
+                return handleQuest(player, args);
             default:
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
@@ -450,6 +461,7 @@ public class PlotCommandExecutor implements CommandExecutor {
             }
 
             player.sendMessage("§a" + target.getName() + " als vertrauenswürdigen Nachbarn hinzugefügt.");
+            questTracker.onNeighborAdded(player);
             return true;
         }
 
@@ -516,6 +528,60 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
+        player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
+    }
+
+
+    private boolean handleQuest(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage("§cVerwendung: /plot quest <list|progress>");
+            return true;
+        }
+
+        if ("list".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§6=== Aktive Plot-Quests ===");
+            for (QuestDefinition quest : questService.getActiveQuests()) {
+                String expired = quest.isExpired() ? "§cABGELAUFEN" : "§aAKTIV";
+                player.sendMessage("§e" + quest.getTitle() + " §7(" + quest.getType().name() + ") §8- " + expired);
+                player.sendMessage("§7" + quest.getDescription());
+            }
+            return true;
+        }
+
+        if ("progress".equalsIgnoreCase(args[1])) {
+            Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+            if (plot == null) {
+                player.sendMessage("§cDu stehst in keinem Plot!");
+                return true;
+            }
+            player.sendMessage("§6=== Quest Fortschritt (" + plot.getPlotId() + ") ===");
+            questTracker.syncDistrictQuest(player, plot);
+            de.streuland.plot.PlotData data = plotManager.getStorage().getPlotData(plot.getPlotId());
+            for (QuestDefinition quest : questService.getActiveQuests()) {
+                QuestProgress progress = questService.getOrCreateProgress(data, quest.getId());
+                int value = Math.min(progress.getValue(), quest.getTarget());
+                String bar = buildProgressBar(value, quest.getTarget(), 20);
+                int pct = (int) Math.round((value * 100.0D) / Math.max(1, quest.getTarget()));
+                String status = progress.isCompleted() ? "§aAbgeschlossen" : "§eIn Arbeit";
+                player.sendMessage("§e" + quest.getTitle() + " §7" + bar + " §f" + pct + "% §8(" + value + "/" + quest.getTarget() + ") §7" + status);
+            }
+            return true;
+        }
+
+        player.sendMessage("§cVerwendung: /plot quest <list|progress>");
+        return true;
+    }
+
+    private String buildProgressBar(int value, int target, int length) {
+        int safeTarget = Math.max(1, target);
+        double ratio = Math.min(1.0D, value / (double) safeTarget);
+        int filled = (int) Math.round(ratio * length);
+        StringBuilder builder = new StringBuilder("§8[");
+        for (int i = 0; i < length; i++) {
+            builder.append(i < filled ? "§a|" : "§7|");
+        }
+        builder.append("§8]");
+        return builder.toString();
     }
 
     private boolean handleSnapshot(Player player, String[] args) {

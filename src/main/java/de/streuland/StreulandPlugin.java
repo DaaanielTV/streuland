@@ -7,6 +7,8 @@ import de.streuland.district.DistrictClusterService;
 import de.streuland.district.DistrictManager;
 import de.streuland.district.DistrictProgressService;
 import de.streuland.dashboard.PlotAnalyticsExporter;
+import de.streuland.quest.QuestService;
+import de.streuland.quest.QuestTracker;
 import de.streuland.dashboard.RestApiController;
 import de.streuland.listener.ProtectionListener;
 import de.streuland.neighborhood.NeighborhoodService;
@@ -48,6 +50,8 @@ public class StreulandPlugin extends JavaPlugin {
     private NeighborhoodService neighborhoodService;
     private ResourceSyncScheduler resourceSyncScheduler;
     private RestApiController restApiController;
+    private QuestService questService;
+    private QuestTracker questTracker;
     
     @Override
     public void onEnable() {
@@ -97,25 +101,30 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ RuleListener registered");
             
             analyticsService = new InMemoryPlotAnalyticsService();
+            questService = new QuestService(this, plotStorage, ruleEngine);
+            getLogger().info("✓ QuestService initialized");
             neighborhoodService = new NeighborhoodService(this, plotManager, new DistrictClusterService(), analyticsService);
             resourceSyncScheduler = new ResourceSyncScheduler(this, neighborhoodService);
             resourceSyncScheduler.start();
             getLogger().info("✓ Neighborhood system initialized");
 
             // Register plot command
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService);
             if (getCommand("plot") == null) {
                 throw new IllegalStateException("Command 'plot' is not defined in plugin.yml");
             }
-            getCommand("plot").setExecutor(commandExecutor);
             
             // Initialize district system
             districtManager = new DistrictManager(this, plotManager);
             districtProgressService = new DistrictProgressService(this, plotManager, districtManager);
             getServer().getPluginManager().registerEvents(districtManager, this);
             getServer().getPluginManager().registerEvents(districtProgressService, this);
+            questTracker = new QuestTracker(plotManager, districtManager, questService);
+            getServer().getPluginManager().registerEvents(questTracker, this);
             getLogger().info("✓ District system initialized");
             
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker);
+            getCommand("plot").setExecutor(commandExecutor);
+
             // Register district command
             getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager));
             getLogger().info("✓ Commands registered");
