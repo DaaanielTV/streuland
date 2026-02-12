@@ -1,17 +1,15 @@
-# ⚠️⚠️ Plugin is a Work-In-Progress, go ahead and experiment with it :) ⚠️⚠️
-
 # Streuland Plot Plugin
 
 A plot system for Paper 1.16.5 Minecraft servers with vanilla world generation and explicit area typing (PATH / PLOT_UNCLAIMED / PLOT_CLAIMED).
 
 ## Features
 
-✅ **AreaType-based Protection** - Protection is driven by explicit area categories
-✅ **Automatic Path Generation** - New plots auto-connect via paths to nearest plots
-✅ **Vanilla World Preservation** - Uses default world generation, no custom terrain
-✅ **Plot Protection** - Only owner/trusted players can build
-✅ **Persistent Storage** - YAML-based plot data that survives restarts
-✅ **Async Operations** - Plot creation runs async to prevent lag
+- **AreaType-based Protection** - Protection is driven by explicit area categories
+- **Automatic Path Generation** - New plots auto-connect via paths to nearest plots
+- **Vanilla World Preservation** - Uses default world generation, no custom terrain
+- **Plot Protection** - Only owner/trusted players can build
+- **Persistent Storage** - YAML-based plot data that survives restarts
+- **Async Operations** - Plot creation runs async to prevent lag
 
 ## Quick Start
 
@@ -94,7 +92,7 @@ The plugin is modular with clear separation of concerns:
 - **ProtectionListener** - Event-based plot protection
 - **PlotCommandExecutor** - Command handler
 
-📖 Siehe [docs/README.md](docs/README.md) für die neue, strukturierte Dokumentation.
+See [docs/README.md](docs/README.md) for detailed documentation.
 
 ## Plot Creation Process
 
@@ -125,11 +123,11 @@ When a player runs `/plot create`:
 
 | Action | Owner | Trusted | Visitor |
 |--------|-------|---------|---------|
-| Build | ✅ | ✅ | ❌ |
-| Break | ✅ | ✅ | ❌ |
-| Interact* | ✅ | ✅ | ❌ |
-| Walk | ✅ | ✅ | ✅ |
-| Edit Paths | ❌ | ❌ | ❌ |
+| Build | Yes | Yes | No |
+| Break | Yes | Yes | No |
+| Interact* | Yes | Yes | No |
+| Walk | Yes | Yes | Yes |
+| Edit Paths | No | No | No |
 
 *Doors, buttons, levers, chests, etc.
 
@@ -203,7 +201,7 @@ mvn clean package
 
 ## License
 
-This plugin is created as part of the Streuland project.
+This project is licensed under the GNU General Public License v3.0 (GNU GPLv3). See the [LICENSE](LICENSE) file for details.
 
 ---
 
