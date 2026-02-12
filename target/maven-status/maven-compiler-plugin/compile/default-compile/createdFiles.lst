@@ -26,12 +26,15 @@ de\streuland\rules\DefaultPlotLevelProvider.class
 de\streuland\plot\biome\BiomeBonusService.class
 de\streuland\listener\ProtectionListener$1.class
 de\streuland\plot\upgrade\PlotUpgradeDefinition.class
+de\streuland\district\TraderNpcService.class
 de\streuland\admin\BlockChangeEntry.class
 de\streuland\event\PlotClaimedEvent.class
 de\streuland\admin\BlockChangeAction.class
 de\streuland\plot\upgrade\PlotLevelDefinition.class
+de\streuland\district\TraderNpcService$1.class
 de\streuland\dashboard\RestApiController.class
 de\streuland\plot\market\PlotMarketService$MarketState.class
+de\streuland\district\TraderNpcService$TraderNpc.class
 de\streuland\plot\skin\PlotSkinService.class
 de\streuland\rules\actions\CooldownAction.class
 de\streuland\plot\biome\BiomeProfile.class
@@ -65,6 +68,7 @@ de\streuland\dashboard\DashboardWebSocketServer.class
 de\streuland\admin\DailyPlotBackupService.class
 de\streuland\district\DistrictManager.class
 de\streuland\plot\PlotStoragePartitioner.class
+de\streuland\district\TraderNpcService$TraderBiome.class
 de\streuland\storage\PlotRepository.class
 de\streuland\plot\upgrade\PlotUpgradeService.class
 de\streuland\admin\AdminPlotService$PendingRollback.class
@@ -113,6 +117,7 @@ de\streuland\plot\PlotManager$1.class
 de\streuland\rules\conditions\PlayerRankCondition.class
 de\streuland\rules\conditions\PlotLevelCondition.class
 de\streuland\district\DistrictProgressService.class
+de\streuland\district\TraderNpcService$TraderItem.class
 de\streuland\listener\ProtectionListener.class
 de\streuland\admin\AdminPlotService$1.class
 de\streuland\rules\ExampleRules.class
