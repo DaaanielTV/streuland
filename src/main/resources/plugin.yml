@@ -9,7 +9,7 @@ api-version: 1.13
 commands:
   plot:
     description: Main plot command
-    usage: /plot <help|create|claim|info|trust|untrust|home|list|unclaim|delete|confirm|cancel|generate|stats>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|unclaim|delete|confirm|cancel|generate|stats>
     aliases:
       - p
   district:

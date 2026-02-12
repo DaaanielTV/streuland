@@ -82,21 +82,47 @@ biomes:
         - "ALLOW_REDSTONE"
       resource-multipliers:
         crop-growth: 1.1
-        mob-loot: 1.0
       environment-constraints:
         max-build-height: 200
-      stacked-effects:
-        - "spring_festival"
+      bonuses:
+        farmland-area-multiplier: 1.2
+    DARK_FOREST:
+      enabled: true
+      priority: 0
+      build-rules:
+        - "LOW_LIGHT_DECOR"
+      resource-multipliers:
+        mob-loot: 1.15
+      environment-constraints:
+        max-build-height: 180
+      bonuses:
+        night-vision: true
+        mob-spawn-rate-multiplier: 1.25
     DESERT:
       enabled: true
       priority: 0
       build-rules:
         - "LIMIT_WATER"
       resource-multipliers:
-        crop-growth: 0.8
         mining: 1.1
       environment-constraints:
         max-build-height: 160
+      bonuses:
+        heat-resistance-on-spawn: true
+    JUNGLE:
+      enabled: true
+      priority: 0
+      build-rules:
+        - "ALLOW_TREE_CANOPY"
+      bonuses:
+        rain-harvest-multiplier: 1.3
+    SNOWY_PLAINS:
+      enabled: true
+      priority: 0
+      build-rules:
+        - "ALLOW_ICE_SCULPTURE"
+      bonuses:
+        snowy-decay-rate-multiplier: 0.75
   # Stackable global effects that can be referenced by id
   stacked-effects:
     spring_festival:

@@ -1,5 +1,6 @@
 package de.streuland.plot;
 
+import de.streuland.plot.skin.PlotTheme;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -23,6 +24,7 @@ public class PlotStorage {
     private final File dataFolder;
     private final File indexFile;
     private final Map<String, Plot> cachedPlots;
+    private final Map<String, PlotData> plotData;
     private final Map<UUID, Set<String>> ownerToPlotIds;
     
     public PlotStorage(JavaPlugin plugin) {
@@ -30,6 +32,7 @@ public class PlotStorage {
         this.dataFolder = new File(plugin.getDataFolder(), "plots");
         this.indexFile = new File(dataFolder, "index.yml");
         this.cachedPlots = new HashMap<>();
+        this.plotData = new HashMap<>();
         this.ownerToPlotIds = new HashMap<>();
 
         
@@ -59,6 +62,8 @@ public class PlotStorage {
         config.set("trusted", plot.getTrustedPlayers().stream()
                 .map(UUID::toString)
                 .collect(java.util.stream.Collectors.toList()));
+        PlotData data = plotData.getOrDefault(plot.getPlotId(), new PlotData());
+        config.set("theme", data.getTheme().name());
 
         try {
             config.save(plotFile);
@@ -68,14 +73,13 @@ public class PlotStorage {
 
         Plot oldPlot = cachedPlots.put(plot.getPlotId(), plot);
         updateOwnerIndexForPlotReplacement(oldPlot, plot);
-        
-        // Update cache and index
-        cachedPlots.put(plot.getPlotId(), plot);
+        plotData.putIfAbsent(plot.getPlotId(), new PlotData());
         saveIndex();
     }
 
     private synchronized void loadAllPlots() {
         cachedPlots.clear();
+        plotData.clear();
         ownerToPlotIds.clear();
 
         
@@ -92,6 +96,10 @@ public class PlotStorage {
             Plot plot = loadPlotFromFile(file);
             if (plot != null) {
                 cachedPlots.put(plot.getPlotId(), plot);
+                FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+                String themeRaw = config.getString("theme", PlotTheme.NATURE.name());
+                PlotTheme theme = PlotTheme.fromInput(themeRaw);
+                plotData.put(plot.getPlotId(), new PlotData(theme));
                 addToOwnerIndex(plot);
             }
         }
@@ -204,6 +212,7 @@ public class PlotStorage {
         Plot plot = cachedPlots.remove(plotId);
         if (plot != null) {
             removeFromOwnerIndex(plot);
+            plotData.remove(plotId);
             File plotFile = new File(dataFolder, plotId + ".yml");
             if (plotFile.exists() && !plotFile.delete()) {
                 plugin.getLogger().warning("Failed to delete plot file: " + plotFile.getName());
@@ -231,6 +240,19 @@ public class PlotStorage {
             }
         }
         return max + 1;
+    }
+
+
+    public synchronized PlotData getPlotData(String plotId) {
+        return plotData.computeIfAbsent(plotId, ignored -> new PlotData());
+    }
+
+    public synchronized void savePlotData(String plotId, PlotData data) {
+        plotData.put(plotId, data == null ? new PlotData() : data);
+        Plot plot = cachedPlots.get(plotId);
+        if (plot != null) {
+            savePlot(plot);
+        }
     }
 
     private void saveIndex() {

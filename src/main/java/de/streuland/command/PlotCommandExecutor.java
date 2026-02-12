@@ -3,6 +3,10 @@ package de.streuland.command;
 import de.streuland.path.PathGenerator;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
+import de.streuland.plot.biome.BiomeBonusService;
+import de.streuland.plot.biome.BiomeRuleSet;
+import de.streuland.plot.skin.PlotSkinService;
+import de.streuland.plot.skin.PlotTheme;
 import de.streuland.plot.snapshot.SnapshotManager;
 import de.streuland.plot.snapshot.SnapshotMeta;
 import de.streuland.rules.RuleEngine;
@@ -36,16 +40,21 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PathGenerator pathGenerator;
     private final SnapshotManager snapshotManager;
     private final RuleEngine ruleEngine;
+    private final PlotSkinService plotSkinService;
+    private final BiomeBonusService biomeBonusService;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     
     public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator,
-                               SnapshotManager snapshotManager, RuleEngine ruleEngine) {
+                               SnapshotManager snapshotManager, RuleEngine ruleEngine, PlotSkinService plotSkinService,
+                               BiomeBonusService biomeBonusService) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
         this.snapshotManager = snapshotManager;
         this.ruleEngine = ruleEngine;
+        this.plotSkinService = plotSkinService;
+        this.biomeBonusService = biomeBonusService;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
     }
@@ -96,6 +105,10 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleGenerate(player, args);
             case "stats":
                 return handleStats(player);
+            case "style":
+                return handleStyle(player, args);
+            case "biome":
+                return handleBiomeBonus(player, args);
             default:
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
@@ -383,6 +396,48 @@ public class PlotCommandExecutor implements CommandExecutor {
         return true;
     }
 
+
+    private boolean handleStyle(Player player, String[] args) {
+        if (args.length < 3 || !"set".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§cVerwendung: /plot style set <theme>");
+            return true;
+        }
+        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
+            player.sendMessage("§cDu musst auf deinem eigenen Plot stehen.");
+            return true;
+        }
+        PlotTheme theme = PlotTheme.fromInput(args[2]);
+        if (theme == null) {
+            player.sendMessage("§cUngültiges Theme. Verfügbar: MODERN, MEDIEVAL, NATURE, STEAMPUNK");
+            return true;
+        }
+        plotSkinService.setTheme(plot, theme);
+        player.sendMessage("§aPlot-Stil gesetzt: §f" + theme.getDisplayName());
+        return true;
+    }
+
+    private boolean handleBiomeBonus(Player player, String[] args) {
+        if (args.length < 2 || !"bonus".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§cVerwendung: /plot biome bonus");
+            return true;
+        }
+        Plot plot = plotManager.getPlotAt(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        if (plot == null) {
+            player.sendMessage("§cDu stehst in keinem Plot!");
+            return true;
+        }
+        org.bukkit.block.Biome biome = player.getLocation().getBlock().getBiome();
+        BiomeRuleSet rules = biomeBonusService.getRuleSetForBiome(biome);
+        player.sendMessage("§6=== Biome Bonus ===");
+        player.sendMessage("§eBiome: §f" + biome.name());
+        player.sendMessage("§eAktive Boni: §f" + biomeBonusService.describeBonuses(biome));
+        if (!rules.getEnvironmentConstraints().isEmpty()) {
+            player.sendMessage("§eBau-Grenzen: §f" + rules.getEnvironmentConstraints());
+        }
+        return true;
+    }
+
     private Plot resolvePlotFromArgsOrLocation(Player player, String[] args, int index) {
         if (args.length > index) {
             return plotManager.getStorage().getPlot(args[index]);
@@ -406,6 +461,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
         player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle");
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
+        player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
+        player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
     }
 
     private boolean handleSnapshot(Player player, String[] args) {
