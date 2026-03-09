@@ -38,6 +38,8 @@ import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.biome.BiomeEffectScheduler;
 import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.plot.market.PlotMarketService;
+import de.streuland.pricing.PricingEngine;
+import de.streuland.commands.PlotPriceCommand;
 import de.streuland.commands.PlotMarketCommand;
 import de.streuland.economy.PlotEconomyHook;
 import de.streuland.market.MarketManager;
@@ -86,6 +88,8 @@ public class StreulandPlugin extends JavaPlugin {
     private QuestService questService;
     private QuestTracker questTracker;
     private PlotMarketService plotMarketService;
+    private PricingEngine pricingEngine;
+    private PlotPriceCommand plotPriceCommand;
     private Economy economy;
     private PlotEconomyHook plotEconomyHook;
     private MarketManager marketManager;
@@ -204,6 +208,11 @@ public class StreulandPlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(questTracker, this);
             getLogger().info("✓ District system initialized");
 
+            pricingEngine = new PricingEngine(this, plotManager, neighborhoodService);
+            plotPriceCommand = new PlotPriceCommand(pricingEngine);
+            plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy, pricingEngine);
+
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, plotPriceCommand, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService);
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
             portalManager = new PortalManager(this, plotManager, new PlotEconomyHook(economy), new CooldownManager());
             getServer().getPluginManager().registerEvents(portalManager, this);
