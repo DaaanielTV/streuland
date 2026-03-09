@@ -1,6 +1,7 @@
 package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
+import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.commands.PlotTeamCommand;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.analytics.PlayerEditStats;
@@ -68,6 +69,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final PlotHistoryCommand plotHistoryCommand;
     private final PlotTeamCommand plotTeamCommand;
     private final PlotSchematicCommand plotSchematicCommand;
     private final PlotMarketCommand plotMarketCommand;
@@ -83,6 +85,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               PlotHistoryCommand plotHistoryCommand) {
                                PlotSchematicCommand plotSchematicCommand) {
                                PlotMarketCommand plotMarketCommand, PlotEconomyHook plotEconomyHook) {
         this.plugin = plugin;
@@ -100,6 +103,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.plotHistoryCommand = plotHistoryCommand;
         this.plotTeamCommand = new PlotTeamCommand(plotManager);
         this.plotSchematicCommand = plotSchematicCommand;
         this.plotMarketCommand = plotMarketCommand;
@@ -157,6 +161,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleGenerate(player, args);
             case "stats":
                 return handleStats(player);
+            case "history":
+                return plotHistoryCommand.handle(player, args);
             case "merge":
             case "split":
                 return plotMergeCommand.handle(player, args);

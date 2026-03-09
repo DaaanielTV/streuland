@@ -6,6 +6,9 @@ import de.streuland.admin.DailyPlotBackupService;
 import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.command.PlotCommandExecutor;
 import de.streuland.command.DistrictCommandExecutor;
+import de.streuland.history.PlotChangeJournal;
+import de.streuland.history.JournalManager;
+import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.district.DistrictClusterService;
 import de.streuland.district.DistrictManager;
@@ -86,6 +89,8 @@ public class StreulandPlugin extends JavaPlugin {
     private DailyPlotBackupService dailyPlotBackupService;
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
+    private PlotChangeJournal plotChangeJournal;
+    private JournalManager journalManager;
     private ParticleEffectScheduler particleEffectScheduler;
     private TransactionManager transactionManager;
     private de.streuland.storage.PlotStorage configuredStorageAdapter;
@@ -143,10 +148,12 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ TransactionManager initialized");
 
             blockChangeLogger = new BlockChangeLogger(this, plotManager);
+            plotChangeJournal = new PlotChangeJournal(this, plotManager);
+            journalManager = new JournalManager(this, plotChangeJournal);
             adminPlotService = new AdminPlotService(plotManager, snapshotManager, blockChangeLogger);
 
             protectionListener = new ProtectionListener(this, plotManager);
-            blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService);
+            blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService, plotChangeJournal, journalManager);
             getLogger().info("✓ Protection/BlockChange listeners registered");
 
             ruleListener = new RuleListener(this, ruleEngine, biomeBonusService);
@@ -190,6 +197,7 @@ public class StreulandPlugin extends JavaPlugin {
 
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
 
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, new PlotHistoryCommand(journalManager));
             SchematicLoader schematicLoader = new SchematicLoader(this);
             SchematicPreview schematicPreview = new SchematicPreview();
             SchematicPaster schematicPaster = new SchematicPaster(this);
