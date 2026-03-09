@@ -237,6 +237,12 @@ weather:
       snowy-decay-rate-multiplier: 0.5
       snowy-mob-spawn-multiplier: 0.7
 
+# Scheduled schematic backups
+backups:
+  enabled: true
+  intervalHours: 24
+  initialDelayTicks: 1200
+  retentionDays: 14
 # Lightweight admin web API/dashboard
 web:
   enabled: false

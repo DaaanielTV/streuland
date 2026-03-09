@@ -3,9 +3,11 @@ package de.streuland;
 import de.streuland.admin.AdminPlotService;
 import de.streuland.admin.BlockChangeLogger;
 import de.streuland.admin.DailyPlotBackupService;
+import de.streuland.backup.SnapshotService;
 import de.streuland.commands.PlotPortalCommand;
 import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.command.PlotCommandExecutor;
+import de.streuland.commands.PlotBackupCommand;
 import de.streuland.command.DistrictCommandExecutor;
 import de.streuland.history.PlotChangeJournal;
 import de.streuland.history.JournalManager;
@@ -91,6 +93,7 @@ public class StreulandPlugin extends JavaPlugin {
     private BlockChangeLogger blockChangeLogger;
     private AdminPlotService adminPlotService;
     private DailyPlotBackupService dailyPlotBackupService;
+    private SnapshotService snapshotService;
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
     private PlotChangeJournal plotChangeJournal;
@@ -123,6 +126,7 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ SnapshotStorage initialized");
 
             snapshotManager = new SnapshotManager(this, plotManager, snapshotStorage);
+            snapshotService = new SnapshotService(this, plotManager, snapshotManager);
             getLogger().info("✓ SnapshotManager initialized");
 
             ruleEngine = new RuleEngine(plotManager, new DefaultPlotLevelProvider());
@@ -212,6 +216,8 @@ public class StreulandPlugin extends JavaPlugin {
             SchematicPaster schematicPaster = new SchematicPaster(this);
             PlotSchematicCommand plotSchematicCommand = new PlotSchematicCommand(schematicLoader, schematicPreview, schematicPaster);
 
+            PlotBackupCommand plotBackupCommand = new PlotBackupCommand(snapshotService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotBackupCommand);
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotSchematicCommand);
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotMarketCommand, plotEconomyHook);
             getCommand("plot").setExecutor(commandExecutor);
@@ -220,7 +226,7 @@ public class StreulandPlugin extends JavaPlugin {
             getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager));
             getLogger().info("✓ Commands registered");
 
-            dailyPlotBackupService = new DailyPlotBackupService(this, plotManager, snapshotManager);
+            dailyPlotBackupService = new DailyPlotBackupService(this, snapshotService);
             dailyPlotBackupService.start();
             getLogger().info("✓ Daily backup scheduler initialized");
 

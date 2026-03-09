@@ -1,6 +1,7 @@
 package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
+import de.streuland.commands.PlotBackupCommand;
 import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.commands.PlotTeamCommand;
 import de.streuland.analytics.PlotAnalyticsService;
@@ -70,6 +71,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final PlotBackupCommand plotBackupCommand;
     private final PlotPortalCommand plotPortalCommand;
     private final PlotHistoryCommand plotHistoryCommand;
     private final PlotTeamCommand plotTeamCommand;
@@ -87,6 +89,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               PlotBackupCommand plotBackupCommand) {
                                PlotPortalCommand plotPortalCommand) {
                                PlotHistoryCommand plotHistoryCommand) {
                                PlotSchematicCommand plotSchematicCommand) {
@@ -106,6 +109,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.plotBackupCommand = plotBackupCommand;
         this.plotPortalCommand = plotPortalCommand;
         this.plotHistoryCommand = plotHistoryCommand;
         this.plotTeamCommand = new PlotTeamCommand(plotManager);
@@ -165,6 +169,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleGenerate(player, args);
             case "stats":
                 return handleStats(player);
+            case "backup":
+                return plotBackupCommand.handle(player, args);
             case "history":
                 return plotHistoryCommand.handle(player, args);
             case "merge":
@@ -632,7 +638,10 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot team <...>§f - Verwalte Plot-Teamrollen");
         player.sendMessage("§e/plot home [Nummer]§f - Teleportiere dich zu einem eigenen Plot");
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
-        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle");
+        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle"
+        );
+        player.sendMessage("§e/plot backup <take|list|restore> <plotId> [snapshotId]§f - Schematic Backups");
+        player.sendMessage(" ");
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
         player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
