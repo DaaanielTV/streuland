@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Streuland Admin Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f4f4f4; }
+    .controls { margin-bottom: 12px; display: flex; gap: 8px; }
+  </style>
+</head>
+<body>
+  <h2>Streuland Plots</h2>
+  <div class="controls">
+    <input id="token" type="password" placeholder="Bearer token" />
+    <button id="load">Load Plots</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>Coords</th><th>Owner</th><th>Area Type</th><th>Trusted</th><th>Featured</th><th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <script>
+    async function api(path, method = 'GET') {
+      const token = document.getElementById('token').value.trim();
+      const headers = {};
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      const res = await fetch(path, { method, headers });
+      if (!res.ok) throw new Error(await res.text());
+      return res.headers.get('content-type')?.includes('application/json') ? res.json() : res.text();
+    }
+
+    async function loadPlots() {
+      const rows = document.getElementById('rows');
+      rows.innerHTML = '';
+      const plots = await api('/api/plots');
+      plots.forEach(plot => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${plot.id}</td>
+          <td>${plot.coords}</td>
+          <td>${plot.owner || '-'}</td>
+          <td>${plot.areaType}</td>
+          <td>${plot.trustedCount}</td>
+          <td>${plot.featured}</td>
+          <td><button data-id="${plot.id}">Toggle Featured</button></td>
+        `;
+        tr.querySelector('button').addEventListener('click', async () => {
+          await api('/api/plots/' + plot.id + '/feature', 'POST');
+          await loadPlots();
+        });
+        rows.appendChild(tr);
+      });
+    }
+
+    document.getElementById('load').addEventListener('click', () => {
+      loadPlots().catch(err => alert('Request failed: ' + err.message));
+    });
+  </script>
+</body>
+</html>
