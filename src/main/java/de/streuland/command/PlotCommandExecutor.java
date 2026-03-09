@@ -22,6 +22,8 @@ import de.streuland.quest.QuestDefinition;
 import de.streuland.quest.QuestProgress;
 import de.streuland.quest.QuestService;
 import de.streuland.quest.QuestTracker;
+import de.streuland.commands.PlotMarketCommand;
+import de.streuland.economy.PlotEconomyHook;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -63,6 +65,8 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
     private final PlotSchematicCommand plotSchematicCommand;
+    private final PlotMarketCommand plotMarketCommand;
+    private final PlotEconomyHook plotEconomyHook;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
@@ -74,6 +78,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
                                PlotSchematicCommand plotSchematicCommand) {
+                               PlotMarketCommand plotMarketCommand, PlotEconomyHook plotEconomyHook) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -90,6 +95,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
         this.plotSchematicCommand = plotSchematicCommand;
+        this.plotMarketCommand = plotMarketCommand;
+        this.plotEconomyHook = plotEconomyHook;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
@@ -156,6 +163,11 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleQuest(player, args);
             case "market":
                 return handleMarket(player, args);
+            case "sell":
+            case "buy":
+            case "auction":
+            case "bid":
+                return plotMarketCommand.handle(player, args, plotEconomyHook.hasEconomy());
             case "world":
                 return handleWorld(player, args);
             case "teleport":
@@ -658,7 +670,12 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot weather current§f - Zeigt aktuelle Saison-Effekte");
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
         player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
-        player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots");
+        player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots"
+        );
+        player.sendMessage("§e/plot sell <price>§f - Aktuelles Plot zum Festpreis anbieten");
+        player.sendMessage("§e/plot buy <plotId>§f - Plot direkt kaufen");
+        player.sendMessage("§e/plot auction <price> <durationMin>§f - Auktion starten");
+        player.sendMessage("§e/plot bid <plotId> <amount>§f - Auf Auktion bieten");
         player.sendMessage("§e/plot trader <nearest|buy|stock>§f - Distrikt-Händler nutzen/verwalten");
         player.sendMessage("§e/plot world list§f - Statistiken der aktuellen Welt");
         player.sendMessage("§e/plot teleport <world> <plot_id>§f - Teleportiere weltenübergreifend");

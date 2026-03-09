@@ -31,6 +31,9 @@ import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.biome.BiomeEffectScheduler;
 import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.plot.market.PlotMarketService;
+import de.streuland.commands.PlotMarketCommand;
+import de.streuland.economy.PlotEconomyHook;
+import de.streuland.market.MarketManager;
 import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
@@ -69,6 +72,9 @@ public class StreulandPlugin extends JavaPlugin {
     private QuestTracker questTracker;
     private PlotMarketService plotMarketService;
     private Economy economy;
+    private PlotEconomyHook plotEconomyHook;
+    private MarketManager marketManager;
+    private PlotMarketCommand plotMarketCommand;
     private BlockChangeLogger blockChangeLogger;
     private AdminPlotService adminPlotService;
     private DailyPlotBackupService dailyPlotBackupService;
@@ -137,11 +143,14 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ SeasonalEffectListener registered");
 
             setupEconomy();
+            plotEconomyHook = new PlotEconomyHook(this);
             if (economy == null) {
                 getLogger().warning("Vault Economy provider not found. Plot market will be disabled.");
             } else {
                 getLogger().info("✓ Vault economy connected: " + economy.getName());
             }
+            marketManager = new MarketManager(this, plotManager.getStorage(), plotEconomyHook);
+            plotMarketCommand = new PlotMarketCommand(plotManager, marketManager);
             questService = new QuestService(this, plotManager.getStorage(), ruleEngine);
             getLogger().info("✓ QuestService initialized");
             neighborhoodService = new NeighborhoodService(this, plotManager, new DistrictClusterService(), analyticsService);
@@ -174,6 +183,7 @@ public class StreulandPlugin extends JavaPlugin {
             PlotSchematicCommand plotSchematicCommand = new PlotSchematicCommand(schematicLoader, schematicPreview, schematicPaster);
 
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotSchematicCommand);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotMarketCommand, plotEconomyHook);
             getCommand("plot").setExecutor(commandExecutor);
 
             // Register district command
