@@ -17,8 +17,10 @@ import de.streuland.weather.ParticleEffectScheduler;
 import de.streuland.weather.SeasonalEffectListener;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.dashboard.RestApiController;
+import de.streuland.flags.PlotFlagManager;
 import de.streuland.listener.BlockChangeListener;
 import de.streuland.listener.ProtectionListener;
+import de.streuland.compat.WorldGuardCompat;
 import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.neighborhood.ResourceSyncScheduler;
 import de.streuland.path.PathGenerator;
@@ -71,6 +73,8 @@ public class StreulandPlugin extends JavaPlugin {
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
     private ParticleEffectScheduler particleEffectScheduler;
+    private PlotFlagManager plotFlagManager;
+    private WorldGuardCompat worldGuardCompat;
     
     @Override
     public void onEnable() {
@@ -122,7 +126,12 @@ public class StreulandPlugin extends JavaPlugin {
             blockChangeLogger = new BlockChangeLogger(this, plotManager);
             adminPlotService = new AdminPlotService(plotManager, snapshotManager, blockChangeLogger);
 
-            protectionListener = new ProtectionListener(this, plotManager);
+            plotFlagManager = new PlotFlagManager(plotManager);
+            worldGuardCompat = new WorldGuardCompat(this, plotManager, plotFlagManager);
+            plotFlagManager.registerHook(worldGuardCompat);
+            worldGuardCompat.syncAllPlots();
+
+            protectionListener = new ProtectionListener(this, plotManager, plotFlagManager);
             blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService);
             getLogger().info("✓ Protection/BlockChange listeners registered");
 
@@ -164,7 +173,7 @@ public class StreulandPlugin extends JavaPlugin {
 
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
 
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotFlagManager);
             getCommand("plot").setExecutor(commandExecutor);
 
             // Register district command
