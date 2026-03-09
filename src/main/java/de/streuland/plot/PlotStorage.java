@@ -71,6 +71,7 @@ public class PlotStorage {
         config.set("rewards.abilities", new ArrayList<>(data.getUnlockedAbilities()));
         config.set("rewards.cosmetics", new ArrayList<>(data.getCosmeticInventory()));
         config.set("rewards.stats", new HashMap<>(data.getStatBonuses()));
+        config.set("flags", new HashMap<>(data.getFlagOverrides()));
 
         for (Map.Entry<String, QuestProgress> entry : data.getQuestProgress().entrySet()) {
             String base = "quests.progress." + entry.getKey();
@@ -121,6 +122,11 @@ public class PlotStorage {
                 if (config.isConfigurationSection("rewards.stats")) {
                     for (String key : config.getConfigurationSection("rewards.stats").getKeys(false)) {
                         data.getStatBonuses().put(key, config.getDouble("rewards.stats." + key));
+                    }
+                }
+                if (config.isConfigurationSection("flags")) {
+                    for (String key : config.getConfigurationSection("flags").getKeys(false)) {
+                        data.getFlagOverrides().put(key, config.getBoolean("flags." + key));
                     }
                 }
                 if (config.isConfigurationSection("quests.progress")) {

@@ -4,6 +4,8 @@ import de.streuland.admin.AdminPlotService;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.analytics.PlayerEditStats;
 import de.streuland.district.TraderNpcService;
+import de.streuland.flags.Flag;
+import de.streuland.flags.PlotFlagManager;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.path.PathGenerator;
 import de.streuland.plot.Plot;
@@ -61,6 +63,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final PlotFlagManager plotFlagManager;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
@@ -70,7 +73,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                                BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
-                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService) {
+                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               PlotFlagManager plotFlagManager) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -86,6 +90,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.plotFlagManager = plotFlagManager;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
@@ -161,6 +166,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return adminPlotService.handleAdmin(player, args);
             case "dashboard":
                 return handleDashboardUrl(player, args);
+            case "flag":
+                return handleFlag(player, args);
             default:
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
@@ -655,9 +662,50 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot inspect <x> <z>§f - Zeige Block-Änderungslog für Koordinaten");
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
         player.sendMessage("§e/plot dashboard url§f - Zeige den Web-Dashboard Link");
+        player.sendMessage("§e/plot flag <name> <on|off|default> [plotId]§f - Setzt Plot-Flags");
     }
 
 
+
+
+    private boolean handleFlag(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage("§cVerwendung: /plot flag <name> <on|off|default> [plotId]");
+            return true;
+        }
+
+        Plot plot = resolvePlotFromArgsOrLocation(player, args, 3);
+        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
+            player.sendMessage("§cDu kannst nur eigene, beanspruchte Plots konfigurieren.");
+            return true;
+        }
+
+        Flag flag = PlotFlagManager.parseFlag(args[1]);
+        if (flag == null) {
+            player.sendMessage("§cUnbekanntes Flag. Erlaubt: " + Arrays.toString(Flag.values()));
+            return true;
+        }
+
+        String mode = args[2].toLowerCase(Locale.ROOT);
+        if (mode.equals("default")) {
+            plotFlagManager.clearOverride(plot, flag);
+            player.sendMessage("§aFlag " + flag.name() + " auf Standard zurückgesetzt.");
+            return true;
+        }
+        if (mode.equals("on") || mode.equals("true")) {
+            plotFlagManager.setFlag(plot, flag, true);
+            player.sendMessage("§aFlag " + flag.name() + " aktiviert.");
+            return true;
+        }
+        if (mode.equals("off") || mode.equals("false")) {
+            plotFlagManager.setFlag(plot, flag, false);
+            player.sendMessage("§aFlag " + flag.name() + " deaktiviert.");
+            return true;
+        }
+
+        player.sendMessage("§cUngültiger Wert. Nutze on, off oder default.");
+        return true;
+    }
 
     private boolean handleDashboardUrl(Player player, String[] args) {
         if (args.length < 2 || !"url".equalsIgnoreCase(args[1])) {

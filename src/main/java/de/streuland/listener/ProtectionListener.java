@@ -1,5 +1,7 @@
 package de.streuland.listener;
 
+import de.streuland.flags.Flag;
+import de.streuland.flags.PlotFlagManager;
 import de.streuland.plot.AreaType;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
@@ -8,8 +10,15 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBurnEvent;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.BlockRedstoneEvent;
+import org.bukkit.event.block.BlockSpreadEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -18,13 +27,77 @@ import org.bukkit.plugin.java.JavaPlugin;
  */
 public class ProtectionListener implements Listener {
     private final PlotManager plotManager;
+    private final PlotFlagManager plotFlagManager;
     private final boolean allowVisitorInteract;
 
-    public ProtectionListener(JavaPlugin plugin, PlotManager plotManager) {
+    public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, PlotFlagManager plotFlagManager) {
         this.plotManager = plotManager;
+        this.plotFlagManager = plotFlagManager;
         this.allowVisitorInteract = plugin.getConfig().getBoolean("protection.allow-visitor-interact", false);
 
         Bukkit.getPluginManager().registerEvents(this, plugin);
+    }
+
+    @EventHandler
+    public void onPvp(EntityDamageByEntityEvent event) {
+        if (!(event.getEntity() instanceof Player) || !(event.getDamager() instanceof Player)) {
+            return;
+        }
+        Plot plot = plotManager.getPlotAt(event.getEntity().getWorld(), event.getEntity().getLocation().getBlockX(), event.getEntity().getLocation().getBlockZ());
+        if (plot != null && !plotFlagManager.isFlagEnabled(plot, Flag.PVP)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onMobSpawn(CreatureSpawnEvent event) {
+        Plot plot = plotManager.getPlotAt(event.getLocation().getWorld(), event.getLocation().getBlockX(), event.getLocation().getBlockZ());
+        if (plot != null && !plotFlagManager.isFlagEnabled(plot, Flag.MOB_SPAWN)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onEntityExplode(EntityExplodeEvent event) {
+        Plot plot = plotManager.getPlotAt(event.getLocation().getWorld(), event.getLocation().getBlockX(), event.getLocation().getBlockZ());
+        if (plot != null && !plotFlagManager.isFlagEnabled(plot, Flag.EXPLOSIONS)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onBlockExplode(BlockExplodeEvent event) {
+        Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), event.getBlock().getX(), event.getBlock().getZ());
+        if (plot != null && !plotFlagManager.isFlagEnabled(plot, Flag.EXPLOSIONS)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onBlockBurn(BlockBurnEvent event) {
+        Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), event.getBlock().getX(), event.getBlock().getZ());
+        if (plot != null && !plotFlagManager.isFlagEnabled(plot, Flag.FIRE_SPREAD)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onFireSpread(BlockSpreadEvent event) {
+        if (event.getSource().getType() != Material.FIRE) {
+            return;
+        }
+        Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), event.getBlock().getX(), event.getBlock().getZ());
+        if (plot != null && !plotFlagManager.isFlagEnabled(plot, Flag.FIRE_SPREAD)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onRedstone(BlockRedstoneEvent event) {
+        Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), event.getBlock().getX(), event.getBlock().getZ());
+        if (plot != null && !plotFlagManager.isFlagEnabled(plot, Flag.REDSTONE)) {
+            event.setNewCurrent(0);
+        }
     }
 
     @EventHandler
