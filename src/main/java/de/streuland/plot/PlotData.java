@@ -18,6 +18,7 @@ public class PlotData {
     private final Set<String> cosmeticInventory;
     private final Map<String, Double> statBonuses;
     private final Map<String, QuestProgress> questProgress;
+    private final Map<String, Boolean> flagOverrides;
 
     public PlotData() {
         this(PlotTheme.NATURE);
@@ -30,6 +31,7 @@ public class PlotData {
         this.cosmeticInventory = new HashSet<>();
         this.statBonuses = new HashMap<>();
         this.questProgress = new HashMap<>();
+        this.flagOverrides = new HashMap<>();
     }
 
     public PlotTheme getTheme() {
@@ -62,5 +64,9 @@ public class PlotData {
 
     public Map<String, QuestProgress> getQuestProgress() {
         return questProgress;
+    }
+
+    public Map<String, Boolean> getFlagOverrides() {
+        return flagOverrides;
     }
 }
