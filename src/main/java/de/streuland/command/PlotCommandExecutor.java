@@ -21,6 +21,8 @@ import de.streuland.quest.QuestDefinition;
 import de.streuland.quest.QuestProgress;
 import de.streuland.quest.QuestService;
 import de.streuland.quest.QuestTracker;
+import de.streuland.commands.LocaleCommand;
+import de.streuland.i18n.MessageProvider;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -61,6 +63,8 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final MessageProvider messageProvider;
+    private final LocaleCommand localeCommand;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
@@ -70,7 +74,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                                BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
-                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService) {
+                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               MessageProvider messageProvider) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -86,6 +91,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.messageProvider = messageProvider;
+        this.localeCommand = new LocaleCommand(messageProvider);
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
@@ -161,6 +168,10 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return adminPlotService.handleAdmin(player, args);
             case "dashboard":
                 return handleDashboardUrl(player, args);
+            case "lang":
+                return localeCommand.handleLang(player, args);
+            case "serverlang":
+                return localeCommand.handleServerLang(player, args);
             default:
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;

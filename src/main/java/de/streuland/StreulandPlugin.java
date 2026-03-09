@@ -18,6 +18,7 @@ import de.streuland.weather.SeasonalEffectListener;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.dashboard.RestApiController;
 import de.streuland.listener.BlockChangeListener;
+import de.streuland.i18n.MessageProvider;
 import de.streuland.listener.ProtectionListener;
 import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.neighborhood.ResourceSyncScheduler;
@@ -71,6 +72,7 @@ public class StreulandPlugin extends JavaPlugin {
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
     private ParticleEffectScheduler particleEffectScheduler;
+    private MessageProvider messageProvider;
     
     @Override
     public void onEnable() {
@@ -83,6 +85,7 @@ public class StreulandPlugin extends JavaPlugin {
         
         try {
             // Initialize components in dependency order
+            messageProvider = new MessageProvider(this);
             plotManager = new PlotManager(this);
             getLogger().info("✓ PlotManager initialized");
 
@@ -122,7 +125,7 @@ public class StreulandPlugin extends JavaPlugin {
             blockChangeLogger = new BlockChangeLogger(this, plotManager);
             adminPlotService = new AdminPlotService(plotManager, snapshotManager, blockChangeLogger);
 
-            protectionListener = new ProtectionListener(this, plotManager);
+            protectionListener = new ProtectionListener(this, plotManager, messageProvider);
             blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService);
             getLogger().info("✓ Protection/BlockChange listeners registered");
 
@@ -164,11 +167,11 @@ public class StreulandPlugin extends JavaPlugin {
 
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
 
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, messageProvider);
             getCommand("plot").setExecutor(commandExecutor);
 
             // Register district command
-            getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager));
+            getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager, messageProvider));
             getLogger().info("✓ Commands registered");
 
             dailyPlotBackupService = new DailyPlotBackupService(this, plotManager, snapshotManager);

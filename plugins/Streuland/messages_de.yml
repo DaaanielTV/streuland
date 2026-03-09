@@ -1,0 +1,48 @@
+error:
+  no_permission: "§cKeine Berechtigung."
+plot:
+  lang:
+    usage: "§cVerwendung: /plot lang <sprache>"
+    invalid: "§cUnbekannte Sprache '{0}'. Verfügbar: {1}"
+    set: "§aDeine Sprache wurde auf {0} gesetzt."
+  serverlang:
+    usage: "§cVerwendung: /plot serverlang <sprache>"
+    invalid: "§cUnbekannte Server-Sprache '{0}'. Verfügbar: {1}"
+    set: "§aServer-Standardsprache auf {0} gesetzt."
+protection:
+  break:
+    path: "§cDu kannst Path-Blöcke nicht abbauen!"
+    only_plot: "§cDu kannst nur in Plot-Bereichen abbauen!"
+  place:
+    path: "§cDu kannst nicht auf Paths bauen!"
+    only_plot: "§cDu kannst nur in Plot-Bereichen bauen!"
+  plot:
+    protected: "§cDieser Plot ist geschützt!"
+  interact:
+    visitor_blocked: "§cBesucher können hier nicht interagieren!"
+district:
+  error:
+    only_players: "§cNur Spieler können District-Befehle verwenden!"
+    not_in_district: "§cDu stehst in keinem Stadtteil!"
+  info:
+    header: "§6=== Stadtteil ==="
+    name: "§eName: §f{0}"
+    id: "§eID: §f{0}"
+    level: "§eLevel: §f{0}"
+    plots: "§ePlots: §f{0}"
+  progress:
+    header: "§6=== Fortschritt ==="
+    blocks: "§eBlöcke: §f{0}"
+    active_players: "§eAktive Spieler: §f{0}"
+    goals: "§eZiele: §f{0}"
+    next_level: "§eNächstes Level: §f{0}"
+    required: "§7Benötigt: {0} Blöcke, {1} Spieler, {2} Ziele"
+    max_level: "§aMaximales Level erreicht."
+  list:
+    header: "§6=== Stadtteile ==="
+    entry: "§e{0}§f ({1}) - {2}"
+  help:
+    header: "§6=== Stadtteil Befehle ==="
+    info: "§e/district info§f - Info zum aktuellen Stadtteil"
+    progress: "§e/district progress§f - Fortschritt anzeigen"
+    list: "§e/district list§f - Liste aller Stadtteile"
