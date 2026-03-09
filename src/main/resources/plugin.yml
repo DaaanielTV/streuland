@@ -9,6 +9,7 @@ api-version: 1.13
 commands:
   plot:
     description: Main plot command
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|merge|split>
     usage: /plot <help|create|claim|info|team|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard>
     usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|template>
     usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|sell|buy|auction|bid|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard>
