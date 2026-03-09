@@ -3,6 +3,7 @@ package de.streuland;
 import de.streuland.admin.AdminPlotService;
 import de.streuland.admin.BlockChangeLogger;
 import de.streuland.admin.DailyPlotBackupService;
+import de.streuland.commands.PlotPortalCommand;
 import de.streuland.command.PlotCommandExecutor;
 import de.streuland.command.DistrictCommandExecutor;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
@@ -34,6 +35,9 @@ import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
 import de.streuland.rules.listener.RuleListener;
+import de.streuland.warp.CooldownManager;
+import de.streuland.warp.PlotEconomyHook;
+import de.streuland.warp.PortalManager;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import net.milkbowl.vault.economy.Economy;
@@ -71,6 +75,7 @@ public class StreulandPlugin extends JavaPlugin {
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
     private ParticleEffectScheduler particleEffectScheduler;
+    private PortalManager portalManager;
     
     @Override
     public void onEnable() {
@@ -163,8 +168,11 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ District system initialized");
 
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
+            portalManager = new PortalManager(this, plotManager, new PlotEconomyHook(economy), new CooldownManager());
+            getServer().getPluginManager().registerEvents(portalManager, this);
+            PlotPortalCommand plotPortalCommand = new PlotPortalCommand(plotManager, portalManager);
 
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotPortalCommand);
             getCommand("plot").setExecutor(commandExecutor);
 
             // Register district command
