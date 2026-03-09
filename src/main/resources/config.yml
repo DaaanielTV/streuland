@@ -243,6 +243,8 @@ weather:
       snowy-decay-rate-multiplier: 0.5
       snowy-mob-spawn-multiplier: 0.7
 
+i18n:
+  default-locale: "en"
 # Discord integration
 discord:
   webhook-url: ""

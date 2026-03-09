@@ -5,6 +5,7 @@ import de.streuland.district.DistrictLevel;
 import de.streuland.district.DistrictManager;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
+import de.streuland.i18n.MessageProvider;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -16,16 +17,18 @@ import org.bukkit.entity.Player;
 public class DistrictCommandExecutor implements CommandExecutor {
     private final PlotManager plotManager;
     private final DistrictManager districtManager;
+    private final MessageProvider messageProvider;
 
-    public DistrictCommandExecutor(PlotManager plotManager, DistrictManager districtManager) {
+    public DistrictCommandExecutor(PlotManager plotManager, DistrictManager districtManager, MessageProvider messageProvider) {
         this.plotManager = plotManager;
         this.districtManager = districtManager;
+        this.messageProvider = messageProvider;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("§cNur Spieler können District-Befehle verwenden!");
+            sender.sendMessage(messageProvider.t((java.util.UUID) null, "district.error.only_players"));
             return true;
         }
 
@@ -52,15 +55,15 @@ public class DistrictCommandExecutor implements CommandExecutor {
         Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         District district = districtManager.getDistrictForPlot(plot);
         if (district == null) {
-            player.sendMessage("§cDu stehst in keinem Stadtteil!");
+            player.sendMessage(messageProvider.t(player, "district.error.not_in_district"));
             return true;
         }
 
-        player.sendMessage("§6=== Stadtteil ===");
-        player.sendMessage("§eName: §f" + district.getName());
-        player.sendMessage("§eID: §f" + district.getId());
-        player.sendMessage("§eLevel: §f" + district.getLevel().name());
-        player.sendMessage("§ePlots: §f" + district.getPlotIds().size());
+        player.sendMessage(messageProvider.t(player, "district.info.header"));
+        player.sendMessage(messageProvider.t(player, "district.info.name", district.getName()));
+        player.sendMessage(messageProvider.t(player, "district.info.id", district.getId()));
+        player.sendMessage(messageProvider.t(player, "district.info.level", district.getLevel().name()));
+        player.sendMessage(messageProvider.t(player, "district.info.plots", district.getPlotIds().size()));
         return true;
     }
 
@@ -68,38 +71,36 @@ public class DistrictCommandExecutor implements CommandExecutor {
         Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         District district = districtManager.getDistrictForPlot(plot);
         if (district == null) {
-            player.sendMessage("§cDu stehst in keinem Stadtteil!");
+            player.sendMessage(messageProvider.t(player, "district.error.not_in_district"));
             return true;
         }
 
         DistrictLevel next = district.getLevel().next();
-        player.sendMessage("§6=== Fortschritt ===");
-        player.sendMessage("§eBlöcke: §f" + district.getProgress().getBuiltBlocks());
-        player.sendMessage("§eAktive Spieler: §f" + district.getProgress().getActivePlayers());
-        player.sendMessage("§eZiele: §f" + district.getProgress().getCompletedGoals().size());
+        player.sendMessage(messageProvider.t(player, "district.progress.header"));
+        player.sendMessage(messageProvider.t(player, "district.progress.blocks", district.getProgress().getBuiltBlocks()));
+        player.sendMessage(messageProvider.t(player, "district.progress.active_players", district.getProgress().getActivePlayers()));
+        player.sendMessage(messageProvider.t(player, "district.progress.goals", district.getProgress().getCompletedGoals().size()));
         if (next != district.getLevel()) {
-            player.sendMessage("§eNächstes Level: §f" + next.name());
-            player.sendMessage("§7Benötigt: " + next.getRequiredBuiltBlocks() + " Blöcke, "
-                    + next.getRequiredActivePlayers() + " Spieler, "
-                    + next.getRequiredGoals() + " Ziele");
+            player.sendMessage(messageProvider.t(player, "district.progress.next_level", next.name()));
+            player.sendMessage(messageProvider.t(player, "district.progress.required", next.getRequiredBuiltBlocks(), next.getRequiredActivePlayers(), next.getRequiredGoals()));
         } else {
-            player.sendMessage("§aMaximales Level erreicht.");
+            player.sendMessage(messageProvider.t(player, "district.progress.max_level"));
         }
         return true;
     }
 
     private boolean handleList(Player player) {
-        player.sendMessage("§6=== Stadtteile ===");
+        player.sendMessage(messageProvider.t(player, "district.list.header"));
         for (District district : districtManager.getAllDistricts()) {
-            player.sendMessage("§e" + district.getName() + "§f (" + district.getId() + ") - " + district.getLevel().name());
+            player.sendMessage(messageProvider.t(player, "district.list.entry", district.getName(), district.getId(), district.getLevel().name()));
         }
         return true;
     }
 
     private void showHelp(Player player) {
-        player.sendMessage("§6=== Stadtteil Befehle ===");
-        player.sendMessage("§e/district info§f - Info zum aktuellen Stadtteil");
-        player.sendMessage("§e/district progress§f - Fortschritt anzeigen");
-        player.sendMessage("§e/district list§f - Liste aller Stadtteile");
+        player.sendMessage(messageProvider.t(player, "district.help.header"));
+        player.sendMessage(messageProvider.t(player, "district.help.info"));
+        player.sendMessage(messageProvider.t(player, "district.help.progress"));
+        player.sendMessage(messageProvider.t(player, "district.help.list"));
     }
 }

@@ -35,6 +35,8 @@ import de.streuland.quest.QuestDefinition;
 import de.streuland.quest.QuestProgress;
 import de.streuland.quest.QuestService;
 import de.streuland.quest.QuestTracker;
+import de.streuland.commands.LocaleCommand;
+import de.streuland.i18n.MessageProvider;
 import de.streuland.commands.PlotMarketCommand;
 import de.streuland.economy.PlotEconomyHook;
 import org.bukkit.Bukkit;
@@ -78,6 +80,8 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final MessageProvider messageProvider;
+    private final LocaleCommand localeCommand;
     private final PlotFlagManager plotFlagManager;
     private final PlotApprovalService plotApprovalService;
     private final DiscordNotifier discordNotifier;
@@ -99,6 +103,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               MessageProvider messageProvider) {
                                PlotFlagManager plotFlagManager) {
                                PlotApprovalService plotApprovalService, DiscordNotifier discordNotifier) {
                                PlotPriceCommand plotPriceCommand, AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
@@ -126,6 +131,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.messageProvider = messageProvider;
+        this.localeCommand = new LocaleCommand(messageProvider);
         this.plotFlagManager = plotFlagManager;
         this.plotApprovalService = plotApprovalService;
         this.discordNotifier = discordNotifier;
@@ -227,6 +234,10 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return adminPlotService.handleAdmin(player, args);
             case "dashboard":
                 return handleDashboardUrl(player, args);
+            case "lang":
+                return localeCommand.handleLang(player, args);
+            case "serverlang":
+                return localeCommand.handleServerLang(player, args);
             case "flag":
                 return handleFlag(player, args);
             case "pending":

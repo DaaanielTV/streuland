@@ -6,6 +6,7 @@ import de.streuland.plot.AreaType;
 import de.streuland.plot.Permission;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
+import de.streuland.i18n.MessageProvider;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -30,7 +31,11 @@ public class ProtectionListener implements Listener {
     private final PlotManager plotManager;
     private final PlotFlagManager plotFlagManager;
     private final boolean allowVisitorInteract;
+    private final MessageProvider messageProvider;
 
+    public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, MessageProvider messageProvider) {
+        this.plotManager = plotManager;
+        this.messageProvider = messageProvider;
     public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, PlotFlagManager plotFlagManager) {
         this.plotManager = plotManager;
         this.plotFlagManager = plotFlagManager;
@@ -112,7 +117,7 @@ public class ProtectionListener implements Listener {
         switch (areaType) {
             case PATH:
                 event.setCancelled(true);
-                player.sendMessage("§cDu kannst Path-Blöcke nicht abbauen!");
+                player.sendMessage(messageProvider.t(player, "protection.break.path"));
                 return;
             case PLOT_UNCLAIMED:
                 return;
@@ -120,13 +125,13 @@ public class ProtectionListener implements Listener {
                 Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
                 if (plot != null && !plot.isAllowed(player.getUniqueId(), Permission.BREAK)) {
                     event.setCancelled(true);
-                    player.sendMessage("§cDieser Plot ist geschützt!");
+                    player.sendMessage(messageProvider.t(player, "protection.plot.protected"));
                 }
                 return;
             case WILDERNESS:
             default:
                 event.setCancelled(true);
-                player.sendMessage("§cDu kannst nur in Plot-Bereichen abbauen!");
+                player.sendMessage(messageProvider.t(player, "protection.break.only_plot"));
         }
     }
 
@@ -141,7 +146,7 @@ public class ProtectionListener implements Listener {
         switch (areaType) {
             case PATH:
                 event.setCancelled(true);
-                player.sendMessage("§cDu kannst nicht auf Paths bauen!");
+                player.sendMessage(messageProvider.t(player, "protection.place.path"));
                 return;
             case PLOT_UNCLAIMED:
                 return;
@@ -149,13 +154,13 @@ public class ProtectionListener implements Listener {
                 Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
                 if (plot != null && !plot.isAllowed(player.getUniqueId(), Permission.BUILD)) {
                     event.setCancelled(true);
-                    player.sendMessage("§cDieser Plot ist geschützt!");
+                    player.sendMessage(messageProvider.t(player, "protection.plot.protected"));
                 }
                 return;
             case WILDERNESS:
             default:
                 event.setCancelled(true);
-                player.sendMessage("§cDu kannst nur in Plot-Bereichen bauen!");
+                player.sendMessage(messageProvider.t(player, "protection.place.only_plot"));
         }
     }
 
@@ -182,7 +187,7 @@ public class ProtectionListener implements Listener {
 
         if (!allowVisitorInteract && isInteractiveBlock(event.getClickedBlock().getType())) {
             event.setCancelled(true);
-            player.sendMessage("§cBesucher können hier nicht interagieren!");
+            player.sendMessage(messageProvider.t(player, "protection.interact.visitor_blocked"));
         }
     }
 
