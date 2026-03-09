@@ -9,7 +9,7 @@ api-version: 1.13
 commands:
   plot:
     description: Main plot command
-    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|pending|approve|reject>
     aliases:
       - p
   district:
@@ -17,6 +17,9 @@ commands:
     usage: /district <info|progress|list>
     aliases:
       - city
+  plotapprove:
+    description: Manage pending plot approvals
+    usage: /plotapprove <list|approve|reject> <id>
 
 softdepend:
   - Vault
@@ -34,4 +37,8 @@ permissions:
 
   streuland.admin:
     description: Grants admin-level dashboard controls
+    default: op
+
+  streuland.plot.approval:
+    description: Allows managing pending plot approvals
     default: op

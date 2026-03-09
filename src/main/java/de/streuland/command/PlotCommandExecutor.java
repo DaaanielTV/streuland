@@ -2,6 +2,9 @@ package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
 import de.streuland.analytics.PlotAnalyticsService;
+import de.streuland.approval.PlotApprovalRequest;
+import de.streuland.approval.PlotApprovalService;
+import de.streuland.discord.DiscordNotifier;
 import de.streuland.analytics.PlayerEditStats;
 import de.streuland.district.TraderNpcService;
 import de.streuland.weather.SeasonalWeatherService;
@@ -61,6 +64,8 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final PlotApprovalService plotApprovalService;
+    private final DiscordNotifier discordNotifier;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
@@ -70,7 +75,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                                BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
-                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService) {
+                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               PlotApprovalService plotApprovalService, DiscordNotifier discordNotifier) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -86,6 +92,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.plotApprovalService = plotApprovalService;
+        this.discordNotifier = discordNotifier;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
@@ -161,16 +169,60 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return adminPlotService.handleAdmin(player, args);
             case "dashboard":
                 return handleDashboardUrl(player, args);
+            case "pending":
+                return handlePendingApprovals(player);
+            case "approve":
+                return handleApprovalAction(player, args, true);
+            case "reject":
+                return handleApprovalAction(player, args, false);
             default:
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
         }
     }
 
+    private boolean handlePendingApprovals(Player player) {
+        if (!player.hasPermission("streuland.plot.approval")) {
+            player.sendMessage("§cKeine Berechtigung.");
+            return true;
+        }
+        List<PlotApprovalRequest> pending = plotApprovalService.listPending();
+        if (pending.isEmpty()) {
+            player.sendMessage("§7Keine offenen Plot-Freigaben.");
+            return true;
+        }
+        player.sendMessage("§6Offene Plot-Freigaben: " + pending.size());
+        for (PlotApprovalRequest request : pending) {
+            player.sendMessage("§e" + request.getId() + " §7- " + request.getPlayerName() + " @ " + request.getWorldName());
+        }
+        return true;
+    }
+
+    private boolean handleApprovalAction(Player player, String[] args, boolean approve) {
+        if (!player.hasPermission("streuland.plot.approval")) {
+            player.sendMessage("§cKeine Berechtigung.");
+            return true;
+        }
+        if (args.length < 2) {
+            player.sendMessage("§cVerwendung: /plot " + (approve ? "approve" : "reject") + " <id>");
+            return true;
+        }
+        boolean success = approve ? plotApprovalService.approve(args[1]) : plotApprovalService.reject(args[1]);
+        player.sendMessage(success ? "§aAntrag verarbeitet." : "§cAntrag nicht gefunden.");
+        return true;
+    }
+
     private boolean handleCreate(Player player) {
         List<Plot> playerPlots = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId());
         if (playerPlots.size() >= plotManager.getMaxPlotsPerPlayer(player.getWorld())) {
             player.sendMessage("§cDu kannst maximal " + plotManager.getMaxPlotsPerPlayer(player.getWorld()) + " Plots besitzen!");
+            return true;
+        }
+
+        if (plotApprovalService.requiresApproval(player)) {
+            PlotApprovalRequest request = plotApprovalService.createPending(player);
+            player.sendMessage("§eDein Plot-Antrag wurde eingereicht: §f" + request.getId());
+            player.sendMessage("§7Ein Admin kann mit /plotapprove approve " + request.getId() + " freigeben.");
             return true;
         }
 
@@ -182,12 +234,24 @@ public class PlotCommandExecutor implements CommandExecutor {
                     pathGenerator.buildPathBlocks(pathBlocks);
                     player.sendMessage("§aPlot erstellt und beansprucht! Lage: " + plot.getCenterX() + ", " + plot.getCenterZ());
                     player.sendMessage("§aNutze /plot home um dorthin zu teleportieren");
+                    notifyLargeClaim(player.getName(), plot);
                 });
             } else {
                 player.sendMessage("§cKein geeigneter Ort für deinen Plot gefunden. Versuche es später erneut.");
             }
         });
         return true;
+    }
+
+    private void notifyLargeClaim(String playerName, Plot plot) {
+        int threshold = plugin.getConfig().getInt("discord.large-claim-threshold", 128);
+        if (plot.getSize() < threshold) {
+            return;
+        }
+        Map<String, Object> extras = new HashMap<>();
+        extras.put("title", "Large plot claim");
+        extras.put("description", playerName + " claimed " + plot.getPlotId() + " (" + plot.getSize() + "x" + plot.getSize() + ")");
+        discordNotifier.sendWebhook("plot-alerts", "Large plot claimed", extras);
     }
 
     private boolean handleClaim(Player player) {
