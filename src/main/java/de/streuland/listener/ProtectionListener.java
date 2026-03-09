@@ -1,6 +1,7 @@
 package de.streuland.listener;
 
 import de.streuland.plot.AreaType;
+import de.streuland.plot.Permission;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
 import org.bukkit.Bukkit;
@@ -44,7 +45,7 @@ public class ProtectionListener implements Listener {
                 return;
             case PLOT_CLAIMED:
                 Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
-                if (plot != null && !plot.isAllowed(player.getUniqueId())) {
+                if (plot != null && !plot.isAllowed(player.getUniqueId(), Permission.BREAK)) {
                     event.setCancelled(true);
                     player.sendMessage("§cDieser Plot ist geschützt!");
                 }
@@ -73,7 +74,7 @@ public class ProtectionListener implements Listener {
                 return;
             case PLOT_CLAIMED:
                 Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
-                if (plot != null && !plot.isAllowed(player.getUniqueId())) {
+                if (plot != null && !plot.isAllowed(player.getUniqueId(), Permission.BUILD)) {
                     event.setCancelled(true);
                     player.sendMessage("§cDieser Plot ist geschützt!");
                 }
@@ -102,7 +103,7 @@ public class ProtectionListener implements Listener {
         }
 
         Plot plot = plotManager.getPlotAt(event.getClickedBlock().getWorld(), x, z);
-        if (plot == null || plot.isAllowed(player.getUniqueId())) {
+        if (plot == null || plot.isAllowed(player.getUniqueId(), Permission.INTERACT)) {
             return;
         }
 
