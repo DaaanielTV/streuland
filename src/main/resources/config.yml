@@ -45,6 +45,14 @@ protection:
   #   - DOOR
   #   - BUTTON
 
+# Role-permission mapping for plot teams
+roles:
+  OWNER: [BUILD, BREAK, INTERACT, TRANSFER]
+  CO_OWNER: [BUILD, BREAK, INTERACT, TRANSFER]
+  MEMBER: [BUILD, BREAK, INTERACT]
+  BUILDER: [BUILD, BREAK]
+  VISITOR: [INTERACT]
+
 # Performance settings
 async:
   # Run plot creation validation async before block changes
@@ -66,11 +74,17 @@ terrain:
 
 # Storage
 storage:
-  # File format: yaml or json
-  format: yaml
-  
-  # Folder where plot data is stored
+  # Storage backend for plot persistence: yaml or sqlite
+  type: yaml
+
+  # Folder where YAML plot data is stored
   data-folder: "plots"
+
+  # SQLite file relative to plugin data folder
+  sqlite-file: "db.sqlite"
+
+  # Optional one-time migration from YAML files to SQLite
+  migrate-yaml-on-startup: false
 
 # Biome-dependent plot effects
 biomes:
@@ -229,3 +243,8 @@ backups:
   intervalHours: 24
   initialDelayTicks: 1200
   retentionDays: 14
+# Lightweight admin web API/dashboard
+web:
+  enabled: false
+  port: 8090
+  token: "change-me"
