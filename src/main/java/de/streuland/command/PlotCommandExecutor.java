@@ -6,6 +6,9 @@ import de.streuland.analytics.PlayerEditStats;
 import de.streuland.district.TraderNpcService;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.path.PathGenerator;
+import de.streuland.commands.PlotMergeCommand;
+import de.streuland.plot.PlotMergeService;
+import de.streuland.plot.SplitStrategy;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
 import de.streuland.plot.biome.BiomeBonusService;
@@ -62,6 +65,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
+    private final PlotMergeCommand plotMergeCommand;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
     
@@ -87,6 +91,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
         this.pendingDeletes = new HashMap<>();
+        this.plotMergeCommand = new PlotMergeCommand(new PlotMergeService(plugin, plotManager));
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
     }
@@ -137,6 +142,9 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleGenerate(player, args);
             case "stats":
                 return handleStats(player);
+            case "merge":
+            case "split":
+                return plotMergeCommand.handle(player, args);
             case "style":
                 return handleStyle(player, args);
             case "biome":
@@ -655,6 +663,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot inspect <x> <z>§f - Zeige Block-Änderungslog für Koordinaten");
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
         player.sendMessage("§e/plot dashboard url§f - Zeige den Web-Dashboard Link");
+        player.sendMessage("§e/plot merge <plotIdA> <plotIdB>§f - Verschmilzt benachbarte Plots");
+        player.sendMessage("§e/plot split <plotId> <rows> <cols>§f - Teilt einen Plot in ein Grid");
     }
 
 

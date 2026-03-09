@@ -276,6 +276,39 @@ public class PlotStorage {
         return plot;
     }
 
+
+    public synchronized void saveMany(List<Plot> plots) {
+        if (plots == null) {
+            return;
+        }
+        for (Plot plot : plots) {
+            if (plot != null) {
+                savePlot(plot);
+            }
+        }
+    }
+
+    public synchronized void deleteMany(List<Integer> plotIds) {
+        if (plotIds == null) {
+            return;
+        }
+        Set<String> toDelete = new HashSet<>();
+        for (Integer id : plotIds) {
+            if (id == null) {
+                continue;
+            }
+            String suffix = "_" + id;
+            for (String plotId : cachedPlots.keySet()) {
+                if (plotId.endsWith(suffix)) {
+                    toDelete.add(plotId);
+                }
+            }
+        }
+        for (String plotId : toDelete) {
+            deletePlot(plotId);
+        }
+    }
+
     /**
      * Determines the next plot number based on existing plot IDs.
      */
