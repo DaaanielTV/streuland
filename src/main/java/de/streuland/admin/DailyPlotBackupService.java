@@ -1,32 +1,30 @@
 package de.streuland.admin;
 
-import de.streuland.plot.Plot;
-import de.streuland.plot.PlotManager;
-import de.streuland.plot.snapshot.PlotSnapshot;
-import de.streuland.plot.snapshot.SnapshotManager;
+import de.streuland.backup.SnapshotService;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class DailyPlotBackupService {
     private final JavaPlugin plugin;
-    private final PlotManager plotManager;
-    private final SnapshotManager snapshotManager;
+    private final SnapshotService snapshotService;
     private BukkitTask task;
 
-    public DailyPlotBackupService(JavaPlugin plugin, PlotManager plotManager, SnapshotManager snapshotManager) {
+    public DailyPlotBackupService(JavaPlugin plugin, SnapshotService snapshotService) {
         this.plugin = plugin;
-        this.plotManager = plotManager;
-        this.snapshotManager = snapshotManager;
+        this.snapshotService = snapshotService;
     }
 
     public void start() {
-        long intervalTicks = 24L * 60L * 60L * 20L;
-        long initialDelay = Math.max(20L, plugin.getConfig().getLong("admin.daily-backup-delay-ticks", 20L * 60L));
-        task = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::runBackup, initialDelay, intervalTicks);
+        if (!plugin.getConfig().getBoolean("backups.enabled", true)) {
+            plugin.getLogger().info("Scheduled backups are disabled in config.");
+            return;
+        }
+        long hours = Math.max(1L, plugin.getConfig().getLong("backups.intervalHours", 24L));
+        long intervalTicks = hours * 60L * 60L * 20L;
+        long initialDelay = Math.max(20L, plugin.getConfig().getLong("backups.initialDelayTicks", 20L * 60L));
+        task = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, snapshotService::runScheduledBackups, initialDelay, intervalTicks);
+        plugin.getLogger().info("Scheduled backups enabled every " + hours + "h.");
     }
 
     public void stop() {
@@ -34,26 +32,5 @@ public class DailyPlotBackupService {
             task.cancel();
             task = null;
         }
-    }
-
-    private void runBackup() {
-        List<Plot> claimedPlots = new ArrayList<>();
-        for (Plot plot : plotManager.getAllPlots()) {
-            if (plot.getOwner() != null) {
-                claimedPlots.add(plot);
-            }
-        }
-        if (claimedPlots.isEmpty()) {
-            return;
-        }
-        plugin.getLogger().info("Starting daily plot backup for " + claimedPlots.size() + " claimed plots.");
-        for (Plot plot : claimedPlots) {
-            snapshotManager.createSnapshot(plot, BlockChangeLogger.SYSTEM_UUID)
-                    .thenAccept(this::onSnapshotSaved);
-        }
-    }
-
-    private void onSnapshotSaved(PlotSnapshot snapshot) {
-        plugin.getLogger().info("Daily backup snapshot created: " + snapshot.getId() + " (" + snapshot.getPlotId() + ")");
     }
 }

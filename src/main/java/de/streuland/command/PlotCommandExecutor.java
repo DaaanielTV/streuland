@@ -1,14 +1,23 @@
 package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
+import de.streuland.commands.PlotPriceCommand;
+import de.streuland.commands.PlotBackupCommand;
+import de.streuland.commands.PlotHistoryCommand;
+import de.streuland.commands.PlotTeamCommand;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.approval.PlotApprovalRequest;
 import de.streuland.approval.PlotApprovalService;
 import de.streuland.discord.DiscordNotifier;
 import de.streuland.analytics.PlayerEditStats;
+import de.streuland.commands.PlotPortalCommand;
+import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.district.TraderNpcService;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.path.PathGenerator;
+import de.streuland.commands.PlotMergeCommand;
+import de.streuland.plot.PlotMergeService;
+import de.streuland.plot.SplitStrategy;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
 import de.streuland.plot.biome.BiomeBonusService;
@@ -24,6 +33,8 @@ import de.streuland.quest.QuestDefinition;
 import de.streuland.quest.QuestProgress;
 import de.streuland.quest.QuestService;
 import de.streuland.quest.QuestTracker;
+import de.streuland.commands.PlotMarketCommand;
+import de.streuland.economy.PlotEconomyHook;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -61,12 +72,21 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final QuestTracker questTracker;
     private final PlotMarketService plotMarketService;
     private final AdminPlotService adminPlotService;
+    private final PlotPriceCommand plotPriceCommand;
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
     private final PlotApprovalService plotApprovalService;
     private final DiscordNotifier discordNotifier;
+    private final PlotBackupCommand plotBackupCommand;
+    private final PlotPortalCommand plotPortalCommand;
+    private final PlotHistoryCommand plotHistoryCommand;
+    private final PlotTeamCommand plotTeamCommand;
+    private final PlotSchematicCommand plotSchematicCommand;
+    private final PlotMarketCommand plotMarketCommand;
+    private final PlotEconomyHook plotEconomyHook;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
+    private final PlotMergeCommand plotMergeCommand;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
     
@@ -77,6 +97,15 @@ public class PlotCommandExecutor implements CommandExecutor {
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
                                PlotApprovalService plotApprovalService, DiscordNotifier discordNotifier) {
+                               PlotPriceCommand plotPriceCommand, AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
+                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService) {
+                               AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
+                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               PlotBackupCommand plotBackupCommand) {
+                               PlotPortalCommand plotPortalCommand) {
+                               PlotHistoryCommand plotHistoryCommand) {
+                               PlotSchematicCommand plotSchematicCommand) {
+                               PlotMarketCommand plotMarketCommand, PlotEconomyHook plotEconomyHook) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -88,13 +117,22 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.questService = questService;
         this.questTracker = questTracker;
         this.plotMarketService = plotMarketService;
+        this.plotPriceCommand = plotPriceCommand;
         this.adminPlotService = adminPlotService;
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
         this.plotApprovalService = plotApprovalService;
         this.discordNotifier = discordNotifier;
+        this.plotBackupCommand = plotBackupCommand;
+        this.plotPortalCommand = plotPortalCommand;
+        this.plotHistoryCommand = plotHistoryCommand;
+        this.plotTeamCommand = new PlotTeamCommand(plotManager);
+        this.plotSchematicCommand = plotSchematicCommand;
+        this.plotMarketCommand = plotMarketCommand;
+        this.plotEconomyHook = plotEconomyHook;
         this.pendingDeletes = new HashMap<>();
+        this.plotMergeCommand = new PlotMergeCommand(new PlotMergeService(plugin, plotManager));
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
     }
@@ -121,10 +159,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleClaim(player);
             case "info":
                 return handleInfo(player);
-            case "trust":
-                return handleTrust(player, args);
-            case "untrust":
-                return handleUntrust(player, args);
+            case "team":
+                return plotTeamCommand.execute(player, args);
             case "home":
                 return handleHome(player, args);
             case "list":
@@ -138,6 +174,9 @@ public class PlotCommandExecutor implements CommandExecutor {
             case "delete":
                 return handleDelete(player, args);
             case "confirm":
+                if (plotSchematicCommand.confirm(player)) {
+                    return true;
+                }
                 return handleConfirmDelete(player);
             case "cancel":
                 return handleCancelDelete(player);
@@ -145,6 +184,13 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleGenerate(player, args);
             case "stats":
                 return handleStats(player);
+            case "backup":
+                return plotBackupCommand.handle(player, args);
+            case "history":
+                return plotHistoryCommand.handle(player, args);
+            case "merge":
+            case "split":
+                return plotMergeCommand.handle(player, args);
             case "style":
                 return handleStyle(player, args);
             case "biome":
@@ -157,6 +203,13 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleQuest(player, args);
             case "market":
                 return handleMarket(player, args);
+            case "price":
+                return plotPriceCommand.handle(player, args);
+            case "sell":
+            case "buy":
+            case "auction":
+            case "bid":
+                return plotMarketCommand.handle(player, args, plotEconomyHook.hasEconomy());
             case "world":
                 return handleWorld(player, args);
             case "teleport":
@@ -175,7 +228,12 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleApprovalAction(player, args, true);
             case "reject":
                 return handleApprovalAction(player, args, false);
+            case "portal":
+                return plotPortalCommand.handle(player, args);
             default:
+                if ("template".equals(subcommand)) {
+                    return plotSchematicCommand.handle(player, args);
+                }
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
         }
@@ -289,59 +347,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§eGröße: §f" + plot.getSize() + "x" + plot.getSize());
         player.sendMessage("§eZustand: §f" + (plot.getState() == Plot.PlotState.UNCLAIMED ? "§eUNBEANSPRUCHT" : "§aBEANSPRUCHT"));
         player.sendMessage("§eEigentümer: §f" + (plot.getOwner() != null ? plot.getOwner() : "Niemand"));
-        player.sendMessage("§eVertraut: §f" + plot.getTrustedPlayers().size() + " Spieler");
+        player.sendMessage("§eTeammitglieder: §f" + Math.max(0, plot.getRoles().size() - 1) + " Spieler");
         player.sendMessage("§eNachbarschaft: §f" + neighborhoodService.getAnalyticsSummary(plot.getPlotId()));
-        return true;
-    }
-
-    private boolean handleTrust(Player player, String[] args) {
-        if (args.length < 2) {
-            player.sendMessage("§cVerwendung: /plot trust <Spieler>");
-            return true;
-        }
-
-        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
-            player.sendMessage("§cDu besitzt diesen Plot nicht!");
-            return true;
-        }
-
-        OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-        if (target == null || target.getUniqueId() == null) {
-            player.sendMessage("§cSpieler nicht gefunden!");
-            return true;
-        }
-
-        if (target.getUniqueId().equals(player.getUniqueId())) {
-            player.sendMessage("§cDu bist bereits Besitzer deines Plots.");
-            return true;
-        }
-
-        plotManager.trustPlayer(plot.getPlotId(), player.getUniqueId(), target.getUniqueId());
-        player.sendMessage("§a" + target.getName() + " ist jetzt vertraut!");
-        return true;
-    }
-
-    private boolean handleUntrust(Player player, String[] args) {
-        if (args.length < 2) {
-            player.sendMessage("§cVerwendung: /plot untrust <Spieler>");
-            return true;
-        }
-
-        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
-            player.sendMessage("§cDu besitzt diesen Plot nicht!");
-            return true;
-        }
-
-        OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-        if (target == null || target.getUniqueId() == null) {
-            player.sendMessage("§cSpieler nicht gefunden!");
-            return true;
-        }
-
-        plotManager.untrustPlayer(plot.getPlotId(), player.getUniqueId(), target.getUniqueId());
-        player.sendMessage("§a" + target.getName() + " ist nicht mehr vertraut!");
         return true;
     }
 
@@ -701,24 +708,35 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot create§f - Generiere und beanspruche einen neuen Plot");
         player.sendMessage("§e/plot claim§f - Beanspruche einen ungeclaimten Plot unter deinen Füßen");
         player.sendMessage("§e/plot info§f - Zeige Informationen zum aktuellen Plot");
-        player.sendMessage("§e/plot trust <Spieler>§f - Vertraue einem Spieler");
-        player.sendMessage("§e/plot untrust <Spieler>§f - Entferne Vertrauen von einem Spieler");
+        player.sendMessage("§e/plot team <...>§f - Verwalte Plot-Teamrollen");
         player.sendMessage("§e/plot home [Nummer]§f - Teleportiere dich zu einem eigenen Plot");
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
-        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle");
+        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle"
+        );
+        player.sendMessage("§e/plot backup <take|list|restore> <plotId> [snapshotId]§f - Schematic Backups");
+        player.sendMessage(" ");
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
         player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
         player.sendMessage("§e/plot weather current§f - Zeigt aktuelle Saison-Effekte");
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
         player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
-        player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots");
+        player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots"
+        );
+        player.sendMessage("§e/plot sell <price>§f - Aktuelles Plot zum Festpreis anbieten");
+        player.sendMessage("§e/plot buy <plotId>§f - Plot direkt kaufen");
+        player.sendMessage("§e/plot auction <price> <durationMin>§f - Auktion starten");
+        player.sendMessage("§e/plot bid <plotId> <amount>§f - Auf Auktion bieten");
         player.sendMessage("§e/plot trader <nearest|buy|stock>§f - Distrikt-Händler nutzen/verwalten");
         player.sendMessage("§e/plot world list§f - Statistiken der aktuellen Welt");
         player.sendMessage("§e/plot teleport <world> <plot_id>§f - Teleportiere weltenübergreifend");
         player.sendMessage("§e/plot inspect <x> <z>§f - Zeige Block-Änderungslog für Koordinaten");
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
         player.sendMessage("§e/plot dashboard url§f - Zeige den Web-Dashboard Link");
+        player.sendMessage("§e/plot portal <create|list|remove|use>§f - Plot Warp-Portale");
+        player.sendMessage("§e/plot merge <plotIdA> <plotIdB>§f - Verschmilzt benachbarte Plots");
+        player.sendMessage("§e/plot split <plotId> <rows> <cols>§f - Teilt einen Plot in ein Grid");
+        player.sendMessage("§e/plot template <list|preview|paste> [name]§f - Template verwalten/einfügen");
     }
 
 

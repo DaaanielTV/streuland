@@ -10,6 +10,7 @@ import de.streuland.district.DistrictManager;
 import de.streuland.discord.DiscordNotifier;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
+import de.streuland.pricing.PricingEngine;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.Bukkit;
@@ -48,6 +49,7 @@ public class PlotMarketService {
     private final DistrictManager districtManager;
     private final PlotAnalyticsService analyticsService;
     private final Economy economy;
+    private final PricingEngine pricingEngine;
     private final Gson gson;
     private final DiscordNotifier discordNotifier;
     private final java.io.File marketFile;
@@ -60,11 +62,14 @@ public class PlotMarketService {
                              DistrictManager districtManager,
                              PlotAnalyticsService analyticsService,
                              Economy economy, DiscordNotifier discordNotifier) {
+                             Economy economy,
+                             PricingEngine pricingEngine) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.districtManager = districtManager;
         this.analyticsService = analyticsService;
         this.economy = economy;
+        this.pricingEngine = pricingEngine;
         this.gson = new GsonBuilder().setPrettyPrinting().create();
         this.discordNotifier = discordNotifier;
         this.marketFile = new java.io.File(plugin.getDataFolder(), "market.json");
@@ -257,6 +262,9 @@ public class PlotMarketService {
         MarketSale sale = new MarketSale(plotId, listing.getSellerId(), player.getUniqueId(), price, fee,
                 Instant.now().toEpochMilli(), listing.getBiome(), listing.getLevel(), listing.getDistrictTier());
         salesHistory.add(sale);
+        if (pricingEngine != null) {
+            pricingEngine.recordSale(plotId, price);
+        }
         save();
 
         analyticsService.record(new PlotAnalyticsRecord(plotId, player.getUniqueId(), "MARKET_SALE", Instant.now(), price));
