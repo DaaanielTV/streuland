@@ -5,6 +5,7 @@ import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.commands.PlotTeamCommand;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.analytics.PlayerEditStats;
+import de.streuland.commands.PlotPortalCommand;
 import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.district.TraderNpcService;
 import de.streuland.weather.SeasonalWeatherService;
@@ -69,6 +70,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final PlotPortalCommand plotPortalCommand;
     private final PlotHistoryCommand plotHistoryCommand;
     private final PlotTeamCommand plotTeamCommand;
     private final PlotSchematicCommand plotSchematicCommand;
@@ -85,6 +87,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               PlotPortalCommand plotPortalCommand) {
                                PlotHistoryCommand plotHistoryCommand) {
                                PlotSchematicCommand plotSchematicCommand) {
                                PlotMarketCommand plotMarketCommand, PlotEconomyHook plotEconomyHook) {
@@ -103,6 +106,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.plotPortalCommand = plotPortalCommand;
         this.plotHistoryCommand = plotHistoryCommand;
         this.plotTeamCommand = new PlotTeamCommand(plotManager);
         this.plotSchematicCommand = plotSchematicCommand;
@@ -195,6 +199,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return adminPlotService.handleAdmin(player, args);
             case "dashboard":
                 return handleDashboardUrl(player, args);
+            case "portal":
+                return plotPortalCommand.handle(player, args);
             default:
                 if ("template".equals(subcommand)) {
                     return plotSchematicCommand.handle(player, args);
@@ -645,6 +651,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot inspect <x> <z>§f - Zeige Block-Änderungslog für Koordinaten");
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
         player.sendMessage("§e/plot dashboard url§f - Zeige den Web-Dashboard Link");
+        player.sendMessage("§e/plot portal <create|list|remove|use>§f - Plot Warp-Portale");
         player.sendMessage("§e/plot merge <plotIdA> <plotIdB>§f - Verschmilzt benachbarte Plots");
         player.sendMessage("§e/plot split <plotId> <rows> <cols>§f - Teilt einen Plot in ein Grid");
         player.sendMessage("§e/plot template <list|preview|paste> [name]§f - Template verwalten/einfügen");

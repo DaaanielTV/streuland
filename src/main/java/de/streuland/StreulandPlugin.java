@@ -3,6 +3,7 @@ package de.streuland;
 import de.streuland.admin.AdminPlotService;
 import de.streuland.admin.BlockChangeLogger;
 import de.streuland.admin.DailyPlotBackupService;
+import de.streuland.commands.PlotPortalCommand;
 import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.command.PlotCommandExecutor;
 import de.streuland.command.DistrictCommandExecutor;
@@ -42,6 +43,9 @@ import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
 import de.streuland.rules.listener.RuleListener;
+import de.streuland.warp.CooldownManager;
+import de.streuland.warp.PlotEconomyHook;
+import de.streuland.warp.PortalManager;
 import de.streuland.transaction.TransactionManager;
 import de.streuland.storage.SqlitePlotStorage;
 import de.streuland.storage.YamlPlotStorage;
@@ -92,6 +96,7 @@ public class StreulandPlugin extends JavaPlugin {
     private PlotChangeJournal plotChangeJournal;
     private JournalManager journalManager;
     private ParticleEffectScheduler particleEffectScheduler;
+    private PortalManager portalManager;
     private TransactionManager transactionManager;
     private de.streuland.storage.PlotStorage configuredStorageAdapter;
     private WebServer webServer;
@@ -196,7 +201,11 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ District system initialized");
 
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
+            portalManager = new PortalManager(this, plotManager, new PlotEconomyHook(economy), new CooldownManager());
+            getServer().getPluginManager().registerEvents(portalManager, this);
+            PlotPortalCommand plotPortalCommand = new PlotPortalCommand(plotManager, portalManager);
 
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotPortalCommand);
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, new PlotHistoryCommand(journalManager));
             SchematicLoader schematicLoader = new SchematicLoader(this);
             SchematicPreview schematicPreview = new SchematicPreview();
