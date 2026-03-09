@@ -9,7 +9,8 @@ api-version: 1.13
 commands:
   plot:
     description: Main plot command
-    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|template>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|sell|buy|auction|bid|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard>
     aliases:
       - p
   district:
@@ -35,3 +36,19 @@ permissions:
   streuland.admin:
     description: Grants admin-level dashboard controls
     default: op
+
+  streuland.market.*:
+    description: Grants access to marketplace commands
+    default: true
+  streuland.market.sell:
+    description: Allows listing plots on the marketplace
+    default: true
+  streuland.market.buy:
+    description: Allows buying plots
+    default: true
+  streuland.market.auction:
+    description: Allows creating plot auctions
+    default: true
+  streuland.market.bid:
+    description: Allows bidding in plot auctions
+    default: true

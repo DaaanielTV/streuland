@@ -3,6 +3,7 @@ package de.streuland;
 import de.streuland.admin.AdminPlotService;
 import de.streuland.admin.BlockChangeLogger;
 import de.streuland.admin.DailyPlotBackupService;
+import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.command.PlotCommandExecutor;
 import de.streuland.command.DistrictCommandExecutor;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
@@ -31,10 +32,16 @@ import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.biome.BiomeEffectScheduler;
 import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.plot.market.PlotMarketService;
+import de.streuland.commands.PlotMarketCommand;
+import de.streuland.economy.PlotEconomyHook;
+import de.streuland.market.MarketManager;
 import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
 import de.streuland.rules.listener.RuleListener;
+import de.streuland.schematic.SchematicLoader;
+import de.streuland.schematic.SchematicPaster;
+import de.streuland.schematic.SchematicPreview;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import net.milkbowl.vault.economy.Economy;
@@ -66,6 +73,9 @@ public class StreulandPlugin extends JavaPlugin {
     private QuestTracker questTracker;
     private PlotMarketService plotMarketService;
     private Economy economy;
+    private PlotEconomyHook plotEconomyHook;
+    private MarketManager marketManager;
+    private PlotMarketCommand plotMarketCommand;
     private BlockChangeLogger blockChangeLogger;
     private AdminPlotService adminPlotService;
     private DailyPlotBackupService dailyPlotBackupService;
@@ -135,11 +145,14 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ SeasonalEffectListener registered");
 
             setupEconomy();
+            plotEconomyHook = new PlotEconomyHook(this);
             if (economy == null) {
                 getLogger().warning("Vault Economy provider not found. Plot market will be disabled.");
             } else {
                 getLogger().info("✓ Vault economy connected: " + economy.getName());
             }
+            marketManager = new MarketManager(this, plotManager.getStorage(), plotEconomyHook);
+            plotMarketCommand = new PlotMarketCommand(plotManager, marketManager);
             questService = new QuestService(this, plotManager.getStorage(), ruleEngine);
             getLogger().info("✓ QuestService initialized");
             neighborhoodService = new NeighborhoodService(this, plotManager, new DistrictClusterService(), analyticsService);
@@ -166,7 +179,13 @@ public class StreulandPlugin extends JavaPlugin {
 
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
 
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService);
+            SchematicLoader schematicLoader = new SchematicLoader(this);
+            SchematicPreview schematicPreview = new SchematicPreview();
+            SchematicPaster schematicPaster = new SchematicPaster(this);
+            PlotSchematicCommand plotSchematicCommand = new PlotSchematicCommand(schematicLoader, schematicPreview, schematicPaster);
+
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotSchematicCommand);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotMarketCommand, plotEconomyHook);
             getCommand("plot").setExecutor(commandExecutor);
 
             // Register district command
