@@ -62,9 +62,11 @@ public class PlotStorage {
         config.set("state", plot.getState().name());
         config.set("createdAt", plot.getCreatedAt());
         config.set("spawnY", plot.getSpawnY());
-        config.set("trusted", plot.getTrustedPlayers().stream()
-                .map(UUID::toString)
-                .collect(java.util.stream.Collectors.toList()));
+        Map<String, String> serializedRoles = new HashMap<>();
+        for (Map.Entry<UUID, Role> entry : plot.getRoles().entrySet()) {
+            serializedRoles.put(entry.getKey().toString(), entry.getValue().name());
+        }
+        config.set("roles", serializedRoles);
         PlotData data = plotData.getOrDefault(plot.getPlotId(), new PlotData());
         config.set("theme", data.getTheme().name());
         config.set("rewards.storageSlots", data.getBonusStorageSlots());
@@ -72,6 +74,7 @@ public class PlotStorage {
         config.set("rewards.cosmetics", new ArrayList<>(data.getCosmeticInventory()));
         config.set("rewards.stats", new HashMap<>(data.getStatBonuses()));
         config.set("flags", new HashMap<>(data.getFlagOverrides()));
+        config.set("featured", data.isFeatured());
 
         for (Map.Entry<String, QuestProgress> entry : data.getQuestProgress().entrySet()) {
             String base = "quests.progress." + entry.getKey();
@@ -119,6 +122,7 @@ public class PlotStorage {
                 data.setBonusStorageSlots(config.getInt("rewards.storageSlots", 0));
                 data.getUnlockedAbilities().addAll(config.getStringList("rewards.abilities"));
                 data.getCosmeticInventory().addAll(config.getStringList("rewards.cosmetics"));
+                data.setFeatured(config.getBoolean("featured", false));
                 if (config.isConfigurationSection("rewards.stats")) {
                     for (String key : config.getConfigurationSection("rewards.stats").getKeys(false)) {
                         data.getStatBonuses().put(key, config.getDouble("rewards.stats." + key));
@@ -164,14 +168,28 @@ public class PlotStorage {
 
             Plot plot = new Plot(id, centerX, centerZ, size, owner, createdAt, spawnY, state);
 
-            List<String> trustedList = config.getStringList("trusted");
-            for (String uuidStr : trustedList) {
-                try {
-                    plot.addTrusted(UUID.fromString(uuidStr));
-                } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("Invalid UUID in trusted list for plot " + id + ": " + uuidStr);
+            Map<UUID, Role> loadedRoles = new HashMap<>();
+            if (config.isConfigurationSection("roles")) {
+                for (String uuidStr : config.getConfigurationSection("roles").getKeys(false)) {
+                    try {
+                        UUID playerId = UUID.fromString(uuidStr);
+                        String roleRaw = config.getString("roles." + uuidStr, Role.VISITOR.name());
+                        loadedRoles.put(playerId, Role.valueOf(roleRaw.toUpperCase(Locale.ROOT)));
+                    } catch (Exception e) {
+                        plugin.getLogger().warning("Invalid role entry for plot " + id + ": " + uuidStr);
+                    }
+                }
+            } else {
+                List<String> trustedList = config.getStringList("trusted");
+                for (String uuidStr : trustedList) {
+                    try {
+                        loadedRoles.put(UUID.fromString(uuidStr), Role.BUILDER);
+                    } catch (IllegalArgumentException e) {
+                        plugin.getLogger().warning("Invalid UUID in trusted list for plot " + id + ": " + uuidStr);
+                    }
                 }
             }
+            plot.replaceRoles(loadedRoles);
 
             return plot;
         } catch (Exception e) {
@@ -217,9 +235,7 @@ public class PlotStorage {
                 plot.getSize(), player, System.currentTimeMillis(), plot.getSpawnY(),
                 Plot.PlotState.CLAIMED);
 
-        for (UUID trusted : plot.getTrustedPlayers()) {
-            claimedPlot.addTrusted(trusted);
-        }
+        claimedPlot.replaceRoles(plot.getRoles());
 
         savePlot(claimedPlot);
         plugin.getLogger().info("Plot " + plotId + " claimed by " + player);
@@ -280,6 +296,39 @@ public class PlotStorage {
             saveIndex();
         }
         return plot;
+    }
+
+
+    public synchronized void saveMany(List<Plot> plots) {
+        if (plots == null) {
+            return;
+        }
+        for (Plot plot : plots) {
+            if (plot != null) {
+                savePlot(plot);
+            }
+        }
+    }
+
+    public synchronized void deleteMany(List<Integer> plotIds) {
+        if (plotIds == null) {
+            return;
+        }
+        Set<String> toDelete = new HashSet<>();
+        for (Integer id : plotIds) {
+            if (id == null) {
+                continue;
+            }
+            String suffix = "_" + id;
+            for (String plotId : cachedPlots.keySet()) {
+                if (plotId.endsWith(suffix)) {
+                    toDelete.add(plotId);
+                }
+            }
+        }
+        for (String plotId : toDelete) {
+            deletePlot(plotId);
+        }
     }
 
     /**

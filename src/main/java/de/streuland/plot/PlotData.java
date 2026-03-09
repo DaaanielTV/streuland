@@ -19,6 +19,7 @@ public class PlotData {
     private final Map<String, Double> statBonuses;
     private final Map<String, QuestProgress> questProgress;
     private final Map<String, Boolean> flagOverrides;
+    private boolean featured;
 
     public PlotData() {
         this(PlotTheme.NATURE);
@@ -32,6 +33,7 @@ public class PlotData {
         this.statBonuses = new HashMap<>();
         this.questProgress = new HashMap<>();
         this.flagOverrides = new HashMap<>();
+        this.featured = false;
     }
 
     public PlotTheme getTheme() {
@@ -68,5 +70,11 @@ public class PlotData {
 
     public Map<String, Boolean> getFlagOverrides() {
         return flagOverrides;
+    public boolean isFeatured() {
+        return featured;
+    }
+
+    public void setFeatured(boolean featured) {
+        this.featured = featured;
     }
 }
