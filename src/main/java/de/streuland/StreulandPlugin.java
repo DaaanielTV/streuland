@@ -39,12 +39,16 @@ import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
 import de.streuland.rules.listener.RuleListener;
+import de.streuland.storage.SqlitePlotStorage;
+import de.streuland.storage.YamlPlotStorage;
 import de.streuland.schematic.SchematicLoader;
 import de.streuland.schematic.SchematicPaster;
 import de.streuland.schematic.SchematicPreview;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import net.milkbowl.vault.economy.Economy;
+
+import java.nio.file.Path;
 
 /**
  * Streuland Main Plugin Class
@@ -82,6 +86,7 @@ public class StreulandPlugin extends JavaPlugin {
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
     private ParticleEffectScheduler particleEffectScheduler;
+    private de.streuland.storage.PlotStorage configuredStorageAdapter;
     private WebServer webServer;
     
     @Override
@@ -92,7 +97,8 @@ public class StreulandPlugin extends JavaPlugin {
         
         // Load configuration
         saveDefaultConfig();
-        
+        initializeStorageAdapter();
+
         try {
             // Initialize components in dependency order
             plotManager = new PlotManager(this);
@@ -221,6 +227,29 @@ public class StreulandPlugin extends JavaPlugin {
         }
     }
     
+
+    private void initializeStorageAdapter() {
+        String type = getConfig().getString("storage.type", "yaml").toLowerCase();
+        String dataFolderName = getConfig().getString("storage.data-folder", "plots");
+        Path yamlDir = getDataFolder().toPath().resolve(dataFolderName);
+
+        if ("sqlite".equals(type)) {
+            String sqliteFile = getConfig().getString("storage.sqlite-file", "db.sqlite");
+            Path sqlitePath = getDataFolder().toPath().resolve(sqliteFile);
+            SqlitePlotStorage sqliteStorage = new SqlitePlotStorage(sqlitePath);
+            if (getConfig().getBoolean("storage.migrate-yaml-on-startup", false)) {
+                int migrated = sqliteStorage.migrateFromYaml(yamlDir);
+                getLogger().info("SQLite migration completed. Migrated plots: " + migrated);
+            }
+            configuredStorageAdapter = sqliteStorage;
+            getLogger().info("Configured plot storage adapter: sqlite (" + sqlitePath + ")");
+            return;
+        }
+
+        configuredStorageAdapter = new YamlPlotStorage(yamlDir);
+        getLogger().info("Configured plot storage adapter: yaml (" + yamlDir + ")");
+    }
+
     private void setupEconomy() {
         if (getServer().getPluginManager().getPlugin("Vault") == null) {
             economy = null;

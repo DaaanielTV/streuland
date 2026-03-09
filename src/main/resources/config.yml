@@ -74,11 +74,17 @@ terrain:
 
 # Storage
 storage:
-  # File format: yaml or json
-  format: yaml
-  
-  # Folder where plot data is stored
+  # Storage backend for plot persistence: yaml or sqlite
+  type: yaml
+
+  # Folder where YAML plot data is stored
   data-folder: "plots"
+
+  # SQLite file relative to plugin data folder
+  sqlite-file: "db.sqlite"
+
+  # Optional one-time migration from YAML files to SQLite
+  migrate-yaml-on-startup: false
 
 # Biome-dependent plot effects
 biomes:
