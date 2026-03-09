@@ -230,3 +230,9 @@ weather:
     winter:
       snowy-decay-rate-multiplier: 0.5
       snowy-mob-spawn-multiplier: 0.7
+
+# Lightweight admin web API/dashboard
+web:
+  enabled: false
+  port: 8090
+  token: "change-me"
