@@ -1,6 +1,7 @@
 package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
+import de.streuland.commands.PlotBackupCommand;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.analytics.PlayerEditStats;
 import de.streuland.district.TraderNpcService;
@@ -61,6 +62,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final PlotBackupCommand plotBackupCommand;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
@@ -70,7 +72,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                                BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
-                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService) {
+                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               PlotBackupCommand plotBackupCommand) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -86,6 +89,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.plotBackupCommand = plotBackupCommand;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
@@ -137,6 +141,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleGenerate(player, args);
             case "stats":
                 return handleStats(player);
+            case "backup":
+                return plotBackupCommand.handle(player, args);
             case "style":
                 return handleStyle(player, args);
             case "biome":
@@ -641,7 +647,10 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot untrust <Spieler>§f - Entferne Vertrauen von einem Spieler");
         player.sendMessage("§e/plot home [Nummer]§f - Teleportiere dich zu einem eigenen Plot");
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
-        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle");
+        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle"
+        );
+        player.sendMessage("§e/plot backup <take|list|restore> <plotId> [snapshotId]§f - Schematic Backups");
+        player.sendMessage(" ");
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
         player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
