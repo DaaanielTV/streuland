@@ -21,6 +21,12 @@ plot:
   # Maximum number of claimed plots a player can own
   max-plots-per-player: 4
 
+  # Require admin approval before /plot create becomes active
+  create-requires-approval: false
+
+  # UUIDs or player names that bypass approval checks
+  create-approval-whitelist: []
+
   # Confirmation timeout in seconds for /plot delete
   delete-confirm-timeout-seconds: 30
 
@@ -237,6 +243,12 @@ weather:
       snowy-decay-rate-multiplier: 0.5
       snowy-mob-spawn-multiplier: 0.7
 
+# Discord integration
+discord:
+  webhook-url: ""
+  bot-token: ""
+  approval-base-url: ""
+  large-claim-threshold: 128
 # Adaptive pricing engine
 pricing:
   base-price: 1000.0

@@ -7,6 +7,7 @@ import de.streuland.backup.SnapshotService;
 import de.streuland.commands.PlotPortalCommand;
 import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.command.PlotCommandExecutor;
+import de.streuland.commands.PlotApprovalCommand;
 import de.streuland.commands.PlotBackupCommand;
 import de.streuland.command.DistrictCommandExecutor;
 import de.streuland.history.PlotChangeJournal;
@@ -14,6 +15,8 @@ import de.streuland.history.JournalManager;
 import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.district.DistrictClusterService;
+import de.streuland.discord.DiscordNotifier;
+import de.streuland.approval.PlotApprovalService;
 import de.streuland.district.DistrictManager;
 import de.streuland.district.DistrictProgressService;
 import de.streuland.district.TraderNpcService;
@@ -103,6 +106,8 @@ public class StreulandPlugin extends JavaPlugin {
     private PlotChangeJournal plotChangeJournal;
     private JournalManager journalManager;
     private ParticleEffectScheduler particleEffectScheduler;
+    private DiscordNotifier discordNotifier;
+    private PlotApprovalService plotApprovalService;
     private PortalManager portalManager;
     private TransactionManager transactionManager;
     private de.streuland.storage.PlotStorage configuredStorageAdapter;
@@ -125,6 +130,9 @@ public class StreulandPlugin extends JavaPlugin {
 
             pathGenerator = new PathGenerator(this, plotManager);
             getLogger().info("✓ PathGenerator initialized");
+
+            discordNotifier = new DiscordNotifier(this);
+            plotApprovalService = new PlotApprovalService(this, plotManager, pathGenerator, discordNotifier);
 
             snapshotStorage = new SnapshotStorage(this);
             getLogger().info("✓ SnapshotStorage initialized");
@@ -208,6 +216,9 @@ public class StreulandPlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(questTracker, this);
             getLogger().info("✓ District system initialized");
 
+            plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy, discordNotifier);
+
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotApprovalService, discordNotifier);
             pricingEngine = new PricingEngine(this, plotManager, neighborhoodService);
             plotPriceCommand = new PlotPriceCommand(pricingEngine);
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy, pricingEngine);
@@ -230,6 +241,9 @@ public class StreulandPlugin extends JavaPlugin {
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotSchematicCommand);
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotMarketCommand, plotEconomyHook);
             getCommand("plot").setExecutor(commandExecutor);
+            if (getCommand("plotapprove") != null) {
+                getCommand("plotapprove").setExecutor(new PlotApprovalCommand(plotApprovalService));
+            }
 
             // Register district command
             getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager));
@@ -240,7 +254,7 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ Daily backup scheduler initialized");
 
             DashboardDataExporter dataExporter = new DashboardDataExporter(plotManager.getStorage());
-            restApiController = new RestApiController(this, plotManager, neighborhoodService, analyticsService, dataExporter, plotMarketService);
+            restApiController = new RestApiController(this, plotManager, neighborhoodService, analyticsService, dataExporter, plotMarketService, plotApprovalService);
             restApiController.start();
             getLogger().info("✓ Dashboard API initialized");
 
