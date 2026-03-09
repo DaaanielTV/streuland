@@ -1,6 +1,7 @@
 package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
+import de.streuland.commands.PlotTeamCommand;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.analytics.PlayerEditStats;
 import de.streuland.commands.PlotSchematicCommand;
@@ -64,6 +65,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final PlotTeamCommand plotTeamCommand;
     private final PlotSchematicCommand plotSchematicCommand;
     private final PlotMarketCommand plotMarketCommand;
     private final PlotEconomyHook plotEconomyHook;
@@ -94,6 +96,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.plotTeamCommand = new PlotTeamCommand(plotManager);
         this.plotSchematicCommand = plotSchematicCommand;
         this.plotMarketCommand = plotMarketCommand;
         this.plotEconomyHook = plotEconomyHook;
@@ -124,10 +127,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleClaim(player);
             case "info":
                 return handleInfo(player);
-            case "trust":
-                return handleTrust(player, args);
-            case "untrust":
-                return handleUntrust(player, args);
+            case "team":
+                return plotTeamCommand.execute(player, args);
             case "home":
                 return handleHome(player, args);
             case "list":
@@ -247,59 +248,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§eGröße: §f" + plot.getSize() + "x" + plot.getSize());
         player.sendMessage("§eZustand: §f" + (plot.getState() == Plot.PlotState.UNCLAIMED ? "§eUNBEANSPRUCHT" : "§aBEANSPRUCHT"));
         player.sendMessage("§eEigentümer: §f" + (plot.getOwner() != null ? plot.getOwner() : "Niemand"));
-        player.sendMessage("§eVertraut: §f" + plot.getTrustedPlayers().size() + " Spieler");
+        player.sendMessage("§eTeammitglieder: §f" + Math.max(0, plot.getRoles().size() - 1) + " Spieler");
         player.sendMessage("§eNachbarschaft: §f" + neighborhoodService.getAnalyticsSummary(plot.getPlotId()));
-        return true;
-    }
-
-    private boolean handleTrust(Player player, String[] args) {
-        if (args.length < 2) {
-            player.sendMessage("§cVerwendung: /plot trust <Spieler>");
-            return true;
-        }
-
-        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
-            player.sendMessage("§cDu besitzt diesen Plot nicht!");
-            return true;
-        }
-
-        OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-        if (target == null || target.getUniqueId() == null) {
-            player.sendMessage("§cSpieler nicht gefunden!");
-            return true;
-        }
-
-        if (target.getUniqueId().equals(player.getUniqueId())) {
-            player.sendMessage("§cDu bist bereits Besitzer deines Plots.");
-            return true;
-        }
-
-        plotManager.trustPlayer(plot.getPlotId(), player.getUniqueId(), target.getUniqueId());
-        player.sendMessage("§a" + target.getName() + " ist jetzt vertraut!");
-        return true;
-    }
-
-    private boolean handleUntrust(Player player, String[] args) {
-        if (args.length < 2) {
-            player.sendMessage("§cVerwendung: /plot untrust <Spieler>");
-            return true;
-        }
-
-        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
-            player.sendMessage("§cDu besitzt diesen Plot nicht!");
-            return true;
-        }
-
-        OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-        if (target == null || target.getUniqueId() == null) {
-            player.sendMessage("§cSpieler nicht gefunden!");
-            return true;
-        }
-
-        plotManager.untrustPlayer(plot.getPlotId(), player.getUniqueId(), target.getUniqueId());
-        player.sendMessage("§a" + target.getName() + " ist nicht mehr vertraut!");
         return true;
     }
 
@@ -659,8 +609,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot create§f - Generiere und beanspruche einen neuen Plot");
         player.sendMessage("§e/plot claim§f - Beanspruche einen ungeclaimten Plot unter deinen Füßen");
         player.sendMessage("§e/plot info§f - Zeige Informationen zum aktuellen Plot");
-        player.sendMessage("§e/plot trust <Spieler>§f - Vertraue einem Spieler");
-        player.sendMessage("§e/plot untrust <Spieler>§f - Entferne Vertrauen von einem Spieler");
+        player.sendMessage("§e/plot team <...>§f - Verwalte Plot-Teamrollen");
         player.sendMessage("§e/plot home [Nummer]§f - Teleportiere dich zu einem eigenen Plot");
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
         player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle");
