@@ -222,3 +222,14 @@ weather:
     winter:
       snowy-decay-rate-multiplier: 0.5
       snowy-mob-spawn-multiplier: 0.7
+
+# Adaptive pricing engine
+pricing:
+  base-price: 1000.0
+  nearby-sales-decay: 0.25
+  featured-boost: 0.15
+  proximity-to-spawn-multiplier: 0.35
+  scarcity-factor: 0.6
+  sales-lookback-days: 14
+  nearby-sales-radius: 256
+  spawn-falloff-distance: 5000

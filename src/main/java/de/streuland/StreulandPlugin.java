@@ -30,6 +30,8 @@ import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.biome.BiomeEffectScheduler;
 import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.plot.market.PlotMarketService;
+import de.streuland.pricing.PricingEngine;
+import de.streuland.commands.PlotPriceCommand;
 import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
@@ -64,6 +66,8 @@ public class StreulandPlugin extends JavaPlugin {
     private QuestService questService;
     private QuestTracker questTracker;
     private PlotMarketService plotMarketService;
+    private PricingEngine pricingEngine;
+    private PlotPriceCommand plotPriceCommand;
     private Economy economy;
     private BlockChangeLogger blockChangeLogger;
     private AdminPlotService adminPlotService;
@@ -162,9 +166,11 @@ public class StreulandPlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(questTracker, this);
             getLogger().info("✓ District system initialized");
 
-            plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
+            pricingEngine = new PricingEngine(this, plotManager, neighborhoodService);
+            plotPriceCommand = new PlotPriceCommand(pricingEngine);
+            plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy, pricingEngine);
 
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, plotPriceCommand, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService);
             getCommand("plot").setExecutor(commandExecutor);
 
             // Register district command

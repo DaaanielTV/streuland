@@ -1,6 +1,7 @@
 package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
+import de.streuland.commands.PlotPriceCommand;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.analytics.PlayerEditStats;
 import de.streuland.district.TraderNpcService;
@@ -58,6 +59,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final QuestTracker questTracker;
     private final PlotMarketService plotMarketService;
     private final AdminPlotService adminPlotService;
+    private final PlotPriceCommand plotPriceCommand;
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
@@ -69,7 +71,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                                SnapshotManager snapshotManager, RuleEngine ruleEngine, PlotSkinService plotSkinService,
                                BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
-                               AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
+                               PlotPriceCommand plotPriceCommand, AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService) {
         this.plugin = plugin;
         this.plotManager = plotManager;
@@ -82,6 +84,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.questService = questService;
         this.questTracker = questTracker;
         this.plotMarketService = plotMarketService;
+        this.plotPriceCommand = plotPriceCommand;
         this.adminPlotService = adminPlotService;
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
@@ -149,6 +152,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleQuest(player, args);
             case "market":
                 return handleMarket(player, args);
+            case "price":
+                return plotPriceCommand.handle(player, args);
             case "world":
                 return handleWorld(player, args);
             case "teleport":
