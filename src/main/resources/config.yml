@@ -45,6 +45,14 @@ protection:
   #   - DOOR
   #   - BUTTON
 
+# Role-permission mapping for plot teams
+roles:
+  OWNER: [BUILD, BREAK, INTERACT, TRANSFER]
+  CO_OWNER: [BUILD, BREAK, INTERACT, TRANSFER]
+  MEMBER: [BUILD, BREAK, INTERACT]
+  BUILDER: [BUILD, BREAK]
+  VISITOR: [INTERACT]
+
 # Performance settings
 async:
   # Run plot creation validation async before block changes

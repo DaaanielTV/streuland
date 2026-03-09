@@ -62,9 +62,11 @@ public class PlotStorage {
         config.set("state", plot.getState().name());
         config.set("createdAt", plot.getCreatedAt());
         config.set("spawnY", plot.getSpawnY());
-        config.set("trusted", plot.getTrustedPlayers().stream()
-                .map(UUID::toString)
-                .collect(java.util.stream.Collectors.toList()));
+        Map<String, String> serializedRoles = new HashMap<>();
+        for (Map.Entry<UUID, Role> entry : plot.getRoles().entrySet()) {
+            serializedRoles.put(entry.getKey().toString(), entry.getValue().name());
+        }
+        config.set("roles", serializedRoles);
         PlotData data = plotData.getOrDefault(plot.getPlotId(), new PlotData());
         config.set("theme", data.getTheme().name());
         config.set("rewards.storageSlots", data.getBonusStorageSlots());
@@ -158,14 +160,28 @@ public class PlotStorage {
 
             Plot plot = new Plot(id, centerX, centerZ, size, owner, createdAt, spawnY, state);
 
-            List<String> trustedList = config.getStringList("trusted");
-            for (String uuidStr : trustedList) {
-                try {
-                    plot.addTrusted(UUID.fromString(uuidStr));
-                } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("Invalid UUID in trusted list for plot " + id + ": " + uuidStr);
+            Map<UUID, Role> loadedRoles = new HashMap<>();
+            if (config.isConfigurationSection("roles")) {
+                for (String uuidStr : config.getConfigurationSection("roles").getKeys(false)) {
+                    try {
+                        UUID playerId = UUID.fromString(uuidStr);
+                        String roleRaw = config.getString("roles." + uuidStr, Role.VISITOR.name());
+                        loadedRoles.put(playerId, Role.valueOf(roleRaw.toUpperCase(Locale.ROOT)));
+                    } catch (Exception e) {
+                        plugin.getLogger().warning("Invalid role entry for plot " + id + ": " + uuidStr);
+                    }
+                }
+            } else {
+                List<String> trustedList = config.getStringList("trusted");
+                for (String uuidStr : trustedList) {
+                    try {
+                        loadedRoles.put(UUID.fromString(uuidStr), Role.BUILDER);
+                    } catch (IllegalArgumentException e) {
+                        plugin.getLogger().warning("Invalid UUID in trusted list for plot " + id + ": " + uuidStr);
+                    }
                 }
             }
+            plot.replaceRoles(loadedRoles);
 
             return plot;
         } catch (Exception e) {
@@ -211,9 +227,7 @@ public class PlotStorage {
                 plot.getSize(), player, System.currentTimeMillis(), plot.getSpawnY(),
                 Plot.PlotState.CLAIMED);
 
-        for (UUID trusted : plot.getTrustedPlayers()) {
-            claimedPlot.addTrusted(trusted);
-        }
+        claimedPlot.replaceRoles(plot.getRoles());
 
         savePlot(claimedPlot);
         plugin.getLogger().info("Plot " + plotId + " claimed by " + player);
