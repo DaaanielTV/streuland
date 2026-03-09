@@ -18,6 +18,7 @@ public class PlotData {
     private final Set<String> cosmeticInventory;
     private final Map<String, Double> statBonuses;
     private final Map<String, QuestProgress> questProgress;
+    private boolean featured;
 
     public PlotData() {
         this(PlotTheme.NATURE);
@@ -30,6 +31,7 @@ public class PlotData {
         this.cosmeticInventory = new HashSet<>();
         this.statBonuses = new HashMap<>();
         this.questProgress = new HashMap<>();
+        this.featured = false;
     }
 
     public PlotTheme getTheme() {
@@ -62,5 +64,13 @@ public class PlotData {
 
     public Map<String, QuestProgress> getQuestProgress() {
         return questProgress;
+    }
+
+    public boolean isFeatured() {
+        return featured;
+    }
+
+    public void setFeatured(boolean featured) {
+        this.featured = featured;
     }
 }

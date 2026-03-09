@@ -72,6 +72,16 @@
     </dependency>
 
     <dependency>
+      <groupId>org.nanohttpd</groupId>
+      <artifactId>nanohttpd</artifactId>
+      <version>2.3.1</version>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
       <groupId>com.github.seeseemelk</groupId>
       <artifactId>MockBukkit-v1.16</artifactId>
       <version>1.7.0</version>
