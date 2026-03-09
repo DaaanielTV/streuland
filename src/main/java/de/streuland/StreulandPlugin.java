@@ -39,6 +39,7 @@ import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
 import de.streuland.rules.listener.RuleListener;
+import de.streuland.transaction.TransactionManager;
 import de.streuland.storage.SqlitePlotStorage;
 import de.streuland.storage.YamlPlotStorage;
 import de.streuland.schematic.SchematicLoader;
@@ -86,6 +87,7 @@ public class StreulandPlugin extends JavaPlugin {
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
     private ParticleEffectScheduler particleEffectScheduler;
+    private TransactionManager transactionManager;
     private de.streuland.storage.PlotStorage configuredStorageAdapter;
     private WebServer webServer;
     
@@ -136,6 +138,9 @@ public class StreulandPlugin extends JavaPlugin {
             particleEffectScheduler = new ParticleEffectScheduler(this, seasonalWeatherService);
             particleEffectScheduler.start();
             getLogger().info("✓ ParticleEffectScheduler initialized");
+
+            transactionManager = new TransactionManager(this);
+            getLogger().info("✓ TransactionManager initialized");
 
             blockChangeLogger = new BlockChangeLogger(this, plotManager);
             adminPlotService = new AdminPlotService(plotManager, snapshotManager, blockChangeLogger);
@@ -298,5 +303,9 @@ public class StreulandPlugin extends JavaPlugin {
     
     public PathGenerator getPathGenerator() {
         return pathGenerator;
+    }
+
+    public TransactionManager getTransactionManager() {
+        return transactionManager;
     }
 }
