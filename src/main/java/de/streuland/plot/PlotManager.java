@@ -34,6 +34,7 @@ public class PlotManager {
 
     public PlotManager(JavaPlugin plugin) {
         this.plugin = plugin;
+        Plot.setRolePermissions(loadRolePermissions(plugin.getConfig()));
         this.worldConfig = new WorldConfig(plugin);
         PlotStoragePartitioner partitioner = new PlotStoragePartitioner(plugin);
 
@@ -204,26 +205,54 @@ public class PlotManager {
         return claimPlotForPlayer(contextFor(getWorldForPlot(plot.getPlotId())), plot, player);
     }
 
-    public boolean trustPlayer(String plotId, UUID owner, UUID playerToTrust) {
+    public boolean assignRole(String plotId, UUID actor, UUID target, Role role) {
         PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(owner)) {
+        if (plot == null || !canManageTeam(plot, actor) || role == null) {
             return false;
         }
-        plot.addTrusted(playerToTrust);
+        if (target == null || target.equals(plot.getOwner())) {
+            return false;
+        }
+        plot.assignRole(target, role);
         storage.savePlot(plot);
         return true;
     }
 
-    public boolean untrustPlayer(String plotId, UUID owner, UUID playerToUntrust) {
+    public boolean removeRole(String plotId, UUID actor, UUID target) {
         PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(owner)) {
+        if (plot == null || !canManageTeam(plot, actor) || target == null || target.equals(plot.getOwner())) {
             return false;
         }
-        plot.removeTrusted(playerToUntrust);
+        plot.removeRole(target);
         storage.savePlot(plot);
         return true;
+    }
+
+    private boolean canManageTeam(Plot plot, UUID actor) {
+        if (plot == null || actor == null) {
+            return false;
+        }
+        Role role = plot.getRole(actor);
+        return role == Role.OWNER || role == Role.CO_OWNER;
+    }
+
+    private Map<Role, Set<Permission>> loadRolePermissions(FileConfiguration config) {
+        Map<Role, Set<Permission>> mappings = new EnumMap<>(Role.class);
+        for (Role role : Role.values()) {
+            List<String> permissionNames = config.getStringList("roles." + role.name());
+            Set<Permission> permissions = EnumSet.noneOf(Permission.class);
+            for (String raw : permissionNames) {
+                try {
+                    permissions.add(Permission.valueOf(raw.toUpperCase(Locale.ROOT)));
+                } catch (IllegalArgumentException ignored) {
+                    plugin.getLogger().warning("Unknown permission '" + raw + "' in roles." + role.name());
+                }
+            }
+            mappings.put(role, permissions);
+        }
+        return mappings;
     }
 
     public Plot claimPlotAt(UUID player, World world, int x, int z) {
