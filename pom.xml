@@ -85,6 +85,10 @@
       <version>3.46.0.0</version>
     </dependency>
 
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -94,6 +98,9 @@
     </dependency>
 
     <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>5.11.0</version>
       <groupId>com.github.seeseemelk</groupId>
       <artifactId>MockBukkit-v1.16</artifactId>
       <version>1.16.5</version>
@@ -124,6 +131,10 @@
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
       <version>5.11.0</version>
+      <artifactId>mockito-inline</artifactId>
+      <version>5.2.0</version>
+      <artifactId>mockito-core</artifactId>
+      <version>5.11.0</version>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>5.10.2</version>
@@ -132,6 +143,8 @@
 
     <dependency>
       <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>4.11.0</version>
       <artifactId>mockito-inline</artifactId>
       <version>5.2.0</version>
       <artifactId>mockito-core</artifactId>
@@ -162,6 +175,12 @@
 
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
         <version>3.2.4</version>
         <executions>
@@ -173,6 +192,7 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
 
       <plugin>
           <plugin>

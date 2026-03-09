@@ -1,12 +1,20 @@
 package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
+import de.streuland.commands.PlotPriceCommand;
+import de.streuland.commands.PlotBackupCommand;
 import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.commands.PlotTeamCommand;
 import de.streuland.analytics.PlotAnalyticsService;
+import de.streuland.approval.PlotApprovalRequest;
+import de.streuland.approval.PlotApprovalService;
+import de.streuland.discord.DiscordNotifier;
 import de.streuland.analytics.PlayerEditStats;
+import de.streuland.commands.PlotPortalCommand;
 import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.district.TraderNpcService;
+import de.streuland.flags.Flag;
+import de.streuland.flags.PlotFlagManager;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.path.PathGenerator;
 import de.streuland.commands.PlotMergeCommand;
@@ -68,11 +76,17 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final QuestTracker questTracker;
     private final PlotMarketService plotMarketService;
     private final AdminPlotService adminPlotService;
+    private final PlotPriceCommand plotPriceCommand;
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
     private final MessageProvider messageProvider;
     private final LocaleCommand localeCommand;
+    private final PlotFlagManager plotFlagManager;
+    private final PlotApprovalService plotApprovalService;
+    private final DiscordNotifier discordNotifier;
+    private final PlotBackupCommand plotBackupCommand;
+    private final PlotPortalCommand plotPortalCommand;
     private final PlotHistoryCommand plotHistoryCommand;
     private final PlotTeamCommand plotTeamCommand;
     private final PlotSchematicCommand plotSchematicCommand;
@@ -90,6 +104,14 @@ public class PlotCommandExecutor implements CommandExecutor {
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
                                MessageProvider messageProvider) {
+                               PlotFlagManager plotFlagManager) {
+                               PlotApprovalService plotApprovalService, DiscordNotifier discordNotifier) {
+                               PlotPriceCommand plotPriceCommand, AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
+                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService) {
+                               AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
+                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               PlotBackupCommand plotBackupCommand) {
+                               PlotPortalCommand plotPortalCommand) {
                                PlotHistoryCommand plotHistoryCommand) {
                                PlotSchematicCommand plotSchematicCommand) {
                                PlotMarketCommand plotMarketCommand, PlotEconomyHook plotEconomyHook) {
@@ -104,12 +126,18 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.questService = questService;
         this.questTracker = questTracker;
         this.plotMarketService = plotMarketService;
+        this.plotPriceCommand = plotPriceCommand;
         this.adminPlotService = adminPlotService;
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
         this.messageProvider = messageProvider;
         this.localeCommand = new LocaleCommand(messageProvider);
+        this.plotFlagManager = plotFlagManager;
+        this.plotApprovalService = plotApprovalService;
+        this.discordNotifier = discordNotifier;
+        this.plotBackupCommand = plotBackupCommand;
+        this.plotPortalCommand = plotPortalCommand;
         this.plotHistoryCommand = plotHistoryCommand;
         this.plotTeamCommand = new PlotTeamCommand(plotManager);
         this.plotSchematicCommand = plotSchematicCommand;
@@ -168,6 +196,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleGenerate(player, args);
             case "stats":
                 return handleStats(player);
+            case "backup":
+                return plotBackupCommand.handle(player, args);
             case "history":
                 return plotHistoryCommand.handle(player, args);
             case "merge":
@@ -185,6 +215,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleQuest(player, args);
             case "market":
                 return handleMarket(player, args);
+            case "price":
+                return plotPriceCommand.handle(player, args);
             case "sell":
             case "buy":
             case "auction":
@@ -206,6 +238,16 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return localeCommand.handleLang(player, args);
             case "serverlang":
                 return localeCommand.handleServerLang(player, args);
+            case "flag":
+                return handleFlag(player, args);
+            case "pending":
+                return handlePendingApprovals(player);
+            case "approve":
+                return handleApprovalAction(player, args, true);
+            case "reject":
+                return handleApprovalAction(player, args, false);
+            case "portal":
+                return plotPortalCommand.handle(player, args);
             default:
                 if ("template".equals(subcommand)) {
                     return plotSchematicCommand.handle(player, args);
@@ -215,10 +257,48 @@ public class PlotCommandExecutor implements CommandExecutor {
         }
     }
 
+    private boolean handlePendingApprovals(Player player) {
+        if (!player.hasPermission("streuland.plot.approval")) {
+            player.sendMessage("§cKeine Berechtigung.");
+            return true;
+        }
+        List<PlotApprovalRequest> pending = plotApprovalService.listPending();
+        if (pending.isEmpty()) {
+            player.sendMessage("§7Keine offenen Plot-Freigaben.");
+            return true;
+        }
+        player.sendMessage("§6Offene Plot-Freigaben: " + pending.size());
+        for (PlotApprovalRequest request : pending) {
+            player.sendMessage("§e" + request.getId() + " §7- " + request.getPlayerName() + " @ " + request.getWorldName());
+        }
+        return true;
+    }
+
+    private boolean handleApprovalAction(Player player, String[] args, boolean approve) {
+        if (!player.hasPermission("streuland.plot.approval")) {
+            player.sendMessage("§cKeine Berechtigung.");
+            return true;
+        }
+        if (args.length < 2) {
+            player.sendMessage("§cVerwendung: /plot " + (approve ? "approve" : "reject") + " <id>");
+            return true;
+        }
+        boolean success = approve ? plotApprovalService.approve(args[1]) : plotApprovalService.reject(args[1]);
+        player.sendMessage(success ? "§aAntrag verarbeitet." : "§cAntrag nicht gefunden.");
+        return true;
+    }
+
     private boolean handleCreate(Player player) {
         List<Plot> playerPlots = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId());
         if (playerPlots.size() >= plotManager.getMaxPlotsPerPlayer(player.getWorld())) {
             player.sendMessage("§cDu kannst maximal " + plotManager.getMaxPlotsPerPlayer(player.getWorld()) + " Plots besitzen!");
+            return true;
+        }
+
+        if (plotApprovalService.requiresApproval(player)) {
+            PlotApprovalRequest request = plotApprovalService.createPending(player);
+            player.sendMessage("§eDein Plot-Antrag wurde eingereicht: §f" + request.getId());
+            player.sendMessage("§7Ein Admin kann mit /plotapprove approve " + request.getId() + " freigeben.");
             return true;
         }
 
@@ -230,12 +310,24 @@ public class PlotCommandExecutor implements CommandExecutor {
                     pathGenerator.buildPathBlocks(pathBlocks);
                     player.sendMessage("§aPlot erstellt und beansprucht! Lage: " + plot.getCenterX() + ", " + plot.getCenterZ());
                     player.sendMessage("§aNutze /plot home um dorthin zu teleportieren");
+                    notifyLargeClaim(player.getName(), plot);
                 });
             } else {
                 player.sendMessage("§cKein geeigneter Ort für deinen Plot gefunden. Versuche es später erneut.");
             }
         });
         return true;
+    }
+
+    private void notifyLargeClaim(String playerName, Plot plot) {
+        int threshold = plugin.getConfig().getInt("discord.large-claim-threshold", 128);
+        if (plot.getSize() < threshold) {
+            return;
+        }
+        Map<String, Object> extras = new HashMap<>();
+        extras.put("title", "Large plot claim");
+        extras.put("description", playerName + " claimed " + plot.getPlotId() + " (" + plot.getSize() + "x" + plot.getSize() + ")");
+        discordNotifier.sendWebhook("plot-alerts", "Large plot claimed", extras);
     }
 
     private boolean handleClaim(Player player) {
@@ -637,7 +729,10 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot team <...>§f - Verwalte Plot-Teamrollen");
         player.sendMessage("§e/plot home [Nummer]§f - Teleportiere dich zu einem eigenen Plot");
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
-        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle");
+        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle"
+        );
+        player.sendMessage("§e/plot backup <take|list|restore> <plotId> [snapshotId]§f - Schematic Backups");
+        player.sendMessage(" ");
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
         player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
@@ -656,12 +751,54 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot inspect <x> <z>§f - Zeige Block-Änderungslog für Koordinaten");
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
         player.sendMessage("§e/plot dashboard url§f - Zeige den Web-Dashboard Link");
+        player.sendMessage("§e/plot flag <name> <on|off|default> [plotId]§f - Setzt Plot-Flags");
+        player.sendMessage("§e/plot portal <create|list|remove|use>§f - Plot Warp-Portale");
         player.sendMessage("§e/plot merge <plotIdA> <plotIdB>§f - Verschmilzt benachbarte Plots");
         player.sendMessage("§e/plot split <plotId> <rows> <cols>§f - Teilt einen Plot in ein Grid");
         player.sendMessage("§e/plot template <list|preview|paste> [name]§f - Template verwalten/einfügen");
     }
 
 
+
+
+    private boolean handleFlag(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage("§cVerwendung: /plot flag <name> <on|off|default> [plotId]");
+            return true;
+        }
+
+        Plot plot = resolvePlotFromArgsOrLocation(player, args, 3);
+        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
+            player.sendMessage("§cDu kannst nur eigene, beanspruchte Plots konfigurieren.");
+            return true;
+        }
+
+        Flag flag = PlotFlagManager.parseFlag(args[1]);
+        if (flag == null) {
+            player.sendMessage("§cUnbekanntes Flag. Erlaubt: " + Arrays.toString(Flag.values()));
+            return true;
+        }
+
+        String mode = args[2].toLowerCase(Locale.ROOT);
+        if (mode.equals("default")) {
+            plotFlagManager.clearOverride(plot, flag);
+            player.sendMessage("§aFlag " + flag.name() + " auf Standard zurückgesetzt.");
+            return true;
+        }
+        if (mode.equals("on") || mode.equals("true")) {
+            plotFlagManager.setFlag(plot, flag, true);
+            player.sendMessage("§aFlag " + flag.name() + " aktiviert.");
+            return true;
+        }
+        if (mode.equals("off") || mode.equals("false")) {
+            plotFlagManager.setFlag(plot, flag, false);
+            player.sendMessage("§aFlag " + flag.name() + " deaktiviert.");
+            return true;
+        }
+
+        player.sendMessage("§cUngültiger Wert. Nutze on, off oder default.");
+        return true;
+    }
 
     private boolean handleDashboardUrl(Player player, String[] args) {
         if (args.length < 2 || !"url".equalsIgnoreCase(args[1])) {

@@ -21,6 +21,12 @@ plot:
   # Maximum number of claimed plots a player can own
   max-plots-per-player: 4
 
+  # Require admin approval before /plot create becomes active
+  create-requires-approval: false
+
+  # UUIDs or player names that bypass approval checks
+  create-approval-whitelist: []
+
   # Confirmation timeout in seconds for /plot delete
   delete-confirm-timeout-seconds: 30
 
@@ -239,6 +245,28 @@ weather:
 
 i18n:
   default-locale: "en"
+# Discord integration
+discord:
+  webhook-url: ""
+  bot-token: ""
+  approval-base-url: ""
+  large-claim-threshold: 128
+# Adaptive pricing engine
+pricing:
+  base-price: 1000.0
+  nearby-sales-decay: 0.25
+  featured-boost: 0.15
+  proximity-to-spawn-multiplier: 0.35
+  scarcity-factor: 0.6
+  sales-lookback-days: 14
+  nearby-sales-radius: 256
+  spawn-falloff-distance: 5000
+# Scheduled schematic backups
+backups:
+  enabled: true
+  intervalHours: 24
+  initialDelayTicks: 1200
+  retentionDays: 14
 # Lightweight admin web API/dashboard
 web:
   enabled: false

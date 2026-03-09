@@ -10,6 +10,10 @@ commands:
   plot:
     description: Main plot command
     usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|lang|serverlang>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|flag>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|pending|approve|reject>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|backup|dashboard>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|portal>
     usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|merge|split>
     usage: /plot <help|create|claim|info|team|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard>
     usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|template>
@@ -21,9 +25,13 @@ commands:
     usage: /district <info|progress|list>
     aliases:
       - city
+  plotapprove:
+    description: Manage pending plot approvals
+    usage: /plotapprove <list|approve|reject> <id>
 
 softdepend:
   - Vault
+  - WorldGuard
 
 permissions:
   streuland.plot.admin.inspect:
@@ -38,6 +46,13 @@ permissions:
 
   streuland.admin:
     description: Grants admin-level dashboard controls
+    default: op
+
+  streuland.plot.approval:
+    description: Allows managing pending plot approvals
+    default: op
+  streuland.portal.admin:
+    description: Allows managing plot portals everywhere
     default: op
 
   streuland.market.*:

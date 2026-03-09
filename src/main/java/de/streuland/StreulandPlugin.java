@@ -3,14 +3,20 @@ package de.streuland;
 import de.streuland.admin.AdminPlotService;
 import de.streuland.admin.BlockChangeLogger;
 import de.streuland.admin.DailyPlotBackupService;
+import de.streuland.backup.SnapshotService;
+import de.streuland.commands.PlotPortalCommand;
 import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.command.PlotCommandExecutor;
+import de.streuland.commands.PlotApprovalCommand;
+import de.streuland.commands.PlotBackupCommand;
 import de.streuland.command.DistrictCommandExecutor;
 import de.streuland.history.PlotChangeJournal;
 import de.streuland.history.JournalManager;
 import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.district.DistrictClusterService;
+import de.streuland.discord.DiscordNotifier;
+import de.streuland.approval.PlotApprovalService;
 import de.streuland.district.DistrictManager;
 import de.streuland.district.DistrictProgressService;
 import de.streuland.district.TraderNpcService;
@@ -22,9 +28,11 @@ import de.streuland.weather.SeasonalEffectListener;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.web.WebServer;
 import de.streuland.dashboard.RestApiController;
+import de.streuland.flags.PlotFlagManager;
 import de.streuland.listener.BlockChangeListener;
 import de.streuland.i18n.MessageProvider;
 import de.streuland.listener.ProtectionListener;
+import de.streuland.compat.WorldGuardCompat;
 import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.neighborhood.ResourceSyncScheduler;
 import de.streuland.path.PathGenerator;
@@ -36,6 +44,8 @@ import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.biome.BiomeEffectScheduler;
 import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.plot.market.PlotMarketService;
+import de.streuland.pricing.PricingEngine;
+import de.streuland.commands.PlotPriceCommand;
 import de.streuland.commands.PlotMarketCommand;
 import de.streuland.economy.PlotEconomyHook;
 import de.streuland.market.MarketManager;
@@ -43,6 +53,9 @@ import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
 import de.streuland.rules.listener.RuleListener;
+import de.streuland.warp.CooldownManager;
+import de.streuland.warp.PlotEconomyHook;
+import de.streuland.warp.PortalManager;
 import de.streuland.transaction.TransactionManager;
 import de.streuland.storage.SqlitePlotStorage;
 import de.streuland.storage.YamlPlotStorage;
@@ -81,6 +94,8 @@ public class StreulandPlugin extends JavaPlugin {
     private QuestService questService;
     private QuestTracker questTracker;
     private PlotMarketService plotMarketService;
+    private PricingEngine pricingEngine;
+    private PlotPriceCommand plotPriceCommand;
     private Economy economy;
     private PlotEconomyHook plotEconomyHook;
     private MarketManager marketManager;
@@ -88,12 +103,18 @@ public class StreulandPlugin extends JavaPlugin {
     private BlockChangeLogger blockChangeLogger;
     private AdminPlotService adminPlotService;
     private DailyPlotBackupService dailyPlotBackupService;
+    private SnapshotService snapshotService;
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
     private PlotChangeJournal plotChangeJournal;
     private JournalManager journalManager;
     private ParticleEffectScheduler particleEffectScheduler;
     private MessageProvider messageProvider;
+    private PlotFlagManager plotFlagManager;
+    private WorldGuardCompat worldGuardCompat;
+    private DiscordNotifier discordNotifier;
+    private PlotApprovalService plotApprovalService;
+    private PortalManager portalManager;
     private TransactionManager transactionManager;
     private de.streuland.storage.PlotStorage configuredStorageAdapter;
     private WebServer webServer;
@@ -117,10 +138,14 @@ public class StreulandPlugin extends JavaPlugin {
             pathGenerator = new PathGenerator(this, plotManager);
             getLogger().info("✓ PathGenerator initialized");
 
+            discordNotifier = new DiscordNotifier(this);
+            plotApprovalService = new PlotApprovalService(this, plotManager, pathGenerator, discordNotifier);
+
             snapshotStorage = new SnapshotStorage(this);
             getLogger().info("✓ SnapshotStorage initialized");
 
             snapshotManager = new SnapshotManager(this, plotManager, snapshotStorage);
+            snapshotService = new SnapshotService(this, plotManager, snapshotManager);
             getLogger().info("✓ SnapshotManager initialized");
 
             ruleEngine = new RuleEngine(plotManager, new DefaultPlotLevelProvider());
@@ -156,6 +181,12 @@ public class StreulandPlugin extends JavaPlugin {
             adminPlotService = new AdminPlotService(plotManager, snapshotManager, blockChangeLogger);
 
             protectionListener = new ProtectionListener(this, plotManager, messageProvider);
+            plotFlagManager = new PlotFlagManager(plotManager);
+            worldGuardCompat = new WorldGuardCompat(this, plotManager, plotFlagManager);
+            plotFlagManager.registerHook(worldGuardCompat);
+            worldGuardCompat.syncAllPlots();
+
+            protectionListener = new ProtectionListener(this, plotManager, plotFlagManager);
             blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService);
             protectionListener = new ProtectionListener(this, plotManager);
             blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService, plotChangeJournal, journalManager);
@@ -200,29 +231,47 @@ public class StreulandPlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(questTracker, this);
             getLogger().info("✓ District system initialized");
 
+            plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy, discordNotifier);
+
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotApprovalService, discordNotifier);
+            pricingEngine = new PricingEngine(this, plotManager, neighborhoodService);
+            plotPriceCommand = new PlotPriceCommand(pricingEngine);
+            plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy, pricingEngine);
+
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, plotPriceCommand, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService);
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
+            portalManager = new PortalManager(this, plotManager, new PlotEconomyHook(economy), new CooldownManager());
+            getServer().getPluginManager().registerEvents(portalManager, this);
+            PlotPortalCommand plotPortalCommand = new PlotPortalCommand(plotManager, portalManager);
 
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, messageProvider);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotPortalCommand);
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, new PlotHistoryCommand(journalManager));
             SchematicLoader schematicLoader = new SchematicLoader(this);
             SchematicPreview schematicPreview = new SchematicPreview();
             SchematicPaster schematicPaster = new SchematicPaster(this);
             PlotSchematicCommand plotSchematicCommand = new PlotSchematicCommand(schematicLoader, schematicPreview, schematicPaster);
 
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotFlagManager);
+            PlotBackupCommand plotBackupCommand = new PlotBackupCommand(snapshotService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotBackupCommand);
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotSchematicCommand);
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotMarketCommand, plotEconomyHook);
             getCommand("plot").setExecutor(commandExecutor);
+            if (getCommand("plotapprove") != null) {
+                getCommand("plotapprove").setExecutor(new PlotApprovalCommand(plotApprovalService));
+            }
 
             // Register district command
             getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager, messageProvider));
             getLogger().info("✓ Commands registered");
 
-            dailyPlotBackupService = new DailyPlotBackupService(this, plotManager, snapshotManager);
+            dailyPlotBackupService = new DailyPlotBackupService(this, snapshotService);
             dailyPlotBackupService.start();
             getLogger().info("✓ Daily backup scheduler initialized");
 
             DashboardDataExporter dataExporter = new DashboardDataExporter(plotManager.getStorage());
-            restApiController = new RestApiController(this, plotManager, neighborhoodService, analyticsService, dataExporter, plotMarketService);
+            restApiController = new RestApiController(this, plotManager, neighborhoodService, analyticsService, dataExporter, plotMarketService, plotApprovalService);
             restApiController.start();
             getLogger().info("✓ Dashboard API initialized");
 
