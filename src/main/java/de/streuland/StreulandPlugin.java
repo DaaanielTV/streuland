@@ -28,8 +28,10 @@ import de.streuland.weather.SeasonalEffectListener;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.web.WebServer;
 import de.streuland.dashboard.RestApiController;
+import de.streuland.flags.PlotFlagManager;
 import de.streuland.listener.BlockChangeListener;
 import de.streuland.listener.ProtectionListener;
+import de.streuland.compat.WorldGuardCompat;
 import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.neighborhood.ResourceSyncScheduler;
 import de.streuland.path.PathGenerator;
@@ -106,6 +108,8 @@ public class StreulandPlugin extends JavaPlugin {
     private PlotChangeJournal plotChangeJournal;
     private JournalManager journalManager;
     private ParticleEffectScheduler particleEffectScheduler;
+    private PlotFlagManager plotFlagManager;
+    private WorldGuardCompat worldGuardCompat;
     private DiscordNotifier discordNotifier;
     private PlotApprovalService plotApprovalService;
     private PortalManager portalManager;
@@ -173,6 +177,13 @@ public class StreulandPlugin extends JavaPlugin {
             journalManager = new JournalManager(this, plotChangeJournal);
             adminPlotService = new AdminPlotService(plotManager, snapshotManager, blockChangeLogger);
 
+            plotFlagManager = new PlotFlagManager(plotManager);
+            worldGuardCompat = new WorldGuardCompat(this, plotManager, plotFlagManager);
+            plotFlagManager.registerHook(worldGuardCompat);
+            worldGuardCompat.syncAllPlots();
+
+            protectionListener = new ProtectionListener(this, plotManager, plotFlagManager);
+            blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService);
             protectionListener = new ProtectionListener(this, plotManager);
             blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService, plotChangeJournal, journalManager);
             getLogger().info("✓ Protection/BlockChange listeners registered");
@@ -236,6 +247,7 @@ public class StreulandPlugin extends JavaPlugin {
             SchematicPaster schematicPaster = new SchematicPaster(this);
             PlotSchematicCommand plotSchematicCommand = new PlotSchematicCommand(schematicLoader, schematicPreview, schematicPaster);
 
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotFlagManager);
             PlotBackupCommand plotBackupCommand = new PlotBackupCommand(snapshotService);
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotBackupCommand);
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotSchematicCommand);
