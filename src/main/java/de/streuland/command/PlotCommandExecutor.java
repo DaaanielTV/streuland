@@ -3,6 +3,7 @@ package de.streuland.command;
 import de.streuland.admin.AdminPlotService;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.analytics.PlayerEditStats;
+import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.district.TraderNpcService;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.path.PathGenerator;
@@ -63,6 +64,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final PlotSchematicCommand plotSchematicCommand;
     private final PlotMarketCommand plotMarketCommand;
     private final PlotEconomyHook plotEconomyHook;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
@@ -75,6 +77,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               PlotSchematicCommand plotSchematicCommand) {
                                PlotMarketCommand plotMarketCommand, PlotEconomyHook plotEconomyHook) {
         this.plugin = plugin;
         this.plotManager = plotManager;
@@ -91,6 +94,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.plotSchematicCommand = plotSchematicCommand;
         this.plotMarketCommand = plotMarketCommand;
         this.plotEconomyHook = plotEconomyHook;
         this.pendingDeletes = new HashMap<>();
@@ -137,6 +141,9 @@ public class PlotCommandExecutor implements CommandExecutor {
             case "delete":
                 return handleDelete(player, args);
             case "confirm":
+                if (plotSchematicCommand.confirm(player)) {
+                    return true;
+                }
                 return handleConfirmDelete(player);
             case "cancel":
                 return handleCancelDelete(player);
@@ -174,6 +181,9 @@ public class PlotCommandExecutor implements CommandExecutor {
             case "dashboard":
                 return handleDashboardUrl(player, args);
             default:
+                if ("template".equals(subcommand)) {
+                    return plotSchematicCommand.handle(player, args);
+                }
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
         }
@@ -672,6 +682,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot inspect <x> <z>§f - Zeige Block-Änderungslog für Koordinaten");
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
         player.sendMessage("§e/plot dashboard url§f - Zeige den Web-Dashboard Link");
+        player.sendMessage("§e/plot template <list|preview|paste> [name]§f - Template verwalten/einfügen");
     }
 
 
