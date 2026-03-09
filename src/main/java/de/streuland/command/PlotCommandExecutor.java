@@ -1,6 +1,7 @@
 package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
+import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.analytics.PlayerEditStats;
 import de.streuland.district.TraderNpcService;
@@ -61,6 +62,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
+    private final PlotHistoryCommand plotHistoryCommand;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
@@ -70,7 +72,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                                BiomeBonusService biomeBonusService, NeighborhoodService neighborhoodService,
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
-                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService) {
+                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
+                               PlotHistoryCommand plotHistoryCommand) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -86,6 +89,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
+        this.plotHistoryCommand = plotHistoryCommand;
         this.pendingDeletes = new HashMap<>();
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
@@ -137,6 +141,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleGenerate(player, args);
             case "stats":
                 return handleStats(player);
+            case "history":
+                return plotHistoryCommand.handle(player, args);
             case "style":
                 return handleStyle(player, args);
             case "biome":
