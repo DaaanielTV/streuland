@@ -1,26 +1,23 @@
 # Refactoring-Notizen (2026-02)
 
-## Entfernt / vereinfacht
+## Fokus
 
-1. **Redundanter Owner-Index in `PlotStorage` entfernt**
-   - War ohne konsistente Pflege potenziell fehleranfällig.
-   - Kein aktueller produktiver Zugriffspfad nutzte diese Struktur.
+- Reduzierung technischer Schulden in Build, Struktur und Testbarkeit
 
-2. **Nicht verwendete Felder/Imports entfernt**
-   - In mehreren Klassen technischer Ballast entfernt.
+## Erledigt
 
-3. **Claiming-Konsistenz verbessert**
-   - Claim-Logik auf zentralen Managerpfad ausgerichtet.
-   - Synchronisierung zwischen Storage und SpatialGrid sichergestellt.
+- Maven-POM bereinigt (kaputte XML-Struktur, doppelte/defekte Dependencies entfernt)
+- Abhängigkeiten auf nachvollziehbare Kernmenge reduziert
+- Dokumentation konsolidiert und auf Deutsch vereinheitlicht
 
-4. **NPE-Risiken reduziert**
-   - Null-sichere Owner-Vergleiche in Plotabfragen und Owner-Checks.
+## Empfohlene nächste Schritte
 
-5. **Konfigurationsnutzung verbessert**
-   - `path.width` wirkt nun in der tatsächlichen Pfaderweiterung.
+1. Service-Grenzen weiter schärfen (insb. Plot- und Marktlogik)
+2. Testabdeckung für Integrationspfade erhöhen
+3. Fehlertexte und Logs standardisieren
+4. Konfigurationsschema versionieren
 
-## Nicht geändert (bewusst)
+## Risiken
 
-- Grundlegendes Berechtigungsmodell (Owner/Trusted/Visitor)
-- Grundarchitektur (Storage + Manager + Grid + Listener + Command)
-- Einfache Pfadstrategie (Bresenham) ohne komplexe Terrainnavigation
+- Build in isolierten Umgebungen ohne Maven-Central-Zugriff bleibt eingeschränkt
+- Altdatenmigrationen können zusätzliche Tests erfordern
