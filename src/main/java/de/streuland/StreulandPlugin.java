@@ -16,6 +16,7 @@ import de.streuland.quest.QuestTracker;
 import de.streuland.weather.ParticleEffectScheduler;
 import de.streuland.weather.SeasonalEffectListener;
 import de.streuland.weather.SeasonalWeatherService;
+import de.streuland.web.WebServer;
 import de.streuland.dashboard.RestApiController;
 import de.streuland.listener.BlockChangeListener;
 import de.streuland.listener.ProtectionListener;
@@ -71,6 +72,7 @@ public class StreulandPlugin extends JavaPlugin {
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
     private ParticleEffectScheduler particleEffectScheduler;
+    private WebServer webServer;
     
     @Override
     public void onEnable() {
@@ -179,6 +181,14 @@ public class StreulandPlugin extends JavaPlugin {
             restApiController = new RestApiController(this, plotManager, neighborhoodService, analyticsService, dataExporter, plotMarketService);
             restApiController.start();
             getLogger().info("✓ Dashboard API initialized");
+
+            if (getConfig().getBoolean("web.enabled", false)) {
+                String token = getConfig().getString("web.token", "");
+                int webPort = getConfig().getInt("web.port", 8090);
+                webServer = new WebServer("0.0.0.0", webPort, token, new WebServer.PlotGatewayAdapter(plotManager), getLogger());
+                webServer.start();
+                getLogger().info("✓ Admin web server listening on http://0.0.0.0:" + webPort);
+            }
             
             getLogger().info("===============================================");
             getLogger().info("Streuland enabled successfully!");
@@ -223,6 +233,9 @@ public class StreulandPlugin extends JavaPlugin {
         }
         if (dailyPlotBackupService != null) {
             dailyPlotBackupService.stop();
+        }
+        if (webServer != null) {
+            webServer.stop();
         }
         getLogger().info("Streuland disabled");
     }
