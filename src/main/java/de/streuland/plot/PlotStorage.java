@@ -1,6 +1,8 @@
 package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
+import de.streuland.plot.upgrade.PlotProgressionState;
+import de.streuland.plot.upgrade.PlotUpgradePersistence;
 import de.streuland.quest.QuestProgress;
 import de.streuland.plot.snapshot.PlotSnapshotMetadata;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -63,11 +65,20 @@ public class PlotStorage {
         config.set("state", plot.getState().name());
         config.set("createdAt", plot.getCreatedAt());
         config.set("spawnY", plot.getSpawnY());
-        Map<String, String> serializedRoles = new HashMap<>();
-        for (Map.Entry<UUID, Role> entry : plot.getRoles().entrySet()) {
-            serializedRoles.put(entry.getKey().toString(), entry.getValue().name());
+        Map<String, List<String>> serializedAssignments = new HashMap<>();
+        for (Map.Entry<UUID, Set<String>> entry : plot.getRoleAssignments().entrySet()) {
+            serializedAssignments.put(entry.getKey().toString(), new ArrayList<>(entry.getValue()));
         }
-        config.set("roles", serializedRoles);
+        config.set("roleAssignments", serializedAssignments);
+        Map<String, List<String>> serializedDefinitions = new LinkedHashMap<>();
+        for (Map.Entry<String, Set<Permission>> entry : plot.getRoleDefinitions().entrySet()) {
+            List<String> permissions = new ArrayList<>();
+            for (Permission permission : entry.getValue()) {
+                permissions.add(permission.name());
+            }
+            serializedDefinitions.put(entry.getKey(), permissions);
+        }
+        config.set("roleDefinitions", serializedDefinitions);
         PlotData data = plotData.getOrDefault(plot.getPlotId(), new PlotData());
         config.set("theme", data.getTheme().name());
         config.set("rewards.storageSlots", data.getBonusStorageSlots());
@@ -76,6 +87,13 @@ public class PlotStorage {
         config.set("rewards.stats", new HashMap<>(data.getStatBonuses()));
         config.set("flags", new HashMap<>(data.getFlagOverrides()));
         config.set("featured", data.isFeatured());
+        config.set("showcase.public", data.isPublicVisitEnabled());
+        config.set("showcase.title", data.getShowcaseTitle());
+        config.set("showcase.description", data.getShowcaseDescription());
+        config.set("showcase.tags", new ArrayList<>(data.getShowcaseTags()));
+        config.set("showcase.spawn.x", data.getShowcaseSpawnX());
+        config.set("showcase.spawn.y", data.getShowcaseSpawnY());
+        config.set("showcase.spawn.z", data.getShowcaseSpawnZ());
 
         for (Map.Entry<String, QuestProgress> entry : data.getQuestProgress().entrySet()) {
             String base = "quests.progress." + entry.getKey();
@@ -124,6 +142,14 @@ public class PlotStorage {
                 data.getUnlockedAbilities().addAll(config.getStringList("rewards.abilities"));
                 data.getCosmeticInventory().addAll(config.getStringList("rewards.cosmetics"));
                 data.setFeatured(config.getBoolean("featured", false));
+                data.setPublicVisitEnabled(config.getBoolean("showcase.public", false));
+                data.setShowcaseTitle(config.getString("showcase.title", ""));
+                data.setShowcaseDescription(config.getString("showcase.description", ""));
+                data.setShowcaseTags(new LinkedHashSet<>(config.getStringList("showcase.tags")));
+                data.setShowcaseSpawn(
+                        config.getInt("showcase.spawn.x", 0),
+                        config.getInt("showcase.spawn.y", 0),
+                        config.getInt("showcase.spawn.z", 0));
                 if (config.isConfigurationSection("rewards.stats")) {
                     for (String key : config.getConfigurationSection("rewards.stats").getKeys(false)) {
                         data.getStatBonuses().put(key, config.getDouble("rewards.stats." + key));
@@ -169,28 +195,57 @@ public class PlotStorage {
 
             Plot plot = new Plot(id, centerX, centerZ, size, owner, createdAt, spawnY, state);
 
-            Map<UUID, Role> loadedRoles = new HashMap<>();
-            if (config.isConfigurationSection("roles")) {
-                for (String uuidStr : config.getConfigurationSection("roles").getKeys(false)) {
-                    try {
-                        UUID playerId = UUID.fromString(uuidStr);
-                        String roleRaw = config.getString("roles." + uuidStr, Role.VISITOR.name());
-                        loadedRoles.put(playerId, Role.valueOf(roleRaw.toUpperCase(Locale.ROOT)));
-                    } catch (Exception e) {
-                        plugin.getLogger().warning("Invalid role entry for plot " + id + ": " + uuidStr);
+            if (config.isConfigurationSection("roleDefinitions")) {
+                Map<String, Set<Permission>> definitions = new LinkedHashMap<>();
+                for (String roleId : config.getConfigurationSection("roleDefinitions").getKeys(false)) {
+                    Set<Permission> permissions = EnumSet.noneOf(Permission.class);
+                    for (String raw : config.getStringList("roleDefinitions." + roleId)) {
+                        try {
+                            permissions.add(Permission.valueOf(raw.toUpperCase(Locale.ROOT)));
+                        } catch (IllegalArgumentException ignored) {
+                            plugin.getLogger().warning("Invalid permission for role " + roleId + " on plot " + id + ": " + raw);
+                        }
                     }
+                    definitions.put(roleId, permissions);
                 }
-            } else {
-                List<String> trustedList = config.getStringList("trusted");
-                for (String uuidStr : trustedList) {
-                    try {
-                        loadedRoles.put(UUID.fromString(uuidStr), Role.BUILDER);
-                    } catch (IllegalArgumentException e) {
-                        plugin.getLogger().warning("Invalid UUID in trusted list for plot " + id + ": " + uuidStr);
-                    }
-                }
+                plot.replaceRoleDefinitions(definitions);
             }
-            plot.replaceRoles(loadedRoles);
+
+            if (config.isConfigurationSection("roleAssignments")) {
+                Map<UUID, Set<String>> assignments = new HashMap<>();
+                for (String uuidStr : config.getConfigurationSection("roleAssignments").getKeys(false)) {
+                    try {
+                        assignments.put(UUID.fromString(uuidStr), new LinkedHashSet<>(config.getStringList("roleAssignments." + uuidStr)));
+                    } catch (Exception e) {
+                        plugin.getLogger().warning("Invalid role assignment for plot " + id + ": " + uuidStr);
+                    }
+                }
+                plot.replaceRoleAssignments(assignments);
+            } else {
+                Map<UUID, Role> loadedRoles = new HashMap<>();
+                if (config.isConfigurationSection("roles")) {
+                    for (String uuidStr : config.getConfigurationSection("roles").getKeys(false)) {
+                        try {
+                            UUID playerId = UUID.fromString(uuidStr);
+                            String roleRaw = config.getString("roles." + uuidStr, Role.VISITOR.name());
+                            Role role = Role.fromId(roleRaw).orElse(Role.VISITOR);
+                            loadedRoles.put(playerId, role);
+                        } catch (Exception e) {
+                            plugin.getLogger().warning("Invalid role entry for plot " + id + ": " + uuidStr);
+                        }
+                    }
+                } else {
+                    List<String> trustedList = config.getStringList("trusted");
+                    for (String uuidStr : trustedList) {
+                        try {
+                            loadedRoles.put(UUID.fromString(uuidStr), Role.BUILDER);
+                        } catch (IllegalArgumentException e) {
+                            plugin.getLogger().warning("Invalid UUID in trusted list for plot " + id + ": " + uuidStr);
+                        }
+                    }
+                }
+                plot.replaceRoles(loadedRoles);
+            }
 
             return plot;
         } catch (Exception e) {

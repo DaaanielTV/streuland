@@ -33,14 +33,11 @@ public class ProtectionListener implements Listener {
     private final boolean allowVisitorInteract;
     private final MessageProvider messageProvider;
 
-    public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, MessageProvider messageProvider) {
-        this.plotManager = plotManager;
-        this.messageProvider = messageProvider;
-    public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, PlotFlagManager plotFlagManager) {
+    public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, PlotFlagManager plotFlagManager, MessageProvider messageProvider) {
         this.plotManager = plotManager;
         this.plotFlagManager = plotFlagManager;
+        this.messageProvider = messageProvider;
         this.allowVisitorInteract = plugin.getConfig().getBoolean("protection.allow-visitor-interact", false);
-
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -123,7 +120,7 @@ public class ProtectionListener implements Listener {
                 return;
             case PLOT_CLAIMED:
                 Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
-                if (plot != null && !plot.isAllowed(player.getUniqueId(), Permission.BREAK)) {
+                if (plot != null && !plotManager.hasPermission(plot, player.getUniqueId(), Permission.BREAK)) {
                     event.setCancelled(true);
                     player.sendMessage(messageProvider.t(player, "protection.plot.protected"));
                 }
@@ -152,7 +149,7 @@ public class ProtectionListener implements Listener {
                 return;
             case PLOT_CLAIMED:
                 Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
-                if (plot != null && !plot.isAllowed(player.getUniqueId(), Permission.BUILD)) {
+                if (plot != null && !plotManager.hasPermission(plot, player.getUniqueId(), Permission.BUILD)) {
                     event.setCancelled(true);
                     player.sendMessage(messageProvider.t(player, "protection.plot.protected"));
                 }
@@ -181,7 +178,7 @@ public class ProtectionListener implements Listener {
         }
 
         Plot plot = plotManager.getPlotAt(event.getClickedBlock().getWorld(), x, z);
-        if (plot == null || plot.isAllowed(player.getUniqueId(), Permission.INTERACT)) {
+        if (plot == null || plotManager.hasPermission(plot, player.getUniqueId(), resolveInteractPermission(event.getClickedBlock().getType()))) {
             return;
         }
 
@@ -189,6 +186,10 @@ public class ProtectionListener implements Listener {
             event.setCancelled(true);
             player.sendMessage(messageProvider.t(player, "protection.interact.visitor_blocked"));
         }
+    }
+
+    private Permission resolveInteractPermission(Material material) {
+        return isContainerBlock(material) ? Permission.CONTAINER_ACCESS : Permission.INTERACT;
     }
 
     private boolean isInteractiveBlock(Material material) {
@@ -203,5 +204,16 @@ public class ProtectionListener implements Listener {
                 material.toString().contains("DROPPER") ||
                 material.toString().contains("REPEATER") ||
                 material.toString().contains("COMPARATOR");
+    }
+
+    private boolean isContainerBlock(Material material) {
+        String name = material.toString();
+        return name.contains("CHEST") ||
+                name.contains("BARREL") ||
+                name.contains("SHULKER_BOX") ||
+                name.contains("FURNACE") ||
+                name.contains("HOPPER") ||
+                name.contains("DISPENSER") ||
+                name.contains("DROPPER");
     }
 }

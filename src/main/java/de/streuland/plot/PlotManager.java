@@ -205,16 +205,56 @@ public class PlotManager {
         return claimPlotForPlayer(contextFor(getWorldForPlot(plot.getPlotId())), plot, player);
     }
 
-    public boolean assignRole(String plotId, UUID actor, UUID target, Role role) {
+    public boolean createRole(String plotId, UUID actor, String roleId, Set<Permission> permissions) {
         PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || !canManageTeam(plot, actor) || role == null) {
+        if (plot == null || !canManageRoles(plot, actor)) {
             return false;
         }
-        if (target == null || target.equals(plot.getOwner())) {
+        boolean created = plot.createRole(roleId, permissions);
+        if (created) {
+            storage.savePlot(plot);
+        }
+        return created;
+    }
+
+    public boolean updateRole(String plotId, UUID actor, String roleId, Set<Permission> permissions) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || !canManageRoles(plot, actor)) {
             return false;
         }
-        plot.assignRole(target, role);
+        boolean updated = plot.updateRole(roleId, permissions);
+        if (updated) {
+            storage.savePlot(plot);
+        }
+        return updated;
+    }
+
+    public boolean removeRoleDefinition(String plotId, UUID actor, String roleId) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || !canManageRoles(plot, actor)) {
+            return false;
+        }
+        boolean removed = plot.removeRoleDefinition(roleId);
+        if (removed) {
+            storage.savePlot(plot);
+        }
+        return removed;
+    }
+
+    public boolean assignRole(String plotId, UUID actor, UUID target, Role role) {
+        return role != null && assignRole(plotId, actor, target, role.getId());
+    }
+
+    public boolean assignRole(String plotId, UUID actor, UUID target, String roleId) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || !canManageRoles(plot, actor) || target == null || target.equals(plot.getOwner())) {
+            return false;
+        }
+        plot.assignRole(target, roleId);
         storage.savePlot(plot);
         return true;
     }
@@ -222,7 +262,7 @@ public class PlotManager {
     public boolean removeRole(String plotId, UUID actor, UUID target) {
         PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || !canManageTeam(plot, actor) || target == null || target.equals(plot.getOwner())) {
+        if (plot == null || !canManageRoles(plot, actor) || target == null || target.equals(plot.getOwner())) {
             return false;
         }
         plot.removeRole(target);
@@ -230,12 +270,31 @@ public class PlotManager {
         return true;
     }
 
-    private boolean canManageTeam(Plot plot, UUID actor) {
+    public boolean unassignRole(String plotId, UUID actor, UUID target, String roleId) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || !canManageRoles(plot, actor) || target == null || target.equals(plot.getOwner())) {
+            return false;
+        }
+        plot.removeRole(target, roleId);
+        storage.savePlot(plot);
+        return true;
+    }
+
+    public boolean hasPermission(Plot plot, UUID actor, Permission permission) {
+        return plot != null && permission != null && plot.isAllowed(actor, permission);
+    }
+
+    public boolean hasPermission(String plotId, UUID actor, Permission permission) {
+        Plot plot = storageForPlot(plotId).getPlot(plotId);
+        return hasPermission(plot, actor, permission);
+    }
+
+    private boolean canManageRoles(Plot plot, UUID actor) {
         if (plot == null || actor == null) {
             return false;
         }
-        Role role = plot.getRole(actor);
-        return role == Role.OWNER || role == Role.CO_OWNER;
+        return plot.isAllowed(actor, Permission.ROLE_MANAGE) || Objects.equals(plot.getOwner(), actor);
     }
 
     private Map<Role, Set<Permission>> loadRolePermissions(FileConfiguration config) {
@@ -264,6 +323,97 @@ public class PlotManager {
     }
 
     public Plot claimPlotAt(UUID player, int x, int z) { return claimPlotAt(player, getWorld(), x, z); }
+
+
+    public boolean updateShowcase(String plotId, UUID actor, boolean publicVisitEnabled, String title,
+                                  String description, Set<String> tags) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || plot.getOwner() == null || actor == null || !plot.getOwner().equals(actor)) {
+            return false;
+        }
+        PlotData data = storage.getPlotData(plotId);
+        data.setPublicVisitEnabled(publicVisitEnabled);
+        data.setShowcaseTitle(title);
+        data.setShowcaseDescription(description);
+        data.setShowcaseTags(tags);
+        if (!data.hasCustomShowcaseSpawn()) {
+            data.setShowcaseSpawn(plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ());
+        }
+        storage.savePlotData(plotId, data);
+        return true;
+    }
+
+    public boolean setShowcaseSpawn(String plotId, UUID actor, int x, int y, int z) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || plot.getOwner() == null || actor == null || !plot.getOwner().equals(actor)) {
+            return false;
+        }
+        PlotData data = storage.getPlotData(plotId);
+        data.setShowcaseSpawn(x, y, z);
+        storage.savePlotData(plotId, data);
+        return true;
+    }
+
+    public List<Plot> getPublicPlots(World world) {
+        List<Plot> publicPlots = new ArrayList<>();
+        for (Plot plot : contextFor(world).storage.getAllPlots()) {
+            PlotData data = contextFor(world).storage.getPlotData(plot.getPlotId());
+            if (plot.getState() == Plot.PlotState.CLAIMED && data.isPublicVisitEnabled()) {
+                publicPlots.add(plot);
+            }
+        }
+        publicPlots.sort(Comparator.comparing(plot -> contextFor(world).storage.getPlotData(plot.getPlotId()).getShowcaseTitle(), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(Plot::getPlotId));
+        return publicPlots;
+    }
+
+    public List<Plot> getPublicPlots() {
+        List<Plot> publicPlots = new ArrayList<>();
+        for (String worldName : contexts.keySet()) {
+            publicPlots.addAll(getPublicPlots(contexts.get(worldName).world));
+        }
+        return publicPlots;
+    }
+
+    public List<Plot> searchPublicPlots(World world, String query) {
+        String needle = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        List<Plot> matches = new ArrayList<>();
+        for (Plot plot : getPublicPlots(world)) {
+            PlotData data = contextFor(world).storage.getPlotData(plot.getPlotId());
+            if (needle.isEmpty()
+                    || plot.getPlotId().toLowerCase(Locale.ROOT).contains(needle)
+                    || data.getShowcaseTitle().toLowerCase(Locale.ROOT).contains(needle)
+                    || data.getShowcaseDescription().toLowerCase(Locale.ROOT).contains(needle)
+                    || data.getShowcaseTags().contains(needle)) {
+                matches.add(plot);
+            }
+        }
+        return matches;
+    }
+
+    public int[] getTeleportCoordinates(String plotId) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null) {
+            return null;
+        }
+        PlotData data = storage.getPlotData(plotId);
+        if (data.hasCustomShowcaseSpawn()) {
+            return new int[]{data.getShowcaseSpawnX(), data.getShowcaseSpawnY(), data.getShowcaseSpawnZ()};
+        }
+        return new int[]{plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ()};
+    }
+
+    public boolean canVisitPublicPlot(String plotId) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || plot.getState() != Plot.PlotState.CLAIMED) {
+            return false;
+        }
+        return storage.getPlotData(plotId).isPublicVisitEnabled();
+    }
 
     public boolean unclaimPlot(String plotId, UUID requester, boolean force) {
         PlotStorage storage = storageForPlot(plotId);

@@ -12,7 +12,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -36,13 +35,8 @@ public class DistrictStorage {
         loadAll();
     }
 
-    public Collection<District> getAllDistricts() {
-        return new ArrayList<>(cachedDistricts.values());
-    }
-
-    public District getDistrict(String id) {
-        return cachedDistricts.get(id);
-    }
+    public Collection<District> getAllDistricts() { return new ArrayList<>(cachedDistricts.values()); }
+    public District getDistrict(String id) { return cachedDistricts.get(id); }
 
     public void saveDistrict(District district) {
         File file = new File(dataFolder, district.getId() + ".yml");
@@ -53,6 +47,13 @@ public class DistrictStorage {
         config.set("level", district.getLevel().name());
         config.set("plotIds", new ArrayList<>(district.getPlotIds()));
         config.set("createdAt", district.getCreatedAt());
+        config.set("sharedRules", new HashMap<>(district.getSharedRules()));
+        config.set("sharedBank.enabled", district.isSharedBankEnabled());
+        config.set("sharedBank.balance", district.getSharedBankBalance());
+        config.set("spawn.world", district.getSpawnWorld());
+        config.set("spawn.x", district.getSpawnX());
+        config.set("spawn.y", district.getSpawnY());
+        config.set("spawn.z", district.getSpawnZ());
         config.set("progress.builtBlocks", district.getProgress().getBuiltBlocks());
         config.set("progress.activePlayers", district.getProgress().getActivePlayers());
         config.set("progress.completedGoals", new ArrayList<>(district.getProgress().getCompletedGoals()));
@@ -105,6 +106,16 @@ public class DistrictStorage {
 
         List<String> plotIds = config.getStringList("plotIds");
         District district = new District(id, name, new HashSet<>(plotIds), level, createdAt);
+        if (config.isConfigurationSection("sharedRules")) {
+            for (String key : config.getConfigurationSection("sharedRules").getKeys(false)) {
+                district.getSharedRules().put(key, config.getBoolean("sharedRules." + key));
+            }
+        }
+        district.setSharedBankEnabled(config.getBoolean("sharedBank.enabled", false));
+        district.setSharedBankBalance(config.getDouble("sharedBank.balance", 0D));
+        if (config.getString("spawn.world") != null) {
+            district.setSpawn(config.getString("spawn.world"), config.getDouble("spawn.x"), config.getDouble("spawn.y"), config.getDouble("spawn.z"));
+        }
 
         district.getProgress().addBuiltBlocks(config.getInt("progress.builtBlocks", 0));
         district.getProgress().setActivePlayers(config.getInt("progress.activePlayers", 0));
