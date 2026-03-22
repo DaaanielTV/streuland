@@ -1,6 +1,8 @@
 package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
+import de.streuland.plot.upgrade.PlotProgressionState;
+import de.streuland.plot.upgrade.PlotUpgradePersistence;
 import de.streuland.quest.QuestProgress;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -75,6 +77,7 @@ public class PlotStorage {
         config.set("rewards.stats", new HashMap<>(data.getStatBonuses()));
         config.set("flags", new HashMap<>(data.getFlagOverrides()));
         config.set("featured", data.isFeatured());
+        config.set("upgrades", PlotUpgradePersistence.serialize(data.getProgressionState()));
 
         for (Map.Entry<String, QuestProgress> entry : data.getQuestProgress().entrySet()) {
             String base = "quests.progress." + entry.getKey();
@@ -123,6 +126,14 @@ public class PlotStorage {
                 data.getUnlockedAbilities().addAll(config.getStringList("rewards.abilities"));
                 data.getCosmeticInventory().addAll(config.getStringList("rewards.cosmetics"));
                 data.setFeatured(config.getBoolean("featured", false));
+                Object rawUpgradeState = config.get("upgrades");
+                if (rawUpgradeState instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> upgradeMap = (Map<String, Object>) rawUpgradeState;
+                    data.setProgressionState(PlotUpgradePersistence.deserialize(upgradeMap));
+                } else {
+                    data.setProgressionState(PlotProgressionState.initial());
+                }
                 if (config.isConfigurationSection("rewards.stats")) {
                     for (String key : config.getConfigurationSection("rewards.stats").getKeys(false)) {
                         data.getStatBonuses().put(key, config.getDouble("rewards.stats." + key));

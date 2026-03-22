@@ -1,6 +1,7 @@
 package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
+import de.streuland.plot.upgrade.PlotProgressionState;
 import de.streuland.quest.QuestProgress;
 
 import java.util.HashMap;
@@ -19,6 +20,7 @@ public class PlotData {
     private final Map<String, Double> statBonuses;
     private final Map<String, QuestProgress> questProgress;
     private final Map<String, Boolean> flagOverrides;
+    private PlotProgressionState progressionState;
     private boolean featured;
 
     public PlotData() {
@@ -33,48 +35,35 @@ public class PlotData {
         this.statBonuses = new HashMap<>();
         this.questProgress = new HashMap<>();
         this.flagOverrides = new HashMap<>();
+        this.progressionState = PlotProgressionState.initial();
         this.featured = false;
     }
 
-    public PlotTheme getTheme() {
-        return theme;
+    public PlotTheme getTheme() { return theme; }
+
+    public void setTheme(PlotTheme theme) { this.theme = theme == null ? PlotTheme.NATURE : theme; }
+
+    public int getBonusStorageSlots() { return bonusStorageSlots; }
+
+    public void setBonusStorageSlots(int bonusStorageSlots) { this.bonusStorageSlots = Math.max(0, bonusStorageSlots); }
+
+    public Set<String> getUnlockedAbilities() { return unlockedAbilities; }
+
+    public Set<String> getCosmeticInventory() { return cosmeticInventory; }
+
+    public Map<String, Double> getStatBonuses() { return statBonuses; }
+
+    public Map<String, QuestProgress> getQuestProgress() { return questProgress; }
+
+    public Map<String, Boolean> getFlagOverrides() { return flagOverrides; }
+
+    public PlotProgressionState getProgressionState() { return progressionState; }
+
+    public void setProgressionState(PlotProgressionState progressionState) {
+        this.progressionState = progressionState == null ? PlotProgressionState.initial() : progressionState;
     }
 
-    public void setTheme(PlotTheme theme) {
-        this.theme = theme == null ? PlotTheme.NATURE : theme;
-    }
+    public boolean isFeatured() { return featured; }
 
-    public int getBonusStorageSlots() {
-        return bonusStorageSlots;
-    }
-
-    public void setBonusStorageSlots(int bonusStorageSlots) {
-        this.bonusStorageSlots = Math.max(0, bonusStorageSlots);
-    }
-
-    public Set<String> getUnlockedAbilities() {
-        return unlockedAbilities;
-    }
-
-    public Set<String> getCosmeticInventory() {
-        return cosmeticInventory;
-    }
-
-    public Map<String, Double> getStatBonuses() {
-        return statBonuses;
-    }
-
-    public Map<String, QuestProgress> getQuestProgress() {
-        return questProgress;
-    }
-
-    public Map<String, Boolean> getFlagOverrides() {
-        return flagOverrides;
-    public boolean isFeatured() {
-        return featured;
-    }
-
-    public void setFeatured(boolean featured) {
-        this.featured = featured;
-    }
+    public void setFeatured(boolean featured) { this.featured = featured; }
 }
