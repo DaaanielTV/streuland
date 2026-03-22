@@ -4,5 +4,8 @@ public enum Permission {
     BUILD,
     BREAK,
     INTERACT,
-    TRANSFER
+    CONTAINER_ACCESS,
+    TELEPORT,
+    TRANSFER,
+    ROLE_MANAGE
 }

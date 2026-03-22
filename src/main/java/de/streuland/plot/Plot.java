@@ -16,11 +16,6 @@ import java.util.UUID;
  * Data is immutable after creation; modifications should go through PlotManager.
  */
 public class Plot {
-    /**
-     * Enum representing the three possible plot states:
-     * - UNCLAIMED: Plot exists but has no owner (anyone can claim it, anyone can build in it)
-     * - CLAIMED: Plot has an owner (only owner/trusted can build)
-     */
     public enum PlotState {
         UNCLAIMED,
         CLAIMED;
@@ -64,9 +59,11 @@ public class Plot {
         this.state = state;
         this.createdAt = createdAt;
         this.spawnY = spawnY;
-        this.roles = new HashMap<>();
+        this.roleDefinitions = new LinkedHashMap<>();
+        this.playerRoles = new HashMap<>();
+        seedDefaultRoleDefinitions();
         if (owner != null) {
-            this.roles.put(owner, Role.OWNER);
+            assignRole(owner, Role.OWNER);
         }
     }
 
@@ -107,10 +104,17 @@ public class Plot {
     }
 
     public void assignRole(UUID player, Role role) {
-        if (player == null || role == null) {
+        if (role != null) {
+            assignRole(player, role.getId());
+        }
+    }
+
+    public void assignRole(UUID player, String roleId) {
+        String normalized = normalizeRoleId(roleId);
+        if (player == null || normalized == null || !roleDefinitions.containsKey(normalized)) {
             return;
         }
-        roles.put(player, role);
+        playerRoles.computeIfAbsent(player, ignored -> new LinkedHashSet<>()).add(normalized);
     }
 
     public void addTrusted(UUID player) {
@@ -125,10 +129,28 @@ public class Plot {
             return;
         }
         if (owner != null && owner.equals(player)) {
-            roles.put(player, Role.OWNER);
+            replacePlayerRoles(player, Collections.singleton(Role.OWNER.getId()));
             return;
         }
-        roles.remove(player);
+        playerRoles.remove(player);
+    }
+
+    public void removeRole(UUID player, String roleId) {
+        String normalized = normalizeRoleId(roleId);
+        if (player == null || normalized == null) {
+            return;
+        }
+        if (owner != null && owner.equals(player) && Role.OWNER.matches(normalized)) {
+            return;
+        }
+        Set<String> assigned = playerRoles.get(player);
+        if (assigned == null) {
+            return;
+        }
+        assigned.remove(normalized);
+        if (assigned.isEmpty()) {
+            playerRoles.remove(player);
+        }
     }
 
     public void removeTrusted(UUID player) {
@@ -143,13 +165,31 @@ public class Plot {
         if (state == PlotState.UNCLAIMED) {
             return true;
         }
-        Role role = getRole(player);
-        Set<Permission> permissions = ROLE_PERMISSIONS.get(role);
-        return permissions != null && permissions.contains(permission);
+        return resolved;
     }
 
     public Map<UUID, Role> getRoles() {
-        return new HashMap<>(roles);
+        Map<UUID, Role> roles = new HashMap<>();
+        for (UUID playerId : playerRoles.keySet()) {
+            roles.put(playerId, getRole(playerId));
+        }
+        return roles;
+    }
+
+    public Map<UUID, Set<String>> getRoleAssignments() {
+        Map<UUID, Set<String>> assignments = new HashMap<>();
+        for (Map.Entry<UUID, Set<String>> entry : playerRoles.entrySet()) {
+            assignments.put(entry.getKey(), new LinkedHashSet<>(entry.getValue()));
+        }
+        return assignments;
+    }
+
+    public Map<String, Set<Permission>> getRoleDefinitions() {
+        Map<String, Set<Permission>> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, Set<Permission>> entry : roleDefinitions.entrySet()) {
+            copy.put(entry.getKey(), copyPermissions(entry.getValue()));
+        }
+        return copy;
     }
 
     public Set<UUID> getTrustedPlayers() {
@@ -166,19 +206,88 @@ public class Plot {
         if (player == null) {
             return Role.VISITOR;
         }
-        if (owner != null && owner.equals(player)) {
-            return Role.OWNER;
+        Set<String> assigned = getAssignedRoleIds(player);
+        for (Role role : Role.valuesByPriority()) {
+            if (assigned.contains(role.getId())) {
+                return role;
+            }
         }
-        return roles.getOrDefault(player, Role.VISITOR);
+        return Role.VISITOR;
+    }
+
+    public Set<String> getAssignedRoleIds(UUID player) {
+        if (player == null) {
+            return Collections.emptySet();
+        }
+        if (owner != null && owner.equals(player)) {
+            return Collections.singleton(Role.OWNER.getId());
+        }
+        Set<String> assigned = playerRoles.get(player);
+        return assigned == null ? Collections.emptySet() : Collections.unmodifiableSet(assigned);
+    }
+
+    public Set<UUID> getTrustedPlayers() {
+        Set<UUID> players = new HashSet<>(playerRoles.keySet());
+        if (owner != null) {
+            players.remove(owner);
+        }
+        return players;
     }
 
     public void replaceRoles(Map<UUID, Role> replacements) {
-        roles.clear();
+        playerRoles.clear();
         if (replacements != null) {
-            roles.putAll(replacements);
+            for (Map.Entry<UUID, Role> entry : replacements.entrySet()) {
+                assignRole(entry.getKey(), entry.getValue());
+            }
         }
         if (owner != null) {
-            roles.put(owner, Role.OWNER);
+            assignRole(owner, Role.OWNER);
+        }
+    }
+
+    public void replaceRoleAssignments(Map<UUID, Set<String>> replacements) {
+        playerRoles.clear();
+        if (replacements != null) {
+            for (Map.Entry<UUID, Set<String>> entry : replacements.entrySet()) {
+                replacePlayerRoles(entry.getKey(), entry.getValue());
+            }
+        }
+        if (owner != null) {
+            assignRole(owner, Role.OWNER);
+        }
+    }
+
+    public void replaceRoleDefinitions(Map<String, Set<Permission>> replacements) {
+        seedDefaultRoleDefinitions();
+        if (replacements == null) {
+            return;
+        }
+        for (Map.Entry<String, Set<Permission>> entry : replacements.entrySet()) {
+            String normalized = normalizeRoleId(entry.getKey());
+            if (normalized != null) {
+                roleDefinitions.put(normalized, copyPermissions(entry.getValue()));
+            }
+        }
+    }
+
+    private void replacePlayerRoles(UUID player, Collection<String> roleIds) {
+        if (player == null) {
+            return;
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        if (roleIds != null) {
+            for (String roleId : roleIds) {
+                String normalizedRoleId = normalizeRoleId(roleId);
+                if (normalizedRoleId != null && roleDefinitions.containsKey(normalizedRoleId)) {
+                    normalized.add(normalizedRoleId);
+                }
+            }
+        }
+        if (normalized.isEmpty()) {
+            playerRoles.remove(player);
+        } else {
+            playerRoles.put(player, normalized);
         }
     }
 
@@ -186,13 +295,31 @@ public class Plot {
         if (mappings == null || mappings.isEmpty()) {
             return;
         }
-        ROLE_PERMISSIONS.clear();
+        DEFAULT_ROLE_PERMISSIONS.clear();
         for (Role role : Role.values()) {
-            Set<Permission> permissions = mappings.get(role);
-            ROLE_PERMISSIONS.put(role, permissions == null || permissions.isEmpty()
-                    ? EnumSet.noneOf(Permission.class)
-                    : EnumSet.copyOf(permissions));
+            DEFAULT_ROLE_PERMISSIONS.put(role, copyPermissions(mappings.get(role)));
         }
+    }
+
+    public static void resetRolePermissions() {
+        DEFAULT_ROLE_PERMISSIONS.clear();
+        for (Role role : Role.values()) {
+            DEFAULT_ROLE_PERMISSIONS.put(role, role.getDefaultPermissions());
+        }
+    }
+
+    private static Set<Permission> copyPermissions(Set<Permission> permissions) {
+        return permissions == null || permissions.isEmpty()
+                ? EnumSet.noneOf(Permission.class)
+                : EnumSet.copyOf(permissions);
+    }
+
+    private static String normalizeRoleId(String roleId) {
+        if (roleId == null) {
+            return null;
+        }
+        String normalized = roleId.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
+        return normalized.isEmpty() ? null : normalized;
     }
 
     public boolean contains(int x, int z) {
