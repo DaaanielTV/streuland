@@ -1,6 +1,7 @@
 package de.streuland.storage;
 
 import de.streuland.plot.Plot;
+import de.streuland.plot.PlotData;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,13 +17,22 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class SqlitePlotStorage implements PlotStorage {
+    private static final String KEY_PUBLIC = "public";
+    private static final String KEY_TITLE = "title";
+    private static final String KEY_DESCRIPTION = "description";
+    private static final String KEY_TAGS = "tags";
+    private static final String KEY_SPAWN = "spawn";
+    private static final String KEY_TRUSTED = "trusted";
+
     private final String jdbcUrl;
 
     public SqlitePlotStorage(Path dbFile) {
@@ -59,7 +69,7 @@ public class SqlitePlotStorage implements PlotStorage {
     @Override
     public synchronized void save(Plot plot) {
         String world = YamlPlotStorage.resolveWorld(plot.getPlotId());
-        String metadata = trustedAsCsv(plot);
+        String metadata = encodeMetadata(plot);
         try (Connection c = connection()) {
             c.setAutoCommit(false);
             try (PreparedStatement ps = c.prepareStatement("INSERT INTO plots(id, world, center_x, center_z, size, spawn_y, owner_uuid, created_at, area_type, metadata) VALUES(?,?,?,?,?,?,?,?,?,?) " +
@@ -209,29 +219,54 @@ public class SqlitePlotStorage implements PlotStorage {
         String areaType = rs.getString("area_type");
         Plot.PlotState state = "PLOT_CLAIMED".equals(areaType) || owner != null ? Plot.PlotState.CLAIMED : Plot.PlotState.UNCLAIMED;
         Plot plot = new Plot(id, centerX, centerZ, size, owner, createdAt, spawnY, state);
-        for (UUID trusted : parseTrustedCsv(rs.getString("metadata"))) {
+        for (UUID trusted : decodeMetadata(rs.getString("metadata")).trusted) {
             plot.addTrusted(trusted);
         }
         return plot;
     }
 
-    private static String trustedAsCsv(Plot plot) {
-        if (plot.getTrustedPlayers().isEmpty()) {
-            return "";
-        }
-        return plot.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.joining(","));
+    private static String encodeMetadata(Plot plot) {
+        Properties properties = new Properties();
+        properties.setProperty(KEY_TRUSTED, plot.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.joining(",")));
+        return propertiesToString(properties);
     }
 
-    private static Set<UUID> parseTrustedCsv(String metadata) {
-        if (metadata == null || metadata.trim().isEmpty()) {
-            return Collections.emptySet();
-        }
-        Set<UUID> trusted = new HashSet<>();
-        for (String token : metadata.split(",")) {
-            if (!token.trim().isEmpty()) {
-                trusted.add(UUID.fromString(token.trim()));
+    private static Metadata decodeMetadata(String raw) {
+        Properties properties = stringToProperties(raw);
+        Metadata metadata = new Metadata();
+        String trusted = properties.getProperty(KEY_TRUSTED, "");
+        if (!trusted.trim().isEmpty()) {
+            for (String token : trusted.split(",")) {
+                if (!token.trim().isEmpty()) {
+                    metadata.trusted.add(UUID.fromString(token.trim()));
+                }
             }
         }
-        return trusted;
+        return metadata;
+    }
+
+    private static String propertiesToString(Properties properties) {
+        return properties.entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(Collectors.joining(";"));
+    }
+
+    private static Properties stringToProperties(String raw) {
+        Properties properties = new Properties();
+        if (raw == null || raw.trim().isEmpty()) {
+            return properties;
+        }
+        for (String entry : raw.split(";")) {
+            int index = entry.indexOf('=');
+            if (index <= 0) {
+                continue;
+            }
+            properties.setProperty(entry.substring(0, index), entry.substring(index + 1));
+        }
+        return properties;
+    }
+
+    private static final class Metadata {
+        private final Set<UUID> trusted = new LinkedHashSet<>();
     }
 }

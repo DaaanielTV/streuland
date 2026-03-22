@@ -59,19 +59,13 @@ public class PlotTeamCommand {
             player.sendMessage("§cUngültiger Spieler.");
             return true;
         }
-        Role role;
-        try {
-            role = Role.valueOf(args[3].toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            player.sendMessage("§cUngültige Rolle. Erlaubt: CO_OWNER, MEMBER, BUILDER, VISITOR");
-            return true;
-        }
-        if (role == Role.OWNER) {
+        String roleId = args[3];
+        if (Role.fromId(roleId).orElse(null) == Role.OWNER) {
             player.sendMessage("§cOWNER kann nicht eingeladen werden.");
             return true;
         }
-        if (plotManager.assignRole(plot.getPlotId(), player.getUniqueId(), target, role)) {
-            player.sendMessage("§aSpieler eingeladen als " + role.name());
+        if (plotManager.assignRole(plot.getPlotId(), player.getUniqueId(), target, roleId)) {
+            player.sendMessage("§aSpieler eingeladen als " + roleId);
         } else {
             player.sendMessage("§cEinladung fehlgeschlagen.");
         }

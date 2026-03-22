@@ -180,15 +180,12 @@ public class StreulandPlugin extends JavaPlugin {
             journalManager = new JournalManager(this, plotChangeJournal);
             adminPlotService = new AdminPlotService(plotManager, snapshotManager, blockChangeLogger);
 
-            protectionListener = new ProtectionListener(this, plotManager, messageProvider);
             plotFlagManager = new PlotFlagManager(plotManager);
             worldGuardCompat = new WorldGuardCompat(this, plotManager, plotFlagManager);
             plotFlagManager.registerHook(worldGuardCompat);
             worldGuardCompat.syncAllPlots();
 
-            protectionListener = new ProtectionListener(this, plotManager, plotFlagManager);
-            blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService);
-            protectionListener = new ProtectionListener(this, plotManager);
+            protectionListener = new ProtectionListener(this, plotManager, plotFlagManager, messageProvider);
             blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService, plotChangeJournal, journalManager);
             getLogger().info("✓ Protection/BlockChange listeners registered");
 
