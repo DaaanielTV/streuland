@@ -3,8 +3,9 @@ package de.streuland.district;
 import de.streuland.event.PlotClaimedEvent;
 import de.streuland.event.PlotCreatedEvent;
 import de.streuland.plot.Plot;
+import de.streuland.plot.PlotData;
 import de.streuland.plot.PlotManager;
-import org.bukkit.Bukkit;
+import de.streuland.plot.PlotStorage;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -20,127 +21,184 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Orchestrates district clustering, progress tracking, and persistence.
+ * Manages district membership, shared settings, progress tracking, and persistence.
  */
 public class DistrictManager implements Listener {
     private final JavaPlugin plugin;
     private final PlotManager plotManager;
     private final DistrictStorage storage;
-    private final DistrictClusterService clusterService;
     private final DistrictGoalCatalog goalCatalog;
     private final Map<String, District> districts = new HashMap<>();
     private final Map<String, String> plotToDistrict = new HashMap<>();
     private int districtCounter = 0;
 
     public DistrictManager(JavaPlugin plugin, PlotManager plotManager) {
+        this(plugin, plotManager, new DistrictStorage(plugin));
+    }
+
+    DistrictManager(JavaPlugin plugin, PlotManager plotManager, DistrictStorage storage) {
         this.plugin = plugin;
         this.plotManager = plotManager;
-        this.storage = new DistrictStorage(plugin);
-        this.clusterService = new DistrictClusterService();
+        this.storage = storage;
         this.goalCatalog = new DistrictGoalCatalog();
 
         for (District district : storage.getAllDistricts()) {
-            districts.put(district.getId(), district);
-            for (String plotId : district.getPlotIds()) {
-                plotToDistrict.put(plotId, district.getId());
-            }
-            districtCounter++;
+            registerDistrict(district);
         }
     }
 
-    public DistrictStorage getStorage() {
-        return storage;
-    }
+    public DistrictStorage getStorage() { return storage; }
 
     public District getDistrictForPlot(Plot plot) {
-        if (plot == null) {
-            return null;
-        }
+        if (plot == null) return null;
         String districtId = plotToDistrict.get(plot.getPlotId());
         return districtId != null ? districts.get(districtId) : null;
     }
 
-    public District getDistrictById(String id) {
-        return districts.get(id);
+    public District getDistrictById(String id) { return districts.get(id); }
+    public Collection<District> getAllDistricts() { return new ArrayList<>(districts.values()); }
+
+    public synchronized District createDistrict(String name, Collection<Plot> plots) {
+        Set<String> plotIds = new HashSet<>();
+        for (Plot plot : plots) {
+            if (plot != null) {
+                plotIds.add(plot.getPlotId());
+            }
+        }
+        if (plotIds.isEmpty()) {
+            throw new IllegalArgumentException("District requires at least one plot");
+        }
+        District district = new District(nextDistrictId(), name == null || name.trim().isEmpty() ? defaultDistrictName() : name.trim(), plotIds, DistrictLevel.DORF, System.currentTimeMillis());
+        for (String plotId : plotIds) {
+            movePlotToDistrict(plotId, district);
+        }
+        registerDistrict(district);
+        storage.saveDistrict(district);
+        return district;
     }
 
-    public Collection<District> getAllDistricts() {
-        return new ArrayList<>(districts.values());
+    public synchronized boolean addPlotToDistrict(String districtId, Plot plot) {
+        District district = districts.get(districtId);
+        if (district == null || plot == null) {
+            return false;
+        }
+        movePlotToDistrict(plot.getPlotId(), district);
+        storage.saveDistrict(district);
+        return true;
+    }
+
+    public synchronized boolean removePlotFromDistrict(String districtId, String plotId) {
+        District district = districts.get(districtId);
+        if (district == null || plotId == null || !district.getPlotIds().contains(plotId)) {
+            return false;
+        }
+        district.removePlot(plotId);
+        plotToDistrict.remove(plotId);
+        if (district.getPlotIds().isEmpty()) {
+            districts.remove(districtId);
+            storage.deleteDistrict(districtId);
+        } else {
+            storage.saveDistrict(district);
+        }
+        return true;
+    }
+
+    public synchronized boolean renameDistrict(String districtId, String name) {
+        District district = districts.get(districtId);
+        if (district == null || name == null || name.trim().isEmpty()) {
+            return false;
+        }
+        district.setName(name.trim());
+        storage.saveDistrict(district);
+        return true;
+    }
+
+    public synchronized boolean setSharedRule(String districtId, String ruleKey, boolean value) {
+        District district = districts.get(districtId);
+        if (district == null || ruleKey == null || ruleKey.trim().isEmpty()) {
+            return false;
+        }
+        district.getSharedRules().put(ruleKey.trim(), value);
+        storage.saveDistrict(district);
+        return true;
+    }
+
+    public synchronized boolean configureSharedBank(String districtId, boolean enabled, double balance) {
+        District district = districts.get(districtId);
+        if (district == null) {
+            return false;
+        }
+        district.setSharedBankEnabled(enabled);
+        district.setSharedBankBalance(Math.max(0D, balance));
+        storage.saveDistrict(district);
+        return true;
+    }
+
+    public synchronized boolean setDistrictSpawn(String districtId, Plot plot) {
+        District district = districts.get(districtId);
+        if (district == null || plot == null) {
+            return false;
+        }
+        district.setSpawn(plotManager.getWorldForPlot(plot.getPlotId()).getName(), plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ());
+        storage.saveDistrict(district);
+        return true;
+    }
+
+    public synchronized boolean clearDistrictSpawn(String districtId) {
+        District district = districts.get(districtId);
+        if (district == null) {
+            return false;
+        }
+        district.clearSpawn();
+        storage.saveDistrict(district);
+        return true;
+    }
+
+    public boolean getEffectiveRule(Plot plot, String ruleKey, boolean fallback) {
+        District district = getDistrictForPlot(plot);
+        if (district != null && district.getSharedRules().containsKey(ruleKey)) {
+            return district.getSharedRules().get(ruleKey);
+        }
+        PlotData data = getPlotData(plot);
+        if (data != null && data.getFlagOverrides().containsKey(ruleKey)) {
+            return data.getFlagOverrides().get(ruleKey);
+        }
+        return fallback;
     }
 
     public CompletableFuture<Void> rebuildClustersAsync() {
-        return CompletableFuture.supplyAsync(() -> {
-            List<Set<Plot>> allClusters = new ArrayList<>();
-            for (String worldName : plotManager.getManagedWorlds()) {
-                org.bukkit.World world = Bukkit.getWorld(worldName);
-                if (world == null) {
-                    continue;
-                }
-                Collection<Plot> plotsSnapshot = new ArrayList<>(plotManager.getAllPlots(world));
-                allClusters.addAll(clusterService.clusterPlots(plotsSnapshot));
-            }
-            return allClusters;
-        }).thenAccept(clusters -> Bukkit.getScheduler().runTask(plugin, () -> applyClusters(clusters)));
+        return CompletableFuture.runAsync(this::ensureDistrictsForAllPlots);
     }
 
-    private void applyClusters(List<Set<Plot>> clusters) {
-        Set<String> touchedDistricts = new HashSet<>();
-
-        for (Set<Plot> cluster : clusters) {
-            Set<String> clusterPlotIds = new HashSet<>();
-            for (Plot plot : cluster) {
-                clusterPlotIds.add(plot.getPlotId());
+    public synchronized void ensureDistrictsForAllPlots() {
+        Set<String> existingPlots = new HashSet<>();
+        for (Plot plot : plotManager.getAllPlots()) {
+            existingPlots.add(plot.getPlotId());
+            if (!plotToDistrict.containsKey(plot.getPlotId())) {
+                District district = new District(nextDistrictId(), plot.getPlotId(), java.util.Collections.singleton(plot.getPlotId()), DistrictLevel.DORF, System.currentTimeMillis());
+                registerDistrict(district);
+                storage.saveDistrict(district);
             }
-
-            District district = findExistingDistrict(clusterPlotIds);
-            if (district == null) {
-                district = new District("district_" + (++districtCounter), "Viertel " + districtCounter, clusterPlotIds, DistrictLevel.DORF, System.currentTimeMillis());
-                districts.put(district.getId(), district);
+        }
+        for (District district : new ArrayList<>(districts.values())) {
+            for (String plotId : new HashSet<>(district.getPlotIds())) {
+                if (!existingPlots.contains(plotId)) {
+                    district.removePlot(plotId);
+                    plotToDistrict.remove(plotId);
+                }
+            }
+            if (district.getPlotIds().isEmpty()) {
+                districts.remove(district.getId());
+                storage.deleteDistrict(district.getId());
             } else {
-                for (String plotId : new HashSet<>(district.getPlotIds())) {
-                    if (!clusterPlotIds.contains(plotId)) {
-                        district.removePlot(plotId);
-                    }
-                }
-                for (String plotId : clusterPlotIds) {
-                    district.addPlot(plotId);
-                }
-            }
-
-            touchedDistricts.add(district.getId());
-            for (String plotId : clusterPlotIds) {
-                plotToDistrict.put(plotId, district.getId());
-            }
-            storage.saveDistrictAsync(district);
-        }
-
-        List<String> removed = new ArrayList<>();
-        for (String districtId : new HashSet<>(districts.keySet())) {
-            if (!touchedDistricts.contains(districtId)) {
-                removed.add(districtId);
+                storage.saveDistrict(district);
             }
         }
-        for (String districtId : removed) {
-            districts.remove(districtId);
-            storage.deleteDistrict(districtId);
-        }
-    }
-
-    private District findExistingDistrict(Set<String> plotIds) {
-        for (String plotId : plotIds) {
-            String districtId = plotToDistrict.get(plotId);
-            if (districtId != null && districts.containsKey(districtId)) {
-                return districts.get(districtId);
-            }
-        }
-        return null;
     }
 
     public void updateBuiltBlocks(Plot plot, int delta) {
         District district = getDistrictForPlot(plot);
-        if (district == null) {
-            return;
-        }
+        if (district == null) return;
         district.getProgress().addBuiltBlocks(delta);
         evaluateGoalsAndLevel(district);
         storage.saveDistrictAsync(district);
@@ -149,9 +207,7 @@ public class DistrictManager implements Listener {
     public void updateActivePlayers(Map<String, Set<UUID>> districtPlayers) {
         for (Map.Entry<String, Set<UUID>> entry : districtPlayers.entrySet()) {
             District district = districts.get(entry.getKey());
-            if (district == null) {
-                continue;
-            }
+            if (district == null) continue;
             district.getProgress().setActivePlayers(entry.getValue().size());
             evaluateGoalsAndLevel(district);
             storage.saveDistrictAsync(district);
@@ -164,7 +220,6 @@ public class DistrictManager implements Listener {
                 district.getProgress().markGoalCompleted(goal.getId());
             }
         }
-
         boolean leveledUp;
         do {
             leveledUp = false;
@@ -179,13 +234,50 @@ public class DistrictManager implements Listener {
         } while (leveledUp);
     }
 
-    @EventHandler
-    public void onPlotCreated(PlotCreatedEvent event) {
-        rebuildClustersAsync();
+    private PlotData getPlotData(Plot plot) {
+        if (plot == null) return null;
+        PlotStorage plotStorage = plotManager.getStorage(plotManager.getWorldForPlot(plot.getPlotId()));
+        return plotStorage == null ? null : plotStorage.getPlotData(plot.getPlotId());
     }
 
-    @EventHandler
-    public void onPlotClaimed(PlotClaimedEvent event) {
-        rebuildClustersAsync();
+    private void registerDistrict(District district) {
+        districts.put(district.getId(), district);
+        districtCounter = Math.max(districtCounter, extractDistrictNumber(district.getId()));
+        for (String plotId : district.getPlotIds()) {
+            plotToDistrict.put(plotId, district.getId());
+        }
     }
+
+    private void movePlotToDistrict(String plotId, District targetDistrict) {
+        String previousDistrictId = plotToDistrict.get(plotId);
+        if (previousDistrictId != null && !previousDistrictId.equals(targetDistrict.getId())) {
+            District previous = districts.get(previousDistrictId);
+            if (previous != null) {
+                previous.removePlot(plotId);
+                if (previous.getPlotIds().isEmpty()) {
+                    districts.remove(previousDistrictId);
+                    storage.deleteDistrict(previousDistrictId);
+                } else {
+                    storage.saveDistrict(previous);
+                }
+            }
+        }
+        targetDistrict.addPlot(plotId);
+        plotToDistrict.put(plotId, targetDistrict.getId());
+    }
+
+    private String nextDistrictId() { return "district_" + (++districtCounter); }
+    private String defaultDistrictName() { return "District " + districtCounter; }
+
+    private int extractDistrictNumber(String districtId) {
+        try {
+            int idx = districtId.lastIndexOf('_');
+            return idx >= 0 ? Integer.parseInt(districtId.substring(idx + 1)) : 0;
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
+    @EventHandler public void onPlotCreated(PlotCreatedEvent event) { ensureDistrictsForAllPlots(); }
+    @EventHandler public void onPlotClaimed(PlotClaimedEvent event) { ensureDistrictsForAllPlots(); }
 }

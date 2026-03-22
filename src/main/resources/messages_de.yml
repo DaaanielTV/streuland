@@ -24,12 +24,16 @@ district:
   error:
     only_players: "§cNur Spieler können District-Befehle verwenden!"
     not_in_district: "§cDu stehst in keinem Stadtteil!"
+    no_plot: "§cDu stehst auf keinem Plot!"
+    unknown_district: "§cUnbekannter Stadtteil {0}."
   info:
     header: "§6=== Stadtteil ==="
     name: "§eName: §f{0}"
     id: "§eID: §f{0}"
     level: "§eLevel: §f{0}"
     plots: "§ePlots: §f{0}"
+    bank: "§eGemeinschaftsbank: §f{0}"
+    spawn: "§eDistrict-Spawn: §f{0}"
   progress:
     header: "§6=== Fortschritt ==="
     blocks: "§eBlöcke: §f{0}"
@@ -40,9 +44,24 @@ district:
     max_level: "§aMaximales Level erreicht."
   list:
     header: "§6=== Stadtteile ==="
-    entry: "§e{0}§f ({1}) - {2}"
+    entry: "§e{0}§f ({1}) - {2} - Plots: {3}"
+  manage:
+    created: "§aStadtteil {0} ({1}) erstellt."
+    added: "§aPlot {0} zu {1} hinzugefügt."
+    removed: "§ePlot {0} aus {1} entfernt."
+    renamed: "§a{0} in {1} umbenannt."
+    rule: "§aDistrict-Regel {0} auf {1} gesetzt."
+    bank: "§aGemeinschaftsbank enabled={0}, Guthaben={1}."
+    spawn: "§aDistrict-Spawn für {0} gesetzt."
   help:
     header: "§6=== Stadtteil Befehle ==="
     info: "§e/district info§f - Info zum aktuellen Stadtteil"
     progress: "§e/district progress§f - Fortschritt anzeigen"
     list: "§e/district list§f - Liste aller Stadtteile"
+    create: "§e/district create <name>§f - Stadtteil aus aktuellem Plot erstellen"
+    add: "§e/district add <districtId>§f - Aktuellen Plot zu Stadtteil hinzufügen"
+    remove: "§e/district remove§f - Aktuellen Plot aus Stadtteil entfernen"
+    rename: "§e/district rename <name>§f - Aktuellen Stadtteil umbenennen"
+    setrule: "§e/district setrule <key> <true|false>§f - District-Regel überschreiben"
+    bank: "§e/district bank <true|false> <balance>§f - Gemeinschaftsbank konfigurieren"
+    setspawn: "§e/district setspawn§f - Aktuellen Plot als District-Spawn setzen"
