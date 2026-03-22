@@ -1,74 +1,42 @@
-# API-Referenz (interne Komponenten)
+# API- und Kernkomponenten
 
-## `de.streuland.plot.Plot`
+## Plugin-Einstieg
 
-### Zweck
-Unveränderliche Kernmetadaten eines Plots (Koordinaten, Owner, Zustand), plus veränderbare Trust-Liste.
+### `StreulandPlugin`
+- Bootstrap der Services
+- Laden der Konfiguration
+- Registrierung von Commands und Listenern
 
-### Wichtige Methoden
-- `contains(int x, int z)`: Bereichsprüfung.
-- `isAllowed(UUID player)`: Berechtigungsprüfung basierend auf Zustand + Owner/Trust.
+## Plot-Kern
 
-### Randfälle
-- `owner == null` ist nur bei `UNCLAIMED` sinnvoll.
+### `PlotManager`
+- Zentrale Fachlogik für Erstellen, Beanspruchen, Freigeben und Prüfen von Plots
 
-## `de.streuland.plot.PlotStorage`
+### `PlotStorage`
+- Persistenz der Plotdaten (Datei-basiert/YAML)
 
-### Zweck
-Persistenz und In-Memory-Cache.
+### `SpatialGrid`
+- Räumlicher Index für schnelle Plot-Lookups
 
-### Wichtige Methoden
-- `savePlot(Plot plot)`
-- `getPlayerPlots(UUID player)`
-- `claimPlot(String plotId, UUID player)`
+## Schutz und Berechtigungen
 
-### Vertragsdetails
-- `claimPlot(...)` gibt den aktuellen Plotzustand zurück.
-- YAML-Datei und Cache werden gemeinsam aktualisiert.
+### `ProtectionListener`
+- Event-basierte Block-/Interaktionsprüfungen
 
-## `de.streuland.plot.SpatialGrid`
+### `Role` / `Permission`
+- Rollen- und Rechteauswertung pro Plot
 
-### Zweck
-Schnelle Positionsabfragen.
+## Zusätzliche Domänen
 
-### Schlüsselmethoden
-- `getPlotAt(x,z)`
-- `isLocationAvailable(centerX, centerZ, plotSize)`
-- `addPlot/removePlot/rebuild`
+- Markt: `MarketManager`, `PlotMarketService`
+- Freigaben: `PlotApprovalService`
+- Backups/Snapshots: `SnapshotService`, `SnapshotManager`
+- Biome/Upgrades: `BiomeBonusService`, `PlotUpgradeService`
+- Dashboard/Web: `RestApiController`, `DashboardWebSocketServer`, `WebServer`
 
-## `de.streuland.plot.PlotManager`
+## Grundprinzipien
 
-### Zweck
-Geschäftslogik und Orchestrierung.
-
-### Schlüsselmethoden
-- `createPlotAsync(UUID)`
-- `claimPlotForPlayer(Plot, UUID)`
-- `getPlotAt(x,z)`
-- `generateUnclaimedPlots(...)`
-
-### Threading
-- Rechenlogik kann async laufen.
-- Weltveränderungen immer auf Mainthread.
-
-## `de.streuland.path.PathGenerator`
-
-### Zweck
-Wegpunkte erzeugen und Wege in der Welt bauen.
-
-### Schlüsselmethoden
-- `generatePath(Plot newPlot)`
-- `buildPathBlocks(List<BlockPosition>)`
-
-### Hinweis
-Die effektive Flächenbreite hängt direkt von `path.width` ab.
-
-## `de.streuland.listener.ProtectionListener`
-
-### Zweck
-Durchsetzung der Bau-/Interaktionsregeln.
-
-### Events
-- `BlockBreakEvent`
-- `BlockPlaceEvent`
-- `PlayerInteractEvent`
+1. Fachlogik getrennt von Transport (Command/Web/API)
+2. Persistenz hinter Services kapseln
+3. Schutzregeln früh und zentral validieren
+4. Seiteneffekte (I/O, Netzwerk) möglichst isoliert testen

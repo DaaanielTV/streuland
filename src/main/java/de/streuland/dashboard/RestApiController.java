@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
+import de.streuland.approval.PlotApprovalService;
 import de.streuland.analytics.PlotAnalyticsRecord;
 import de.streuland.api.event.PlotUpgradedEvent;
 import de.streuland.event.PlotCreatedEvent;
@@ -40,6 +41,7 @@ public class RestApiController implements Listener {
     private final DashboardDataExporter dataExporter;
     private final PlotMarketService marketService;
     private final Gson gson;
+    private final PlotApprovalService approvalService;
     private HttpServer httpServer;
     private DashboardWebSocketServer webSocketServer;
 
@@ -48,7 +50,8 @@ public class RestApiController implements Listener {
                              NeighborhoodService neighborhoodService,
                              InMemoryPlotAnalyticsService analyticsService,
                              DashboardDataExporter dataExporter,
-                             PlotMarketService marketService) {
+                             PlotMarketService marketService,
+                             PlotApprovalService approvalService) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.neighborhoodService = neighborhoodService;
@@ -56,6 +59,7 @@ public class RestApiController implements Listener {
         this.dataExporter = dataExporter;
         this.marketService = marketService;
         this.gson = new Gson();
+        this.approvalService = approvalService;
     }
 
     public void start() throws IOException {
@@ -68,6 +72,8 @@ public class RestApiController implements Listener {
         httpServer.createContext("/api/market/listings", exchange -> writeJson(exchange, buildMarketListingsJson()));
         httpServer.createContext("/api/biomes/stats", exchange -> writeJson(exchange, buildBiomeStatsJson()));
         httpServer.createContext("/streuland-dashboard", new DashboardStaticHandler());
+        httpServer.createContext("/api/approval/approve", exchange -> handleApproval(exchange, true));
+        httpServer.createContext("/api/approval/reject", exchange -> handleApproval(exchange, false));
         httpServer.start();
 
         webSocketServer = new DashboardWebSocketServer(wsPort, plugin.getLogger());
@@ -197,6 +203,33 @@ public class RestApiController implements Listener {
             rows.add(aggregate);
         }
         return gson.toJson(Collections.singletonMap("biomes", rows));
+    }
+
+    private void handleApproval(HttpExchange exchange, boolean approve) throws IOException {
+        Map<String, String> query = parseQuery(exchange.getRequestURI().getRawQuery());
+        String id = query.get("id");
+        String token = query.get("token");
+        boolean success = id != null && token != null && (approve ? approvalService.approveByToken(id, token) : approvalService.rejectByToken(id, token));
+        if (!success) {
+            exchange.sendResponseHeaders(403, -1);
+            return;
+        }
+        writeText(exchange, approve ? "Approval successful" : "Rejection successful", "text/plain");
+    }
+
+    private Map<String, String> parseQuery(String raw) {
+        Map<String, String> map = new HashMap<>();
+        if (raw == null || raw.isEmpty()) {
+            return map;
+        }
+        String[] parts = raw.split("&");
+        for (String part : parts) {
+            String[] kv = part.split("=", 2);
+            if (kv.length == 2) {
+                map.put(kv[0], kv[1]);
+            }
+        }
+        return map;
     }
 
     private void writeJson(HttpExchange exchange, String json) throws IOException {

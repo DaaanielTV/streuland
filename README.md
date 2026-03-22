@@ -1,210 +1,70 @@
 # Streuland Plot Plugin
 
-A plot system for Paper 1.16.5 Minecraft servers with vanilla world generation and explicit area typing (PATH / PLOT_UNCLAIMED / PLOT_CLAIMED).
+Streuland ist ein Plot-System für Paper 1.16.5 mit Vanilla-Weltgenerierung. Das Plugin trennt Wege, freie Plots und beanspruchte Plots explizit über Area-Typen.
 
-## Features
+## Funktionen
 
-- **AreaType-based Protection** - Protection is driven by explicit area categories
-- **Automatic Path Generation** - New plots auto-connect via paths to nearest plots
-- **Vanilla World Preservation** - Uses default world generation, no custom terrain
-- **Plot Protection** - Only owner/trusted players can build
-- **Persistent Storage** - YAML-based plot data that survives restarts
-- **Async Operations** - Plot creation runs async to prevent lag
+- Schutzlogik auf Basis von `AreaType` (`PATH`, `PLOT_UNCLAIMED`, `PLOT_CLAIMED`)
+- Automatische Wegerzeugung zwischen Plots
+- Persistenz per YAML-Dateien
+- Asynchrone Plot-Erstellung zur Lastreduktion
+- Erweiterungen für Markt, Freigabeprozess, Biome, Dashboard und Backups
 
-## Quick Start
+## Schnellstart
 
-### 1. Build
+### 1) Bauen
+
 ```bash
 mvn clean package
 ```
 
-### 2. Install
-Copy `target/Streuland-1.0.0-SNAPSHOT.jar` to your server's `plugins/` folder
+### 2) Installieren
 
-### 3. Configure
-Edit `plugins/Streuland/config.yml`:
-- Set world name
-- Configure plot size (default 64x64)
-- Adjust search radius for plot placement
+Kopiere `target/Streuland-1.0.0-SNAPSHOT.jar` in den Ordner `plugins/` deines Servers.
 
-### 4. Restart Server
-```
+### 3) Konfigurieren
+
+Bearbeite `plugins/Streuland/config.yml` (Weltname, Plot-Größe, Suchradius, Limits).
+
+### 4) Server neu starten
+
+```text
 /restart
 ```
 
-Check console for:
-```
-Streuland enabled successfully!
-```
+## Wichtige Befehle
 
-## Commands
+| Befehl | Beschreibung |
+|---|---|
+| `/plot create` | Neuen Plot erzeugen |
+| `/plot info` | Plot-Informationen anzeigen |
+| `/plot trust <spieler>` | Bau-Rechte vergeben |
+| `/plot untrust <spieler>` | Bau-Rechte entziehen |
+| `/plot home` | Zum Plot teleportieren |
+| `/plot list` | Eigene Plots auflisten |
+| `/plot unclaim [plotId]` | Plot freigeben |
+| `/plot delete [plotId]` | Plot löschen (mit Bestätigung) |
+| `/plot confirm` / `/plot cancel` | Löschvorgang bestätigen/abbrechen |
 
-### Player Commands
-| Command | Description |
-|---------|-------------|
-| `/plot create` | Create a new claimed plot at a generated location |
-| `/plot info` | Show details about your current plot |
-| `/plot trust <player>` | Allow player to build on your plot |
-| `/plot untrust <player>` | Remove player from trusted list |
-| `/plot home` | Teleport to your plot |
-| `/plot list` | List all your plots |
-| `/plot unclaim [plotId]` | Release your claimed plot back to unclaimed |
-| `/plot delete [plotId]` | Delete a plot (requires `/plot confirm`) |
-| `/plot confirm` / `/plot cancel` | Confirm or cancel a pending delete |
-| `/plot stats` | Show claim/unclaim/grid statistics |
-| `/plot generate <gridSize> <spacing>` | OP-only: pre-generate unclaimed plot pool |
-| `/plot help` | Show help message |
+## Build- und Entwicklungsstatus
 
-## Configuration
+- Die Maven-Konfiguration wurde bereinigt (kaputte XML-/Dependency-Definitionen entfernt).
+- In Umgebungen ohne Zugriff auf Maven Central kann der Build trotz korrekter `pom.xml` fehlschlagen, weil Plugins/Artefakte nicht heruntergeladen werden können.
 
-**File:** `plugins/Streuland/config.yml`
+## Dokumentation
 
-```yaml
-# World to use for plots
-world:
-  name: "world"
+Weitere Dokumente findest du in `docs/`:
 
-# Plot settings
-plot:
-  size: 64                    # Size of each plot (blocks)
-  min-distance: 100           # Minimum distance between plot centers
-  max-search-radius: 5000     # Search radius from spawn
-  max-plots-per-player: 4      # Per-player claimed plot cap
-  delete-confirm-timeout-seconds: 30 # Seconds before delete confirmation expires
+- [Dokumentationsübersicht](docs/README.md)
+- [Architekturüberblick](docs/architecture/system-overview.md)
+- [Code-Walkthrough](docs/architecture/code-walkthrough.md)
+- [API-Kernkomponenten](docs/api/core-components.md)
+- [Befehlsabläufe](docs/examples/command-flows.md)
 
-# Path settings
-path:
-  width: 4                    # Path width in blocks
+## Mitwirken
 
-# Terrain validation
-terrain:
-  water-rejection: true       # Reject plots in water
-  adjacent-water-threshold: 3 # Reject if > 3 water blocks nearby
-```
+Bitte lies [CONTRIBUTING.md](CONTRIBUTING.md) für den Ablauf über Issue + Pull Request.
 
-## Architecture
+## Lizenz
 
-The plugin is modular with clear separation of concerns:
-
-- **PlotManager** - Central orchestrator for plot operations
-- **PlotStorage** - YAML persistence layer
-- **PathGenerator** - Generates paths using Bresenham algorithm
-- **ProtectionListener** - Event-based plot protection
-- **PlotCommandExecutor** - Command handler
-
-See [docs/README.md](docs/README.md) for detailed documentation.
-
-## Plot Creation Process
-
-When a player runs `/plot create`:
-
-1. **Async Validation** (non-blocking)
-   - Random location in search radius
-   - Terrain check (not in water/lava)
-   - Distance validation (no overlaps)
-
-2. **Main Thread Execution** (when validation passes)
-   - Plot data created and saved
-   - Path generated from new plot to nearest existing plot
-   - Path blocks placed (GRAVEL)
-   - Player teleported to plot
-
-3. **Storage** (persistent)
-   - Plot data saved to `plugins/Streuland/plots/`
-   - Survives server restarts
-
-
-## Claim Semantics
-
-- `/plot claim` is **position-based**: the player must stand inside an existing `PLOT_UNCLAIMED` area.
-- Protection checks use `AreaType` first, then ownership/trust checks only for `PLOT_CLAIMED`.
-
-## Plot Protection Rules
-
-| Action | Owner | Trusted | Visitor |
-|--------|-------|---------|---------|
-| Build | Yes | Yes | No |
-| Break | Yes | Yes | No |
-| Interact* | Yes | Yes | No |
-| Walk | Yes | Yes | Yes |
-| Edit Paths | No | No | No |
-
-*Doors, buttons, levers, chests, etc.
-
-## Data Storage
-
-Plot data is stored as YAML files in `plugins/Streuland/plots/`:
-
-```
-plots/
-├── plot_1.yml       # First plot
-├── plot_2.yml       # Second plot
-└── index.yml        # Quick lookup index
-```
-
-Each plot file contains:
-- Plot ID and coordinates
-- Owner UUID and creation timestamp
-- List of trusted player UUIDs
-
-## Requirements
-
-- **Server**: PaperMC 1.16.5
-- **Java**: 8 or higher
-- **Permissions**: Default (no permission nodes needed)
-
-## Building from Source
-
-```bash
-# Clone or extract the source
-cd Streuland
-
-# Build with Maven
-mvn clean package
-
-# Find JAR in target/
-```
-
-**Dependencies**: Paper API 1.16.5 (provided by Maven)
-
-## Troubleshooting
-
-### Plugin won't start
-- Check console for errors
-- Ensure Java 8+ is installed
-- Verify Paper 1.16.5 is running
-
-### Players can't create plots
-- Check search radius in config (default 5000 blocks)
-- Ensure terrain has suitable areas (not all ocean)
-- Try `/plot create` multiple times (limited to 10 attempts)
-
-### Plots not saving
-- Check `plugins/Streuland/plots/` folder exists
-- Verify write permissions on the server directory
-
-## Performance Notes
-
-- Plot creation is async to prevent lag
-- Path generation uses simple Bresenham algorithm
-- In-memory cache keeps all plots loaded
-- Each plot query is near O(1) using the SpatialGrid cell index
-- Paths are built as GRAVEL blocks (cheap to place)
-
-## Future Plans
-
-- Plot deletion with owner verification
-- Schematic pasting on creation
-- Permission levels (visitor/member/owner)
-- Economy integration (sell plots)
-- Admin commands (plot force-create, delete, etc)
-
-## License
-
-This project is licensed under the GNU General Public License v3.0 (GNU GPLv3). See the [LICENSE](LICENSE) file for details.
-
----
-
-**Version:** 1.0.0-SNAPSHOT
-**Target:** Paper 1.16.5-R0.1-SNAPSHOT
-**Created:** February 1, 2026
+GNU GPLv3, siehe [LICENSE](LICENSE).

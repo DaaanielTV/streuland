@@ -3,6 +3,8 @@ package de.streuland.listener;
 import de.streuland.admin.BlockChangeAction;
 import de.streuland.admin.BlockChangeLogger;
 import de.streuland.analytics.PlotAnalyticsService;
+import de.streuland.history.JournalManager;
+import de.streuland.history.PlotChangeJournal;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
 import org.bukkit.Bukkit;
@@ -27,33 +29,47 @@ public class BlockChangeListener implements Listener {
     private final PlotManager plotManager;
     private final BlockChangeLogger blockChangeLogger;
     private final PlotAnalyticsService analyticsService;
+    private final PlotChangeJournal plotChangeJournal;
+    private final JournalManager journalManager;
     private final Map<String, IgniteTrace> recentIgnitions = new ConcurrentHashMap<>();
 
     public BlockChangeListener(JavaPlugin plugin, PlotManager plotManager,
                                BlockChangeLogger blockChangeLogger,
-                               PlotAnalyticsService analyticsService) {
+                               PlotAnalyticsService analyticsService,
+                               PlotChangeJournal plotChangeJournal,
+                               JournalManager journalManager) {
         this.plotManager = plotManager;
         this.blockChangeLogger = blockChangeLogger;
         this.analyticsService = analyticsService;
+        this.plotChangeJournal = plotChangeJournal;
+        this.journalManager = journalManager;
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
+        if (journalManager.isApplyingHistory()) {
+            return;
+        }
         Block block = event.getBlockPlaced();
         Player player = event.getPlayer();
         blockChangeLogger.logChange(player.getUniqueId(), BlockChangeAction.PLACE,
                 block.getX(), block.getY(), block.getZ(),
                 event.getBlockReplacedState().getType().name(), block.getType().name());
+        plotChangeJournal.recordChange(block.getLocation(), event.getBlockReplacedState(), block.getState(), player.getUniqueId(), System.currentTimeMillis());
         recordEditMetric(player.getUniqueId(), block.getX(), block.getZ(), "block_place", block.getWorld());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
+        if (journalManager.isApplyingHistory()) {
+            return;
+        }
         Block block = event.getBlock();
         Player player = event.getPlayer();
         blockChangeLogger.logChange(player.getUniqueId(), BlockChangeAction.BREAK,
                 block.getX(), block.getY(), block.getZ(), block.getType().name(), Material.AIR.name());
+        plotChangeJournal.recordChange(block.getLocation(), block.getState(), null, player.getUniqueId(), System.currentTimeMillis());
         recordEditMetric(player.getUniqueId(), block.getX(), block.getZ(), "block_break", block.getWorld());
     }
 
@@ -68,6 +84,9 @@ public class BlockChangeListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBurn(BlockBurnEvent event) {
+        if (journalManager.isApplyingHistory()) {
+            return;
+        }
         Block block = event.getBlock();
         UUID actor = BlockChangeLogger.SYSTEM_UUID;
         IgniteTrace trace = recentIgnitions.remove(key(block));
@@ -76,6 +95,7 @@ public class BlockChangeListener implements Listener {
         }
         blockChangeLogger.logChange(actor, BlockChangeAction.BURN,
                 block.getX(), block.getY(), block.getZ(), block.getType().name(), Material.AIR.name());
+        plotChangeJournal.recordChange(block.getLocation(), block.getState(), null, actor, System.currentTimeMillis());
         recordEditMetric(actor, block.getX(), block.getZ(), "block_burn", block.getWorld());
     }
 

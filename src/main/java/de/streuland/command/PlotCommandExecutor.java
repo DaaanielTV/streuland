@@ -1,13 +1,25 @@
 package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
+import de.streuland.commands.PlotPriceCommand;
+import de.streuland.commands.PlotBackupCommand;
+import de.streuland.commands.PlotHistoryCommand;
+import de.streuland.commands.PlotTeamCommand;
 import de.streuland.analytics.PlotAnalyticsService;
+import de.streuland.approval.PlotApprovalRequest;
+import de.streuland.approval.PlotApprovalService;
+import de.streuland.discord.DiscordNotifier;
 import de.streuland.analytics.PlayerEditStats;
+import de.streuland.commands.PlotPortalCommand;
+import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.district.TraderNpcService;
 import de.streuland.flags.Flag;
 import de.streuland.flags.PlotFlagManager;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.path.PathGenerator;
+import de.streuland.commands.PlotMergeCommand;
+import de.streuland.plot.PlotMergeService;
+import de.streuland.plot.SplitStrategy;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
 import de.streuland.plot.biome.BiomeBonusService;
@@ -23,6 +35,10 @@ import de.streuland.quest.QuestDefinition;
 import de.streuland.quest.QuestProgress;
 import de.streuland.quest.QuestService;
 import de.streuland.quest.QuestTracker;
+import de.streuland.commands.LocaleCommand;
+import de.streuland.i18n.MessageProvider;
+import de.streuland.commands.PlotMarketCommand;
+import de.streuland.economy.PlotEconomyHook;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -31,6 +47,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.*;
 
@@ -38,6 +57,8 @@ import java.util.*;
  * Handles /plot command and subcommands.
  */
 public class PlotCommandExecutor implements CommandExecutor {
+    private static final DateTimeFormatter SNAPSHOT_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
+
     private static class DeleteConfirmation {
         private final String plotId;
         private final long expiresAt;
@@ -60,11 +81,13 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final QuestTracker questTracker;
     private final PlotMarketService plotMarketService;
     private final AdminPlotService adminPlotService;
+    private final PlotPriceCommand plotPriceCommand;
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
     private final PlotFlagManager plotFlagManager;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
+    private final PlotMergeCommand plotMergeCommand;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
     
@@ -86,12 +109,14 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.questService = questService;
         this.questTracker = questTracker;
         this.plotMarketService = plotMarketService;
+        this.plotPriceCommand = plotPriceCommand;
         this.adminPlotService = adminPlotService;
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
         this.plotFlagManager = plotFlagManager;
         this.pendingDeletes = new HashMap<>();
+        this.plotMergeCommand = new PlotMergeCommand(new PlotMergeService(plugin, plotManager));
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
     }
@@ -118,16 +143,18 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleClaim(player);
             case "info":
                 return handleInfo(player);
-            case "trust":
-                return handleTrust(player, args);
-            case "untrust":
-                return handleUntrust(player, args);
+            case "team":
+                return plotTeamCommand.execute(player, args);
             case "home":
                 return handleHome(player, args);
             case "list":
                 return handleList(player);
             case "snapshot":
                 return handleSnapshot(player, args);
+            case "snapshots":
+                return handleSnapshot(player, new String[]{"snapshot", "list"});
+            case "rollback":
+                return handleSnapshot(player, prependSnapshotRestore(args));
             case "rules":
                 return handleRules(player, args);
             case "unclaim":
@@ -135,6 +162,9 @@ public class PlotCommandExecutor implements CommandExecutor {
             case "delete":
                 return handleDelete(player, args);
             case "confirm":
+                if (plotSchematicCommand.confirm(player)) {
+                    return true;
+                }
                 return handleConfirmDelete(player);
             case "cancel":
                 return handleCancelDelete(player);
@@ -142,6 +172,13 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleGenerate(player, args);
             case "stats":
                 return handleStats(player);
+            case "backup":
+                return plotBackupCommand.handle(player, args);
+            case "history":
+                return plotHistoryCommand.handle(player, args);
+            case "merge":
+            case "split":
+                return plotMergeCommand.handle(player, args);
             case "style":
                 return handleStyle(player, args);
             case "biome":
@@ -154,6 +191,13 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleQuest(player, args);
             case "market":
                 return handleMarket(player, args);
+            case "price":
+                return plotPriceCommand.handle(player, args);
+            case "sell":
+            case "buy":
+            case "auction":
+            case "bid":
+                return plotMarketCommand.handle(player, args, plotEconomyHook.hasEconomy());
             case "world":
                 return handleWorld(player, args);
             case "teleport":
@@ -169,15 +213,56 @@ public class PlotCommandExecutor implements CommandExecutor {
             case "flag":
                 return handleFlag(player, args);
             default:
+                if ("template".equals(subcommand)) {
+                    return plotSchematicCommand.handle(player, args);
+                }
                 player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
                 return true;
         }
+    }
+
+    private boolean handlePendingApprovals(Player player) {
+        if (!player.hasPermission("streuland.plot.approval")) {
+            player.sendMessage("§cKeine Berechtigung.");
+            return true;
+        }
+        List<PlotApprovalRequest> pending = plotApprovalService.listPending();
+        if (pending.isEmpty()) {
+            player.sendMessage("§7Keine offenen Plot-Freigaben.");
+            return true;
+        }
+        player.sendMessage("§6Offene Plot-Freigaben: " + pending.size());
+        for (PlotApprovalRequest request : pending) {
+            player.sendMessage("§e" + request.getId() + " §7- " + request.getPlayerName() + " @ " + request.getWorldName());
+        }
+        return true;
+    }
+
+    private boolean handleApprovalAction(Player player, String[] args, boolean approve) {
+        if (!player.hasPermission("streuland.plot.approval")) {
+            player.sendMessage("§cKeine Berechtigung.");
+            return true;
+        }
+        if (args.length < 2) {
+            player.sendMessage("§cVerwendung: /plot " + (approve ? "approve" : "reject") + " <id>");
+            return true;
+        }
+        boolean success = approve ? plotApprovalService.approve(args[1]) : plotApprovalService.reject(args[1]);
+        player.sendMessage(success ? "§aAntrag verarbeitet." : "§cAntrag nicht gefunden.");
+        return true;
     }
 
     private boolean handleCreate(Player player) {
         List<Plot> playerPlots = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId());
         if (playerPlots.size() >= plotManager.getMaxPlotsPerPlayer(player.getWorld())) {
             player.sendMessage("§cDu kannst maximal " + plotManager.getMaxPlotsPerPlayer(player.getWorld()) + " Plots besitzen!");
+            return true;
+        }
+
+        if (plotApprovalService.requiresApproval(player)) {
+            PlotApprovalRequest request = plotApprovalService.createPending(player);
+            player.sendMessage("§eDein Plot-Antrag wurde eingereicht: §f" + request.getId());
+            player.sendMessage("§7Ein Admin kann mit /plotapprove approve " + request.getId() + " freigeben.");
             return true;
         }
 
@@ -189,12 +274,24 @@ public class PlotCommandExecutor implements CommandExecutor {
                     pathGenerator.buildPathBlocks(pathBlocks);
                     player.sendMessage("§aPlot erstellt und beansprucht! Lage: " + plot.getCenterX() + ", " + plot.getCenterZ());
                     player.sendMessage("§aNutze /plot home um dorthin zu teleportieren");
+                    notifyLargeClaim(player.getName(), plot);
                 });
             } else {
                 player.sendMessage("§cKein geeigneter Ort für deinen Plot gefunden. Versuche es später erneut.");
             }
         });
         return true;
+    }
+
+    private void notifyLargeClaim(String playerName, Plot plot) {
+        int threshold = plugin.getConfig().getInt("discord.large-claim-threshold", 128);
+        if (plot.getSize() < threshold) {
+            return;
+        }
+        Map<String, Object> extras = new HashMap<>();
+        extras.put("title", "Large plot claim");
+        extras.put("description", playerName + " claimed " + plot.getPlotId() + " (" + plot.getSize() + "x" + plot.getSize() + ")");
+        discordNotifier.sendWebhook("plot-alerts", "Large plot claimed", extras);
     }
 
     private boolean handleClaim(Player player) {
@@ -232,59 +329,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§eGröße: §f" + plot.getSize() + "x" + plot.getSize());
         player.sendMessage("§eZustand: §f" + (plot.getState() == Plot.PlotState.UNCLAIMED ? "§eUNBEANSPRUCHT" : "§aBEANSPRUCHT"));
         player.sendMessage("§eEigentümer: §f" + (plot.getOwner() != null ? plot.getOwner() : "Niemand"));
-        player.sendMessage("§eVertraut: §f" + plot.getTrustedPlayers().size() + " Spieler");
+        player.sendMessage("§eTeammitglieder: §f" + Math.max(0, plot.getRoles().size() - 1) + " Spieler");
         player.sendMessage("§eNachbarschaft: §f" + neighborhoodService.getAnalyticsSummary(plot.getPlotId()));
-        return true;
-    }
-
-    private boolean handleTrust(Player player, String[] args) {
-        if (args.length < 2) {
-            player.sendMessage("§cVerwendung: /plot trust <Spieler>");
-            return true;
-        }
-
-        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
-            player.sendMessage("§cDu besitzt diesen Plot nicht!");
-            return true;
-        }
-
-        OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-        if (target == null || target.getUniqueId() == null) {
-            player.sendMessage("§cSpieler nicht gefunden!");
-            return true;
-        }
-
-        if (target.getUniqueId().equals(player.getUniqueId())) {
-            player.sendMessage("§cDu bist bereits Besitzer deines Plots.");
-            return true;
-        }
-
-        plotManager.trustPlayer(plot.getPlotId(), player.getUniqueId(), target.getUniqueId());
-        player.sendMessage("§a" + target.getName() + " ist jetzt vertraut!");
-        return true;
-    }
-
-    private boolean handleUntrust(Player player, String[] args) {
-        if (args.length < 2) {
-            player.sendMessage("§cVerwendung: /plot untrust <Spieler>");
-            return true;
-        }
-
-        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-        if (plot == null || plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
-            player.sendMessage("§cDu besitzt diesen Plot nicht!");
-            return true;
-        }
-
-        OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-        if (target == null || target.getUniqueId() == null) {
-            player.sendMessage("§cSpieler nicht gefunden!");
-            return true;
-        }
-
-        plotManager.untrustPlayer(plot.getPlotId(), player.getUniqueId(), target.getUniqueId());
-        player.sendMessage("§a" + target.getName() + " ist nicht mehr vertraut!");
         return true;
     }
 
@@ -644,18 +690,25 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot create§f - Generiere und beanspruche einen neuen Plot");
         player.sendMessage("§e/plot claim§f - Beanspruche einen ungeclaimten Plot unter deinen Füßen");
         player.sendMessage("§e/plot info§f - Zeige Informationen zum aktuellen Plot");
-        player.sendMessage("§e/plot trust <Spieler>§f - Vertraue einem Spieler");
-        player.sendMessage("§e/plot untrust <Spieler>§f - Entferne Vertrauen von einem Spieler");
+        player.sendMessage("§e/plot team <...>§f - Verwalte Plot-Teamrollen");
         player.sendMessage("§e/plot home [Nummer]§f - Teleportiere dich zu einem eigenen Plot");
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
-        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle");
+        player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle"
+        );
+        player.sendMessage("§e/plot backup <take|list|restore> <plotId> [snapshotId]§f - Schematic Backups");
+        player.sendMessage(" ");
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
         player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
         player.sendMessage("§e/plot weather current§f - Zeigt aktuelle Saison-Effekte");
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
         player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
-        player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots");
+        player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots"
+        );
+        player.sendMessage("§e/plot sell <price>§f - Aktuelles Plot zum Festpreis anbieten");
+        player.sendMessage("§e/plot buy <plotId>§f - Plot direkt kaufen");
+        player.sendMessage("§e/plot auction <price> <durationMin>§f - Auktion starten");
+        player.sendMessage("§e/plot bid <plotId> <amount>§f - Auf Auktion bieten");
         player.sendMessage("§e/plot trader <nearest|buy|stock>§f - Distrikt-Händler nutzen/verwalten");
         player.sendMessage("§e/plot world list§f - Statistiken der aktuellen Welt");
         player.sendMessage("§e/plot teleport <world> <plot_id>§f - Teleportiere weltenübergreifend");
@@ -785,9 +838,10 @@ public class PlotCommandExecutor implements CommandExecutor {
     private boolean handleSnapshot(Player player, String[] args) {
         if (args.length < 2) {
             player.sendMessage("§cVerwendung: /plot snapshot <create|list|restore>");
+            player.sendMessage("§7Aliase: /plot snapshots, /plot rollback <id>");
             return true;
         }
-        String action = args[1].toLowerCase();
+        String action = args[1].toLowerCase(Locale.ROOT);
         boolean isAdmin = player.hasPermission(SnapshotManager.PERMISSION_ADMIN_RESTORE);
         if (!player.hasPermission(SnapshotManager.PERMISSION_SNAPSHOT) && !isAdmin) {
             player.sendMessage("§cKeine Berechtigung für Snapshots!");
@@ -800,31 +854,44 @@ public class PlotCommandExecutor implements CommandExecutor {
         }
         boolean isOwner = plot.getOwner() != null && plot.getOwner().equals(player.getUniqueId());
         if (!isOwner && !isAdmin) {
-            player.sendMessage("§cDu kannst diesen Plot nicht sichern!");
+            player.sendMessage("§cDu kannst diesen Plot nicht sichern oder zurücksetzen!");
             return true;
         }
         if ("create".equals(action)) {
+            String note = args.length > 2 ? String.join(" ", Arrays.copyOfRange(args, 2, args.length)).trim() : null;
+            if (note != null && note.isEmpty()) {
+                note = null;
+            }
             player.sendMessage("§eSnapshot wird erstellt...");
-            snapshotManager.createSnapshot(plot, player.getUniqueId()).thenAccept(snapshot -> {
+            snapshotManager.createSnapshot(plot, player.getUniqueId(), player.getName(), note).thenAccept(snapshot -> {
                 player.sendMessage("§aSnapshot erstellt: §f" + snapshot.getId());
+                if (snapshot.getMetadata() != null && snapshot.getMetadata().getNote() != null) {
+                    player.sendMessage("§7Notiz: §f" + snapshot.getMetadata().getNote());
+                }
+            }).exceptionally(ex -> {
+                player.sendMessage("§cSnapshot konnte nicht erstellt werden: " + ex.getMessage());
+                return null;
             });
             return true;
         }
-        if ("list".equals(action)) {
+        if ("list".equals(action) || "snapshots".equals(action)) {
             List<SnapshotMeta> snapshots = snapshotManager.listSnapshots(plot.getPlotId());
             if (snapshots.isEmpty()) {
                 player.sendMessage("§cKeine Snapshots vorhanden!");
                 return true;
             }
-            player.sendMessage("§6=== Snapshots ===");
+            player.sendMessage("§6=== Snapshots für " + plot.getPlotId() + " ===");
             for (SnapshotMeta meta : snapshots) {
-                player.sendMessage("§e" + meta.getId() + "§f - " + meta.getCreatedAt());
+                String author = meta.getAuthorName() != null ? meta.getAuthorName() : (meta.getCreator() != null ? meta.getCreator().toString() : "SYSTEM");
+                String note = meta.getNote() == null || meta.getNote().trim().isEmpty() ? "" : " §8- §7" + meta.getNote();
+                player.sendMessage("§e" + meta.getId() + " §7@ " + SNAPSHOT_TIME_FORMAT.format(Instant.ofEpochMilli(meta.getCreatedAt())) + " §fvon " + author + note);
             }
             return true;
         }
         if ("restore".equals(action)) {
             if (args.length < 3) {
                 player.sendMessage("§cVerwendung: /plot snapshot restore <id> [instant]");
+                player.sendMessage("§7Oder nutze: /plot rollback <id>");
                 return true;
             }
             String snapshotId = args[2];
@@ -832,11 +899,24 @@ public class PlotCommandExecutor implements CommandExecutor {
             player.sendMessage("§eSnapshot wird wiederhergestellt...");
             snapshotManager.restoreSnapshot(plot.getPlotId(), snapshotId, delayed).thenRun(() -> {
                 player.sendMessage("§aSnapshot wiederhergestellt!");
+            }).exceptionally(ex -> {
+                player.sendMessage("§cSnapshot konnte nicht wiederhergestellt werden: " + ex.getMessage());
+                return null;
             });
             return true;
         }
         player.sendMessage("§cVerwendung: /plot snapshot <create|list|restore>");
         return true;
+    }
+
+    private String[] prependSnapshotRestore(String[] args) {
+        String[] translated = new String[Math.max(3, args.length + 1)];
+        translated[0] = "snapshot";
+        translated[1] = "restore";
+        if (args.length > 1) {
+            System.arraycopy(args, 1, translated, 2, args.length - 1);
+        }
+        return translated;
     }
 
     private boolean handleRules(Player player, String[] args) {
