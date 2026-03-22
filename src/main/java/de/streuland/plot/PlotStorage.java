@@ -75,6 +75,13 @@ public class PlotStorage {
         config.set("rewards.stats", new HashMap<>(data.getStatBonuses()));
         config.set("flags", new HashMap<>(data.getFlagOverrides()));
         config.set("featured", data.isFeatured());
+        config.set("showcase.public", data.isPublicVisitEnabled());
+        config.set("showcase.title", data.getShowcaseTitle());
+        config.set("showcase.description", data.getShowcaseDescription());
+        config.set("showcase.tags", new ArrayList<>(data.getShowcaseTags()));
+        config.set("showcase.spawn.x", data.getShowcaseSpawnX());
+        config.set("showcase.spawn.y", data.getShowcaseSpawnY());
+        config.set("showcase.spawn.z", data.getShowcaseSpawnZ());
 
         for (Map.Entry<String, QuestProgress> entry : data.getQuestProgress().entrySet()) {
             String base = "quests.progress." + entry.getKey();
@@ -123,6 +130,14 @@ public class PlotStorage {
                 data.getUnlockedAbilities().addAll(config.getStringList("rewards.abilities"));
                 data.getCosmeticInventory().addAll(config.getStringList("rewards.cosmetics"));
                 data.setFeatured(config.getBoolean("featured", false));
+                data.setPublicVisitEnabled(config.getBoolean("showcase.public", false));
+                data.setShowcaseTitle(config.getString("showcase.title", ""));
+                data.setShowcaseDescription(config.getString("showcase.description", ""));
+                data.setShowcaseTags(new LinkedHashSet<>(config.getStringList("showcase.tags")));
+                data.setShowcaseSpawn(
+                        config.getInt("showcase.spawn.x", 0),
+                        config.getInt("showcase.spawn.y", 0),
+                        config.getInt("showcase.spawn.z", 0));
                 if (config.isConfigurationSection("rewards.stats")) {
                     for (String key : config.getConfigurationSection("rewards.stats").getKeys(false)) {
                         data.getStatBonuses().put(key, config.getDouble("rewards.stats." + key));

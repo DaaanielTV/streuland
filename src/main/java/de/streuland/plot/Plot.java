@@ -1,11 +1,18 @@
 package de.streuland.plot;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * Represents a single plot in the Streuland world.
- * 
+ *
  * Data is immutable after creation; modifications should go through PlotManager.
  */
 public class Plot {
@@ -22,15 +29,7 @@ public class Plot {
             return this == UNCLAIMED ? AreaType.PLOT_UNCLAIMED : AreaType.PLOT_CLAIMED;
         }
     }
-    
-    private final String plotId;
-    private final int centerX;
-    private final int centerZ;
-    private final int size;
-    private final UUID owner;
-    private final PlotState state;
-    private final long createdAt;
-    private final int spawnY;  // Safe Y coordinate for spawning
+
     private static final Map<Role, Set<Permission>> ROLE_PERMISSIONS = new EnumMap<>(Role.class);
 
     static {
@@ -41,12 +40,21 @@ public class Plot {
         ROLE_PERMISSIONS.put(Role.VISITOR, EnumSet.of(Permission.INTERACT));
     }
 
+    private final String plotId;
+    private final int centerX;
+    private final int centerZ;
+    private final int size;
+    private final UUID owner;
+    private final PlotState state;
+    private final long createdAt;
+    private final int spawnY;
     private final Map<UUID, Role> roles;
-    
+
     public Plot(String plotId, int centerX, int centerZ, int size, UUID owner, long createdAt, int spawnY) {
-        this(plotId, centerX, centerZ, size, owner, createdAt, spawnY, owner == null ? PlotState.UNCLAIMED : PlotState.CLAIMED);
+        this(plotId, centerX, centerZ, size, owner, createdAt, spawnY,
+                owner == null ? PlotState.UNCLAIMED : PlotState.CLAIMED);
     }
-    
+
     public Plot(String plotId, int centerX, int centerZ, int size, UUID owner, long createdAt, int spawnY, PlotState state) {
         this.plotId = plotId;
         this.centerX = centerX;
@@ -61,83 +69,57 @@ public class Plot {
             this.roles.put(owner, Role.OWNER);
         }
     }
-    
-    /**
-     * Gets the plot ID (unique identifier)
-     */
+
     public String getPlotId() {
         return plotId;
     }
-    
-    /**
-     * Gets the center X coordinate of the plot
-     */
+
     public int getCenterX() {
         return centerX;
     }
-    
-    /**
-     * Gets the center Z coordinate of the plot
-     */
+
     public int getCenterZ() {
         return centerZ;
     }
-    
-    /**
-     * Gets the plot size (all plots are square: size x size)
-     */
+
     public int getSize() {
         return size;
     }
-    
-    /**
-     * Gets the owner UUID
-     */
+
     public UUID getOwner() {
         return owner;
     }
-    
-    /**
-     * Gets creation timestamp
-     */
+
     public long getCreatedAt() {
         return createdAt;
     }
-    
-    /**
-     * Gets the safe Y coordinate for spawning in this plot
-     */
+
     public int getSpawnY() {
         return spawnY;
     }
-    
-    /**
-     * Gets the plot state (UNCLAIMED or CLAIMED)
-     */
+
     public PlotState getState() {
         return state;
     }
-    
-    /**
-     * Resolves the current area type represented by this plot.
-     */
+
     public AreaType getAreaType() {
         return state.toAreaType();
     }
 
-    /**
-     * Adds a trusted player to the plot
-     */
     public void assignRole(UUID player, Role role) {
         if (player == null || role == null) {
             return;
         }
         roles.put(player, role);
     }
-    
-    /**
-     * Removes a trusted player from the plot
-     */
+
+    public void addTrusted(UUID player) {
+        if (player == null) {
+            return;
+        }
+        assignRole(player, Role.BUILDER);
+    }
+
     public void removeRole(UUID player) {
         if (player == null) {
             return;
@@ -148,32 +130,36 @@ public class Plot {
         }
         roles.remove(player);
     }
-    
-    /**
-     * Checks if a player is allowed to build in this plot.
-     * 
-     * Rules:
-     * - UNCLAIMED plots: Any player can build (returns true)
-     * - CLAIMED plots: Only owner or trusted players can build
-     */
+
+    public void removeTrusted(UUID player) {
+        removeRole(player);
+    }
+
     public boolean isAllowed(UUID player) {
         return isAllowed(player, Permission.BUILD);
     }
 
     public boolean isAllowed(UUID player, Permission permission) {
         if (state == PlotState.UNCLAIMED) {
-            return true;  // Anyone can build in unclaimed plots
+            return true;
         }
         Role role = getRole(player);
         Set<Permission> permissions = ROLE_PERMISSIONS.get(role);
         return permissions != null && permissions.contains(permission);
     }
-    
-    /**
-     * Gets set of trusted players (copy to prevent external modification)
-     */
+
     public Map<UUID, Role> getRoles() {
         return new HashMap<>(roles);
+    }
+
+    public Set<UUID> getTrustedPlayers() {
+        Set<UUID> trusted = new HashSet<>();
+        for (Map.Entry<UUID, Role> entry : roles.entrySet()) {
+            if (entry.getValue() != Role.OWNER) {
+                trusted.add(entry.getKey());
+            }
+        }
+        return Collections.unmodifiableSet(trusted);
     }
 
     public Role getRole(UUID player) {
@@ -208,67 +194,40 @@ public class Plot {
                     : EnumSet.copyOf(permissions));
         }
     }
-    
-    /**
-     * Checks if a block at given coordinates is within this plot's boundary
-     * 
-     * @param x block X coordinate
-     * @param z block Z coordinate
-     * @return true if block is within plot boundary
-     */
+
     public boolean contains(int x, int z) {
         int minX = centerX - (size / 2);
         int maxX = centerX + (size / 2);
         int minZ = centerZ - (size / 2);
         int maxZ = centerZ + (size / 2);
-        
         return x >= minX && x < maxX && z >= minZ && z < maxZ;
     }
-    
-    /**
-     * Gets the minimum X coordinate (inclusive)
-     */
+
     public int getMinX() {
         return centerX - (size / 2);
     }
-    
-    /**
-     * Gets the maximum X coordinate (exclusive)
-     */
+
     public int getMaxX() {
         return centerX + (size / 2);
     }
-    
-    /**
-     * Gets the minimum Z coordinate (inclusive)
-     */
+
     public int getMinZ() {
         return centerZ - (size / 2);
     }
-    
-    /**
-     * Gets the maximum Z coordinate (exclusive)
-     */
+
     public int getMaxZ() {
         return centerZ + (size / 2);
     }
-    
-    /**
-     * Calculates distance to another plot (center to center)
-     */
+
     public double distance(Plot other) {
         double dx = this.centerX - other.centerX;
         double dz = this.centerZ - other.centerZ;
         return Math.sqrt(dx * dx + dz * dz);
     }
-    
+
     @Override
     public String toString() {
-        return "Plot{" +
-                "id='" + plotId + '\'' +
-                ", center=(" + centerX + "," + centerZ + ")" +
-                ", size=" + size +
-                ", owner=" + owner +
-                '}';
+        return String.format(Locale.ROOT, "Plot{id='%s', center=(%d,%d), size=%d, owner=%s}",
+                plotId, centerX, centerZ, size, owner);
     }
 }
