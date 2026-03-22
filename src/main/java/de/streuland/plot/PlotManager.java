@@ -265,6 +265,97 @@ public class PlotManager {
 
     public Plot claimPlotAt(UUID player, int x, int z) { return claimPlotAt(player, getWorld(), x, z); }
 
+
+    public boolean updateShowcase(String plotId, UUID actor, boolean publicVisitEnabled, String title,
+                                  String description, Set<String> tags) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || plot.getOwner() == null || actor == null || !plot.getOwner().equals(actor)) {
+            return false;
+        }
+        PlotData data = storage.getPlotData(plotId);
+        data.setPublicVisitEnabled(publicVisitEnabled);
+        data.setShowcaseTitle(title);
+        data.setShowcaseDescription(description);
+        data.setShowcaseTags(tags);
+        if (!data.hasCustomShowcaseSpawn()) {
+            data.setShowcaseSpawn(plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ());
+        }
+        storage.savePlotData(plotId, data);
+        return true;
+    }
+
+    public boolean setShowcaseSpawn(String plotId, UUID actor, int x, int y, int z) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || plot.getOwner() == null || actor == null || !plot.getOwner().equals(actor)) {
+            return false;
+        }
+        PlotData data = storage.getPlotData(plotId);
+        data.setShowcaseSpawn(x, y, z);
+        storage.savePlotData(plotId, data);
+        return true;
+    }
+
+    public List<Plot> getPublicPlots(World world) {
+        List<Plot> publicPlots = new ArrayList<>();
+        for (Plot plot : contextFor(world).storage.getAllPlots()) {
+            PlotData data = contextFor(world).storage.getPlotData(plot.getPlotId());
+            if (plot.getState() == Plot.PlotState.CLAIMED && data.isPublicVisitEnabled()) {
+                publicPlots.add(plot);
+            }
+        }
+        publicPlots.sort(Comparator.comparing(plot -> contextFor(world).storage.getPlotData(plot.getPlotId()).getShowcaseTitle(), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(Plot::getPlotId));
+        return publicPlots;
+    }
+
+    public List<Plot> getPublicPlots() {
+        List<Plot> publicPlots = new ArrayList<>();
+        for (String worldName : contexts.keySet()) {
+            publicPlots.addAll(getPublicPlots(contexts.get(worldName).world));
+        }
+        return publicPlots;
+    }
+
+    public List<Plot> searchPublicPlots(World world, String query) {
+        String needle = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        List<Plot> matches = new ArrayList<>();
+        for (Plot plot : getPublicPlots(world)) {
+            PlotData data = contextFor(world).storage.getPlotData(plot.getPlotId());
+            if (needle.isEmpty()
+                    || plot.getPlotId().toLowerCase(Locale.ROOT).contains(needle)
+                    || data.getShowcaseTitle().toLowerCase(Locale.ROOT).contains(needle)
+                    || data.getShowcaseDescription().toLowerCase(Locale.ROOT).contains(needle)
+                    || data.getShowcaseTags().contains(needle)) {
+                matches.add(plot);
+            }
+        }
+        return matches;
+    }
+
+    public int[] getTeleportCoordinates(String plotId) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null) {
+            return null;
+        }
+        PlotData data = storage.getPlotData(plotId);
+        if (data.hasCustomShowcaseSpawn()) {
+            return new int[]{data.getShowcaseSpawnX(), data.getShowcaseSpawnY(), data.getShowcaseSpawnZ()};
+        }
+        return new int[]{plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ()};
+    }
+
+    public boolean canVisitPublicPlot(String plotId) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || plot.getState() != Plot.PlotState.CLAIMED) {
+            return false;
+        }
+        return storage.getPlotData(plotId).isPublicVisitEnabled();
+    }
+
     public boolean unclaimPlot(String plotId, UUID requester, boolean force) {
         PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);

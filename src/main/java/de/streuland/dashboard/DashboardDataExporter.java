@@ -45,7 +45,14 @@ public class DashboardDataExporter {
                 .append("\"biome\":\"").append(biome.name()).append("\",")
                 .append("\"state\":\"").append(plot.getState().name()).append("\",")
                 .append("\"level\":").append(String.format(Locale.US, "%.2f", level)).append(',')
-                .append("\"size\":").append(plot.getSize())
+                .append("\"size\":").append(plot.getSize()).append(',')
+                .append("\"publicVisit\":").append(plotData != null && plotData.isPublicVisitEnabled()).append(',')
+                .append("\"title\":\"").append(escape(plotData == null ? "" : plotData.getShowcaseTitle())).append("\",")
+                .append("\"description\":\"").append(escape(plotData == null ? "" : plotData.getShowcaseDescription())).append("\",")
+                .append("\"tags\":[").append(formatTags(plotData)).append("],")
+                .append("\"spawnX\":").append(resolveSpawnX(plot, plotData)).append(',')
+                .append("\"spawnY\":").append(resolveSpawnY(plot, plotData)).append(',')
+                .append("\"spawnZ\":").append(resolveSpawnZ(plot, plotData))
                 .append("}}");
         }
         json.append("]}");
@@ -55,6 +62,26 @@ public class DashboardDataExporter {
     private String formatOwner(UUID owner) {
         return owner == null ? "UNCLAIMED" : owner.toString();
     }
+
+    private String formatTags(PlotData plotData) {
+        if (plotData == null || plotData.getShowcaseTags().isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        boolean first = true;
+        for (String tag : plotData.getShowcaseTags()) {
+            if (!first) {
+                builder.append(',');
+            }
+            first = false;
+            builder.append("\"").append(escape(tag)).append("\"");
+        }
+        return builder.toString();
+    }
+
+    private int resolveSpawnX(Plot plot, PlotData plotData) { return plotData != null && plotData.hasCustomShowcaseSpawn() ? plotData.getShowcaseSpawnX() : plot.getCenterX(); }
+    private int resolveSpawnY(Plot plot, PlotData plotData) { return plotData != null && plotData.hasCustomShowcaseSpawn() ? plotData.getShowcaseSpawnY() : plot.getSpawnY(); }
+    private int resolveSpawnZ(Plot plot, PlotData plotData) { return plotData != null && plotData.hasCustomShowcaseSpawn() ? plotData.getShowcaseSpawnZ() : plot.getCenterZ(); }
 
     private String escape(String value) {
         return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
