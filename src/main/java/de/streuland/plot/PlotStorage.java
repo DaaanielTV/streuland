@@ -2,6 +2,7 @@ package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
 import de.streuland.quest.QuestProgress;
+import de.streuland.plot.snapshot.PlotSnapshotMetadata;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -351,6 +352,57 @@ public class PlotStorage {
         return max + 1;
     }
 
+
+
+    public synchronized PlotSnapshotMetadata snapshotMetadata(String plotId, String authorName, String note) {
+        Plot plot = cachedPlots.get(plotId);
+        if (plot == null) {
+            return null;
+        }
+        return new PlotSnapshotMetadata(copyPlot(plot), copyPlotData(plotData.get(plotId)), authorName, note);
+    }
+
+    public synchronized boolean restoreSnapshotMetadata(String plotId, PlotSnapshotMetadata metadata) {
+        if (metadata == null || metadata.getPlot() == null || !cachedPlots.containsKey(plotId)) {
+            return false;
+        }
+        Plot restoredPlot = copyPlot(metadata.getPlot());
+        PlotData restoredData = copyPlotData(metadata.getPlotData());
+        plotData.put(plotId, restoredData);
+        savePlot(restoredPlot);
+        return true;
+    }
+
+    private Plot copyPlot(Plot plot) {
+        if (plot == null) {
+            return null;
+        }
+        Plot copy = new Plot(plot.getPlotId(), plot.getCenterX(), plot.getCenterZ(), plot.getSize(), plot.getOwner(),
+                plot.getCreatedAt(), plot.getSpawnY(), plot.getState());
+        copy.replaceRoles(plot.getRoles());
+        return copy;
+    }
+
+    private PlotData copyPlotData(PlotData source) {
+        PlotData copy = new PlotData(source == null ? PlotTheme.NATURE : source.getTheme());
+        if (source == null) {
+            return copy;
+        }
+        copy.setBonusStorageSlots(source.getBonusStorageSlots());
+        copy.getUnlockedAbilities().addAll(source.getUnlockedAbilities());
+        copy.getCosmeticInventory().addAll(source.getCosmeticInventory());
+        copy.getStatBonuses().putAll(source.getStatBonuses());
+        for (Map.Entry<String, QuestProgress> entry : source.getQuestProgress().entrySet()) {
+            QuestProgress progress = new QuestProgress();
+            progress.setValue(entry.getValue().getValue());
+            progress.setCompleted(entry.getValue().isCompleted());
+            progress.setCompletedAt(entry.getValue().getCompletedAt());
+            copy.getQuestProgress().put(entry.getKey(), progress);
+        }
+        copy.getFlagOverrides().putAll(source.getFlagOverrides());
+        copy.setFeatured(source.isFeatured());
+        return copy;
+    }
 
     public synchronized PlotData getPlotData(String plotId) {
         return plotData.computeIfAbsent(plotId, ignored -> new PlotData());

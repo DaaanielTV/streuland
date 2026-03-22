@@ -1,5 +1,11 @@
 package de.streuland.plot.snapshot;
 
+import de.streuland.plot.Plot;
+import de.streuland.plot.PlotData;
+import de.streuland.plot.Role;
+import de.streuland.plot.skin.PlotTheme;
+import de.streuland.quest.QuestProgress;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -10,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -41,6 +48,7 @@ public class SnapshotStorage {
         config.set("plotId", snapshot.getPlotId());
         config.set("creator", snapshot.getCreator() != null ? snapshot.getCreator().toString() : null);
         config.set("createdAt", snapshot.getCreatedAt());
+        writeMetadata(config, snapshot.getMetadata());
 
         List<Map<String, Object>> blocks = new ArrayList<>();
         for (BlockSnapshot block : snapshot.getBlocks()) {
@@ -63,7 +71,7 @@ public class SnapshotStorage {
             plugin.getLogger().severe("Failed to save snapshot " + snapshot.getId() + ": " + e.getMessage());
         }
 
-        updateIndex(snapshot.getPlotId(), snapshot.getId(), snapshot.getCreatedAt(), snapshot.getCreator());
+        updateIndex(snapshot.getPlotId(), snapshot.getId(), snapshot.getCreatedAt(), snapshot.getCreator(), snapshot.getMetadata());
     }
 
     public CompletableFuture<PlotSnapshot> loadSnapshotAsync(String plotId, String snapshotId) {
@@ -84,9 +92,9 @@ public class SnapshotStorage {
         List<Map<?, ?>> blocks = config.getMapList("blocks");
         List<BlockSnapshot> blockSnapshots = new ArrayList<>(blocks.size());
         for (Map<?, ?> entry : blocks) {
-            int x = (int) entry.get("x");
-            int y = (int) entry.get("y");
-            int z = (int) entry.get("z");
+            int x = ((Number) entry.get("x")).intValue();
+            int y = ((Number) entry.get("y")).intValue();
+            int z = ((Number) entry.get("z")).intValue();
             String type = (String) entry.get("type");
             String data = (String) entry.get("data");
             Map<String, Object> tile = null;
@@ -96,7 +104,7 @@ public class SnapshotStorage {
             }
             blockSnapshots.add(new BlockSnapshot(x, y, z, type, data, tile));
         }
-        return new PlotSnapshot(id, plot, creator, createdAt, blockSnapshots);
+        return new PlotSnapshot(id, plot, creator, createdAt, blockSnapshots, readMetadata(config));
     }
 
     public List<SnapshotMeta> listSnapshots(String plotId) {
@@ -112,8 +120,11 @@ public class SnapshotStorage {
             long createdAt = ((Number) entry.get("createdAt")).longValue();
             String creatorStr = (String) entry.get("creator");
             UUID creator = creatorStr != null ? UUID.fromString(creatorStr) : null;
-            result.add(new SnapshotMeta(id, createdAt, creator));
+            String authorName = (String) entry.get("authorName");
+            String note = (String) entry.get("note");
+            result.add(new SnapshotMeta(id, createdAt, creator, authorName, note));
         }
+        result.sort(Comparator.comparingLong(SnapshotMeta::getCreatedAt).reversed());
         return result;
     }
 
@@ -140,7 +151,7 @@ public class SnapshotStorage {
         }
     }
 
-    private void updateIndex(String plotId, String snapshotId, long createdAt, UUID creator) {
+    private void updateIndex(String plotId, String snapshotId, long createdAt, UUID creator, PlotSnapshotMetadata metadata) {
         File indexFile = getIndexFile(plotId);
         FileConfiguration config = indexFile.exists() ? YamlConfiguration.loadConfiguration(indexFile) : new YamlConfiguration();
         List<Map<String, Object>> entries = new ArrayList<>();
@@ -149,12 +160,16 @@ public class SnapshotStorage {
             copy.put("id", entry.get("id"));
             copy.put("createdAt", entry.get("createdAt"));
             copy.put("creator", entry.get("creator"));
+            copy.put("authorName", entry.get("authorName"));
+            copy.put("note", entry.get("note"));
             entries.add(copy);
         }
         Map<String, Object> newEntry = new HashMap<>();
         newEntry.put("id", snapshotId);
         newEntry.put("createdAt", createdAt);
         newEntry.put("creator", creator != null ? creator.toString() : null);
+        newEntry.put("authorName", metadata != null ? metadata.getAuthorName() : null);
+        newEntry.put("note", metadata != null ? metadata.getNote() : null);
         entries.add(newEntry);
         config.set("snapshots", entries);
         try {
@@ -179,6 +194,8 @@ public class SnapshotStorage {
                 copy.put("id", entry.get("id"));
                 copy.put("createdAt", entry.get("createdAt"));
                 copy.put("creator", entry.get("creator"));
+                copy.put("authorName", entry.get("authorName"));
+                copy.put("note", entry.get("note"));
                 updated.add(copy);
             }
         }
@@ -188,6 +205,104 @@ public class SnapshotStorage {
         } catch (IOException e) {
             plugin.getLogger().severe("Failed to update snapshot index: " + e.getMessage());
         }
+    }
+
+    private void writeMetadata(FileConfiguration config, PlotSnapshotMetadata metadata) {
+        if (metadata == null) {
+            return;
+        }
+        config.set("metadata.authorName", metadata.getAuthorName());
+        config.set("metadata.note", metadata.getNote());
+        Plot plot = metadata.getPlot();
+        if (plot != null) {
+            config.set("metadata.plot.id", plot.getPlotId());
+            config.set("metadata.plot.centerX", plot.getCenterX());
+            config.set("metadata.plot.centerZ", plot.getCenterZ());
+            config.set("metadata.plot.size", plot.getSize());
+            config.set("metadata.plot.owner", plot.getOwner() != null ? plot.getOwner().toString() : null);
+            config.set("metadata.plot.state", plot.getState().name());
+            config.set("metadata.plot.createdAt", plot.getCreatedAt());
+            config.set("metadata.plot.spawnY", plot.getSpawnY());
+            Map<String, String> roles = new HashMap<>();
+            for (Map.Entry<UUID, Role> roleEntry : plot.getRoles().entrySet()) {
+                roles.put(roleEntry.getKey().toString(), roleEntry.getValue().name());
+            }
+            config.set("metadata.plot.roles", roles);
+        }
+        PlotData plotData = metadata.getPlotData();
+        if (plotData != null) {
+            config.set("metadata.data.theme", plotData.getTheme().name());
+            config.set("metadata.data.bonusStorageSlots", plotData.getBonusStorageSlots());
+            config.set("metadata.data.unlockedAbilities", new ArrayList<>(plotData.getUnlockedAbilities()));
+            config.set("metadata.data.cosmeticInventory", new ArrayList<>(plotData.getCosmeticInventory()));
+            config.set("metadata.data.statBonuses", new HashMap<>(plotData.getStatBonuses()));
+            config.set("metadata.data.flagOverrides", new HashMap<>(plotData.getFlagOverrides()));
+            config.set("metadata.data.featured", plotData.isFeatured());
+            for (Map.Entry<String, QuestProgress> entry : plotData.getQuestProgress().entrySet()) {
+                String base = "metadata.data.questProgress." + entry.getKey();
+                QuestProgress progress = entry.getValue();
+                config.set(base + ".value", progress.getValue());
+                config.set(base + ".completed", progress.isCompleted());
+                config.set(base + ".completedAt", progress.getCompletedAt());
+            }
+        }
+    }
+
+    private PlotSnapshotMetadata readMetadata(FileConfiguration config) {
+        if (!config.isConfigurationSection("metadata")) {
+            return null;
+        }
+        String authorName = config.getString("metadata.authorName");
+        String note = config.getString("metadata.note");
+        Plot plot = null;
+        if (config.isConfigurationSection("metadata.plot")) {
+            String id = config.getString("metadata.plot.id");
+            int centerX = config.getInt("metadata.plot.centerX");
+            int centerZ = config.getInt("metadata.plot.centerZ");
+            int size = config.getInt("metadata.plot.size");
+            String ownerStr = config.getString("metadata.plot.owner");
+            UUID owner = ownerStr == null ? null : UUID.fromString(ownerStr);
+            long createdAt = config.getLong("metadata.plot.createdAt");
+            int spawnY = config.getInt("metadata.plot.spawnY");
+            Plot.PlotState state = Plot.PlotState.valueOf(config.getString("metadata.plot.state", owner == null ? "UNCLAIMED" : "CLAIMED").toUpperCase(Locale.ROOT));
+            plot = new Plot(id, centerX, centerZ, size, owner, createdAt, spawnY, state);
+            Map<UUID, Role> roles = new HashMap<>();
+            ConfigurationSection roleSection = config.getConfigurationSection("metadata.plot.roles");
+            if (roleSection != null) {
+                for (String key : roleSection.getKeys(false)) {
+                    roles.put(UUID.fromString(key), Role.valueOf(roleSection.getString(key, Role.VISITOR.name()).toUpperCase(Locale.ROOT)));
+                }
+            }
+            plot.replaceRoles(roles);
+        }
+        PlotData plotData = new PlotData(PlotTheme.fromInput(config.getString("metadata.data.theme", PlotTheme.NATURE.name())));
+        plotData.setBonusStorageSlots(config.getInt("metadata.data.bonusStorageSlots", 0));
+        plotData.getUnlockedAbilities().addAll(config.getStringList("metadata.data.unlockedAbilities"));
+        plotData.getCosmeticInventory().addAll(config.getStringList("metadata.data.cosmeticInventory"));
+        ConfigurationSection stats = config.getConfigurationSection("metadata.data.statBonuses");
+        if (stats != null) {
+            for (String key : stats.getKeys(false)) {
+                plotData.getStatBonuses().put(key, stats.getDouble(key));
+            }
+        }
+        ConfigurationSection flags = config.getConfigurationSection("metadata.data.flagOverrides");
+        if (flags != null) {
+            for (String key : flags.getKeys(false)) {
+                plotData.getFlagOverrides().put(key, flags.getBoolean(key));
+            }
+        }
+        plotData.setFeatured(config.getBoolean("metadata.data.featured", false));
+        ConfigurationSection quests = config.getConfigurationSection("metadata.data.questProgress");
+        if (quests != null) {
+            for (String questId : quests.getKeys(false)) {
+                QuestProgress progress = new QuestProgress();
+                progress.setValue(config.getInt("metadata.data.questProgress." + questId + ".value", 0));
+                progress.setCompleted(config.getBoolean("metadata.data.questProgress." + questId + ".completed", false));
+                progress.setCompletedAt(config.getLong("metadata.data.questProgress." + questId + ".completedAt", 0L));
+                plotData.getQuestProgress().put(questId, progress);
+            }
+        }
+        return new PlotSnapshotMetadata(plot, plotData, authorName, note);
     }
 
     private File getPlotFolder(String plotId) {

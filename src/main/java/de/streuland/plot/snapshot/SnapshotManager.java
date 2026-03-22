@@ -1,6 +1,7 @@
 package de.streuland.plot.snapshot;
 
 import de.streuland.plot.Plot;
+import de.streuland.plot.PlotStorage;
 import de.streuland.plot.PlotManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -51,9 +52,15 @@ public class SnapshotManager {
     }
 
     public CompletableFuture<PlotSnapshot> createSnapshot(Plot plot, UUID creator) {
+        return createSnapshot(plot, creator, null, null);
+    }
+
+    public CompletableFuture<PlotSnapshot> createSnapshot(Plot plot, UUID creator, String authorName, String note) {
         int limit = Math.max(0, maxSnapshotsPerPlot - 1);
         storage.enforceMaxSnapshots(plot.getPlotId(), limit);
-        World world = plotManager.getWorld();
+        World world = plotManager.getWorldForPlot(plot.getPlotId());
+        PlotStorage plotStorage = plotManager.getStorage(world);
+        PlotSnapshotMetadata metadata = plotStorage.snapshotMetadata(plot.getPlotId(), authorName, note);
         Set<ChunkKey> chunks = getPlotChunks(plot);
         Queue<ChunkKey> queue = new ArrayDeque<>(chunks);
         Map<ChunkKey, ChunkSnapshot> chunkSnapshots = new HashMap<>();
@@ -79,8 +86,12 @@ public class SnapshotManager {
             }
             if (queue.isEmpty()) {
                 Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                    PlotSnapshot snapshot = buildSnapshot(plot, creator, chunkSnapshots, tileEntities);
-                    storage.saveSnapshotAsync(snapshot).thenRun(() -> future.complete(snapshot));
+                    PlotSnapshot snapshot = buildSnapshot(plot, creator, chunkSnapshots, tileEntities, metadata);
+                    storage.saveSnapshotAsync(snapshot).thenRun(() -> future.complete(snapshot))
+                            .exceptionally(ex -> {
+                                future.completeExceptionally(ex);
+                                return null;
+                            });
                 });
                 Bukkit.getScheduler().cancelTask(taskId.get());
             }
@@ -90,13 +101,13 @@ public class SnapshotManager {
     }
 
     private PlotSnapshot buildSnapshot(Plot plot, UUID creator, Map<ChunkKey, ChunkSnapshot> chunkSnapshots,
-                                      Map<Vector, BlockState> tileEntities) {
+                                      Map<Vector, BlockState> tileEntities, PlotSnapshotMetadata metadata) {
         List<BlockSnapshot> blocks = new ArrayList<>();
         int minX = plot.getMinX();
         int maxX = plot.getMaxX();
         int minZ = plot.getMinZ();
         int maxZ = plot.getMaxZ();
-        int maxY = plotManager.getWorld().getMaxHeight();
+        int maxY = plotManager.getWorldForPlot(plot.getPlotId()).getMaxHeight();
 
         for (Map.Entry<ChunkKey, ChunkSnapshot> entry : chunkSnapshots.entrySet()) {
             ChunkKey key = entry.getKey();
@@ -128,7 +139,7 @@ public class SnapshotManager {
         }
 
         String id = "snapshot_" + System.currentTimeMillis();
-        return new PlotSnapshot(id, plot.getPlotId(), creator, System.currentTimeMillis(), blocks);
+        return new PlotSnapshot(id, plot.getPlotId(), creator, System.currentTimeMillis(), blocks, metadata);
     }
 
     public CompletableFuture<Void> restoreSnapshot(String plotId, String snapshotId, boolean delayed) {
@@ -138,8 +149,17 @@ public class SnapshotManager {
             }
             CompletableFuture<Void> future = new CompletableFuture<>();
             Bukkit.getScheduler().runTask(plugin, () -> applySnapshot(snapshot, delayed, future));
-            return future;
+            return future.thenRun(() -> restoreMetadata(snapshot));
         });
+    }
+
+    private void restoreMetadata(PlotSnapshot snapshot) {
+        PlotSnapshotMetadata metadata = snapshot.getMetadata();
+        if (metadata == null) {
+            return;
+        }
+        PlotStorage plotStorage = plotManager.getStorage(plotManager.getWorldForPlot(snapshot.getPlotId()));
+        plotStorage.restoreSnapshotMetadata(snapshot.getPlotId(), metadata);
     }
 
     private void applySnapshot(PlotSnapshot snapshot, boolean delayed, CompletableFuture<Void> completion) {
@@ -152,7 +172,7 @@ public class SnapshotManager {
             int processed = 0;
             while (!blocks.isEmpty() && processed < batchSize) {
                 BlockSnapshot blockSnapshot = blocks.remove(blocks.size() - 1);
-                Block block = plotManager.getWorld().getBlockAt(blockSnapshot.getX(), blockSnapshot.getY(), blockSnapshot.getZ());
+                Block block = plotManager.getWorldForPlot(snapshot.getPlotId()).getBlockAt(blockSnapshot.getX(), blockSnapshot.getY(), blockSnapshot.getZ());
                 Material material = Material.matchMaterial(blockSnapshot.getType());
                 if (material != null) {
                     block.setType(material, false);

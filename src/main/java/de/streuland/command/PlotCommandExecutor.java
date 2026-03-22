@@ -47,6 +47,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.*;
 
@@ -54,6 +57,8 @@ import java.util.*;
  * Handles /plot command and subcommands.
  */
 public class PlotCommandExecutor implements CommandExecutor {
+    private static final DateTimeFormatter SNAPSHOT_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
+
     private static class DeleteConfirmation {
         private final String plotId;
         private final long expiresAt;
@@ -179,6 +184,10 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleList(player);
             case "snapshot":
                 return handleSnapshot(player, args);
+            case "snapshots":
+                return handleSnapshot(player, new String[]{"snapshot", "list"});
+            case "rollback":
+                return handleSnapshot(player, prependSnapshotRestore(args));
             case "rules":
                 return handleRules(player, args);
             case "unclaim":
@@ -878,9 +887,10 @@ public class PlotCommandExecutor implements CommandExecutor {
     private boolean handleSnapshot(Player player, String[] args) {
         if (args.length < 2) {
             player.sendMessage("§cVerwendung: /plot snapshot <create|list|restore>");
+            player.sendMessage("§7Aliase: /plot snapshots, /plot rollback <id>");
             return true;
         }
-        String action = args[1].toLowerCase();
+        String action = args[1].toLowerCase(Locale.ROOT);
         boolean isAdmin = player.hasPermission(SnapshotManager.PERMISSION_ADMIN_RESTORE);
         if (!player.hasPermission(SnapshotManager.PERMISSION_SNAPSHOT) && !isAdmin) {
             player.sendMessage("§cKeine Berechtigung für Snapshots!");
@@ -893,31 +903,44 @@ public class PlotCommandExecutor implements CommandExecutor {
         }
         boolean isOwner = plot.getOwner() != null && plot.getOwner().equals(player.getUniqueId());
         if (!isOwner && !isAdmin) {
-            player.sendMessage("§cDu kannst diesen Plot nicht sichern!");
+            player.sendMessage("§cDu kannst diesen Plot nicht sichern oder zurücksetzen!");
             return true;
         }
         if ("create".equals(action)) {
+            String note = args.length > 2 ? String.join(" ", Arrays.copyOfRange(args, 2, args.length)).trim() : null;
+            if (note != null && note.isEmpty()) {
+                note = null;
+            }
             player.sendMessage("§eSnapshot wird erstellt...");
-            snapshotManager.createSnapshot(plot, player.getUniqueId()).thenAccept(snapshot -> {
+            snapshotManager.createSnapshot(plot, player.getUniqueId(), player.getName(), note).thenAccept(snapshot -> {
                 player.sendMessage("§aSnapshot erstellt: §f" + snapshot.getId());
+                if (snapshot.getMetadata() != null && snapshot.getMetadata().getNote() != null) {
+                    player.sendMessage("§7Notiz: §f" + snapshot.getMetadata().getNote());
+                }
+            }).exceptionally(ex -> {
+                player.sendMessage("§cSnapshot konnte nicht erstellt werden: " + ex.getMessage());
+                return null;
             });
             return true;
         }
-        if ("list".equals(action)) {
+        if ("list".equals(action) || "snapshots".equals(action)) {
             List<SnapshotMeta> snapshots = snapshotManager.listSnapshots(plot.getPlotId());
             if (snapshots.isEmpty()) {
                 player.sendMessage("§cKeine Snapshots vorhanden!");
                 return true;
             }
-            player.sendMessage("§6=== Snapshots ===");
+            player.sendMessage("§6=== Snapshots für " + plot.getPlotId() + " ===");
             for (SnapshotMeta meta : snapshots) {
-                player.sendMessage("§e" + meta.getId() + "§f - " + meta.getCreatedAt());
+                String author = meta.getAuthorName() != null ? meta.getAuthorName() : (meta.getCreator() != null ? meta.getCreator().toString() : "SYSTEM");
+                String note = meta.getNote() == null || meta.getNote().trim().isEmpty() ? "" : " §8- §7" + meta.getNote();
+                player.sendMessage("§e" + meta.getId() + " §7@ " + SNAPSHOT_TIME_FORMAT.format(Instant.ofEpochMilli(meta.getCreatedAt())) + " §fvon " + author + note);
             }
             return true;
         }
         if ("restore".equals(action)) {
             if (args.length < 3) {
                 player.sendMessage("§cVerwendung: /plot snapshot restore <id> [instant]");
+                player.sendMessage("§7Oder nutze: /plot rollback <id>");
                 return true;
             }
             String snapshotId = args[2];
@@ -925,11 +948,24 @@ public class PlotCommandExecutor implements CommandExecutor {
             player.sendMessage("§eSnapshot wird wiederhergestellt...");
             snapshotManager.restoreSnapshot(plot.getPlotId(), snapshotId, delayed).thenRun(() -> {
                 player.sendMessage("§aSnapshot wiederhergestellt!");
+            }).exceptionally(ex -> {
+                player.sendMessage("§cSnapshot konnte nicht wiederhergestellt werden: " + ex.getMessage());
+                return null;
             });
             return true;
         }
         player.sendMessage("§cVerwendung: /plot snapshot <create|list|restore>");
         return true;
+    }
+
+    private String[] prependSnapshotRestore(String[] args) {
+        String[] translated = new String[Math.max(3, args.length + 1)];
+        translated[0] = "snapshot";
+        translated[1] = "restore";
+        if (args.length > 1) {
+            System.arraycopy(args, 1, translated, 2, args.length - 1);
+        }
+        return translated;
     }
 
     private boolean handleRules(Player player, String[] args) {
