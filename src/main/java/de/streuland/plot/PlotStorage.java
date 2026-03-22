@@ -1,6 +1,8 @@
 package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
+import de.streuland.plot.upgrade.PlotProgressionState;
+import de.streuland.plot.upgrade.PlotUpgradePersistence;
 import de.streuland.quest.QuestProgress;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;

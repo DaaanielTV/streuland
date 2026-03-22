@@ -1,6 +1,7 @@
 package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
+import de.streuland.plot.upgrade.PlotProgressionState;
 import de.streuland.quest.QuestProgress;
 
 import java.util.Arrays;
@@ -24,6 +25,7 @@ public class PlotData {
     private final Map<String, Double> statBonuses;
     private final Map<String, QuestProgress> questProgress;
     private final Map<String, Boolean> flagOverrides;
+    private PlotProgressionState progressionState;
     private boolean featured;
     private boolean publicVisitEnabled;
     private String showcaseTitle;
@@ -45,6 +47,7 @@ public class PlotData {
         this.statBonuses = new HashMap<>();
         this.questProgress = new HashMap<>();
         this.flagOverrides = new HashMap<>();
+        this.progressionState = PlotProgressionState.initial();
         this.featured = false;
         this.publicVisitEnabled = false;
         this.showcaseTitle = "";
@@ -119,4 +122,8 @@ public class PlotData {
         String tag = normalizeText(input, 24).toLowerCase(Locale.ROOT).replace(' ', '-');
         return tag.replaceAll("[^a-z0-9:_-]", "");
     }
+
+    public boolean isFeatured() { return featured; }
+
+    public void setFeatured(boolean featured) { this.featured = featured; }
 }
