@@ -205,16 +205,56 @@ public class PlotManager {
         return claimPlotForPlayer(contextFor(getWorldForPlot(plot.getPlotId())), plot, player);
     }
 
-    public boolean assignRole(String plotId, UUID actor, UUID target, Role role) {
+    public boolean createRole(String plotId, UUID actor, String roleId, Set<Permission> permissions) {
         PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || !canManageTeam(plot, actor) || role == null) {
+        if (plot == null || !canManageRoles(plot, actor)) {
             return false;
         }
-        if (target == null || target.equals(plot.getOwner())) {
+        boolean created = plot.createRole(roleId, permissions);
+        if (created) {
+            storage.savePlot(plot);
+        }
+        return created;
+    }
+
+    public boolean updateRole(String plotId, UUID actor, String roleId, Set<Permission> permissions) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || !canManageRoles(plot, actor)) {
             return false;
         }
-        plot.assignRole(target, role);
+        boolean updated = plot.updateRole(roleId, permissions);
+        if (updated) {
+            storage.savePlot(plot);
+        }
+        return updated;
+    }
+
+    public boolean removeRoleDefinition(String plotId, UUID actor, String roleId) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || !canManageRoles(plot, actor)) {
+            return false;
+        }
+        boolean removed = plot.removeRoleDefinition(roleId);
+        if (removed) {
+            storage.savePlot(plot);
+        }
+        return removed;
+    }
+
+    public boolean assignRole(String plotId, UUID actor, UUID target, Role role) {
+        return role != null && assignRole(plotId, actor, target, role.getId());
+    }
+
+    public boolean assignRole(String plotId, UUID actor, UUID target, String roleId) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || !canManageRoles(plot, actor) || target == null || target.equals(plot.getOwner())) {
+            return false;
+        }
+        plot.assignRole(target, roleId);
         storage.savePlot(plot);
         return true;
     }
@@ -222,7 +262,7 @@ public class PlotManager {
     public boolean removeRole(String plotId, UUID actor, UUID target) {
         PlotStorage storage = storageForPlot(plotId);
         Plot plot = storage.getPlot(plotId);
-        if (plot == null || !canManageTeam(plot, actor) || target == null || target.equals(plot.getOwner())) {
+        if (plot == null || !canManageRoles(plot, actor) || target == null || target.equals(plot.getOwner())) {
             return false;
         }
         plot.removeRole(target);
@@ -230,12 +270,31 @@ public class PlotManager {
         return true;
     }
 
-    private boolean canManageTeam(Plot plot, UUID actor) {
+    public boolean unassignRole(String plotId, UUID actor, UUID target, String roleId) {
+        PlotStorage storage = storageForPlot(plotId);
+        Plot plot = storage.getPlot(plotId);
+        if (plot == null || !canManageRoles(plot, actor) || target == null || target.equals(plot.getOwner())) {
+            return false;
+        }
+        plot.removeRole(target, roleId);
+        storage.savePlot(plot);
+        return true;
+    }
+
+    public boolean hasPermission(Plot plot, UUID actor, Permission permission) {
+        return plot != null && permission != null && plot.isAllowed(actor, permission);
+    }
+
+    public boolean hasPermission(String plotId, UUID actor, Permission permission) {
+        Plot plot = storageForPlot(plotId).getPlot(plotId);
+        return hasPermission(plot, actor, permission);
+    }
+
+    private boolean canManageRoles(Plot plot, UUID actor) {
         if (plot == null || actor == null) {
             return false;
         }
-        Role role = plot.getRole(actor);
-        return role == Role.OWNER || role == Role.CO_OWNER;
+        return plot.isAllowed(actor, Permission.ROLE_MANAGE) || Objects.equals(plot.getOwner(), actor);
     }
 
     private Map<Role, Set<Permission>> loadRolePermissions(FileConfiguration config) {

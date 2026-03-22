@@ -86,7 +86,7 @@ public class PlotPortalCommand {
             return true;
         }
         Plot plot = plotManager.getStorage(player.getWorld()).getPlot(plotId);
-        return plot != null && plot.isAllowed(player.getUniqueId());
+        return plot != null && plotManager.hasPermission(plot, player.getUniqueId(), de.streuland.plot.Permission.TELEPORT);
     }
 
     private double parseDouble(String input, double fallback) {
