@@ -25,15 +25,6 @@ public class PlotData {
     private final Map<String, Double> statBonuses;
     private final Map<String, QuestProgress> questProgress;
     private final Map<String, Boolean> flagOverrides;
-    private PlotProgressionState progressionState;
-    private boolean featured;
-    private boolean publicVisitEnabled;
-    private String showcaseTitle;
-    private String showcaseDescription;
-    private final Set<String> showcaseTags;
-    private int showcaseSpawnX;
-    private int showcaseSpawnY;
-    private int showcaseSpawnZ;
 
     public PlotData() {
         this(PlotTheme.NATURE);
@@ -47,15 +38,6 @@ public class PlotData {
         this.statBonuses = new HashMap<>();
         this.questProgress = new HashMap<>();
         this.flagOverrides = new HashMap<>();
-        this.progressionState = PlotProgressionState.initial();
-        this.featured = false;
-        this.publicVisitEnabled = false;
-        this.showcaseTitle = "";
-        this.showcaseDescription = "";
-        this.showcaseTags = new LinkedHashSet<>();
-        this.showcaseSpawnX = 0;
-        this.showcaseSpawnY = 0;
-        this.showcaseSpawnZ = 0;
     }
 
     public PlotTheme getTheme() { return theme; }
@@ -123,7 +105,11 @@ public class PlotData {
         return tag.replaceAll("[^a-z0-9:_-]", "");
     }
 
-    public boolean isFeatured() { return featured; }
+    public Map<String, QuestProgress> getQuestProgress() {
+        return questProgress;
+    }
 
-    public void setFeatured(boolean featured) { this.featured = featured; }
+    public Map<String, Boolean> getFlagOverrides() {
+        return flagOverrides;
+    }
 }

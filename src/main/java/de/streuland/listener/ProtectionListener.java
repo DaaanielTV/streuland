@@ -33,10 +33,9 @@ public class ProtectionListener implements Listener {
     private final boolean allowVisitorInteract;
     private final MessageProvider messageProvider;
 
-    public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, PlotFlagManager plotFlagManager, MessageProvider messageProvider) {
+    public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, PlotFlagManager plotFlagManager) {
         this.plotManager = plotManager;
         this.plotFlagManager = plotFlagManager;
-        this.messageProvider = messageProvider;
         this.allowVisitorInteract = plugin.getConfig().getBoolean("protection.allow-visitor-interact", false);
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
@@ -204,16 +203,5 @@ public class ProtectionListener implements Listener {
                 material.toString().contains("DROPPER") ||
                 material.toString().contains("REPEATER") ||
                 material.toString().contains("COMPARATOR");
-    }
-
-    private boolean isContainerBlock(Material material) {
-        String name = material.toString();
-        return name.contains("CHEST") ||
-                name.contains("BARREL") ||
-                name.contains("SHULKER_BOX") ||
-                name.contains("FURNACE") ||
-                name.contains("HOPPER") ||
-                name.contains("DISPENSER") ||
-                name.contains("DROPPER");
     }
 }

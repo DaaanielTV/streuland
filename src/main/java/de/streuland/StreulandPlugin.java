@@ -109,15 +109,8 @@ public class StreulandPlugin extends JavaPlugin {
     private PlotChangeJournal plotChangeJournal;
     private JournalManager journalManager;
     private ParticleEffectScheduler particleEffectScheduler;
-    private MessageProvider messageProvider;
     private PlotFlagManager plotFlagManager;
     private WorldGuardCompat worldGuardCompat;
-    private DiscordNotifier discordNotifier;
-    private PlotApprovalService plotApprovalService;
-    private PortalManager portalManager;
-    private TransactionManager transactionManager;
-    private de.streuland.storage.PlotStorage configuredStorageAdapter;
-    private WebServer webServer;
     
     @Override
     public void onEnable() {
@@ -185,8 +178,8 @@ public class StreulandPlugin extends JavaPlugin {
             plotFlagManager.registerHook(worldGuardCompat);
             worldGuardCompat.syncAllPlots();
 
-            protectionListener = new ProtectionListener(this, plotManager, plotFlagManager, messageProvider);
-            blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService, plotChangeJournal, journalManager);
+            protectionListener = new ProtectionListener(this, plotManager, plotFlagManager);
+            blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService);
             getLogger().info("✓ Protection/BlockChange listeners registered");
 
             ruleListener = new RuleListener(this, ruleEngine, biomeBonusService);
@@ -250,10 +243,6 @@ public class StreulandPlugin extends JavaPlugin {
             PlotSchematicCommand plotSchematicCommand = new PlotSchematicCommand(schematicLoader, schematicPreview, schematicPaster);
 
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotFlagManager);
-            PlotBackupCommand plotBackupCommand = new PlotBackupCommand(snapshotService);
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotBackupCommand);
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotSchematicCommand);
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotMarketCommand, plotEconomyHook);
             getCommand("plot").setExecutor(commandExecutor);
             if (getCommand("plotapprove") != null) {
                 getCommand("plotapprove").setExecutor(new PlotApprovalCommand(plotApprovalService));

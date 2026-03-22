@@ -85,18 +85,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotAnalyticsService plotAnalyticsService;
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
-    private final MessageProvider messageProvider;
-    private final LocaleCommand localeCommand;
     private final PlotFlagManager plotFlagManager;
-    private final PlotApprovalService plotApprovalService;
-    private final DiscordNotifier discordNotifier;
-    private final PlotBackupCommand plotBackupCommand;
-    private final PlotPortalCommand plotPortalCommand;
-    private final PlotHistoryCommand plotHistoryCommand;
-    private final PlotTeamCommand plotTeamCommand;
-    private final PlotSchematicCommand plotSchematicCommand;
-    private final PlotMarketCommand plotMarketCommand;
-    private final PlotEconomyHook plotEconomyHook;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final PlotMergeCommand plotMergeCommand;
     private final long deleteConfirmTimeoutMs;
@@ -108,18 +97,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
-                               MessageProvider messageProvider) {
                                PlotFlagManager plotFlagManager) {
-                               PlotApprovalService plotApprovalService, DiscordNotifier discordNotifier) {
-                               PlotPriceCommand plotPriceCommand, AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
-                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService) {
-                               AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
-                               TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
-                               PlotBackupCommand plotBackupCommand) {
-                               PlotPortalCommand plotPortalCommand) {
-                               PlotHistoryCommand plotHistoryCommand) {
-                               PlotSchematicCommand plotSchematicCommand) {
-                               PlotMarketCommand plotMarketCommand, PlotEconomyHook plotEconomyHook) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -136,18 +114,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
-        this.messageProvider = messageProvider;
-        this.localeCommand = new LocaleCommand(messageProvider);
         this.plotFlagManager = plotFlagManager;
-        this.plotApprovalService = plotApprovalService;
-        this.discordNotifier = discordNotifier;
-        this.plotBackupCommand = plotBackupCommand;
-        this.plotPortalCommand = plotPortalCommand;
-        this.plotHistoryCommand = plotHistoryCommand;
-        this.plotTeamCommand = new PlotTeamCommand(plotManager);
-        this.plotSchematicCommand = plotSchematicCommand;
-        this.plotMarketCommand = plotMarketCommand;
-        this.plotEconomyHook = plotEconomyHook;
         this.pendingDeletes = new HashMap<>();
         this.plotMergeCommand = new PlotMergeCommand(new PlotMergeService(plugin, plotManager));
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
@@ -243,20 +210,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return adminPlotService.handleAdmin(player, args);
             case "dashboard":
                 return handleDashboardUrl(player, args);
-            case "lang":
-                return localeCommand.handleLang(player, args);
-            case "serverlang":
-                return localeCommand.handleServerLang(player, args);
             case "flag":
                 return handleFlag(player, args);
-            case "pending":
-                return handlePendingApprovals(player);
-            case "approve":
-                return handleApprovalAction(player, args, true);
-            case "reject":
-                return handleApprovalAction(player, args, false);
-            case "portal":
-                return plotPortalCommand.handle(player, args);
             default:
                 if ("template".equals(subcommand)) {
                     return plotSchematicCommand.handle(player, args);
@@ -761,10 +716,6 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
         player.sendMessage("§e/plot dashboard url§f - Zeige den Web-Dashboard Link");
         player.sendMessage("§e/plot flag <name> <on|off|default> [plotId]§f - Setzt Plot-Flags");
-        player.sendMessage("§e/plot portal <create|list|remove|use>§f - Plot Warp-Portale");
-        player.sendMessage("§e/plot merge <plotIdA> <plotIdB>§f - Verschmilzt benachbarte Plots");
-        player.sendMessage("§e/plot split <plotId> <rows> <cols>§f - Teilt einen Plot in ein Grid");
-        player.sendMessage("§e/plot template <list|preview|paste> [name]§f - Template verwalten/einfügen");
     }
 
 
