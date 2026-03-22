@@ -1,6 +1,14 @@
 package de.streuland.plot;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Represents a single plot in the Streuland world.
@@ -17,10 +25,14 @@ public class Plot {
         }
     }
 
-    private static final Map<Role, Set<Permission>> DEFAULT_ROLE_PERMISSIONS = new EnumMap<>(Role.class);
+    private static final Map<Role, Set<Permission>> ROLE_PERMISSIONS = new EnumMap<>(Role.class);
 
     static {
-        resetRolePermissions();
+        ROLE_PERMISSIONS.put(Role.OWNER, EnumSet.allOf(Permission.class));
+        ROLE_PERMISSIONS.put(Role.CO_OWNER, EnumSet.of(Permission.BUILD, Permission.BREAK, Permission.INTERACT, Permission.TRANSFER));
+        ROLE_PERMISSIONS.put(Role.MEMBER, EnumSet.of(Permission.BUILD, Permission.BREAK, Permission.INTERACT));
+        ROLE_PERMISSIONS.put(Role.BUILDER, EnumSet.of(Permission.BUILD, Permission.BREAK));
+        ROLE_PERMISSIONS.put(Role.VISITOR, EnumSet.of(Permission.INTERACT));
     }
 
     private final String plotId;
@@ -31,11 +43,11 @@ public class Plot {
     private final PlotState state;
     private final long createdAt;
     private final int spawnY;
-    private final Map<String, Set<Permission>> roleDefinitions;
-    private final Map<UUID, Set<String>> playerRoles;
+    private final Map<UUID, Role> roles;
 
     public Plot(String plotId, int centerX, int centerZ, int size, UUID owner, long createdAt, int spawnY) {
-        this(plotId, centerX, centerZ, size, owner, createdAt, spawnY, owner == null ? PlotState.UNCLAIMED : PlotState.CLAIMED);
+        this(plotId, centerX, centerZ, size, owner, createdAt, spawnY,
+                owner == null ? PlotState.UNCLAIMED : PlotState.CLAIMED);
     }
 
     public Plot(String plotId, int centerX, int centerZ, int size, UUID owner, long createdAt, int spawnY, PlotState state) {
@@ -55,60 +67,40 @@ public class Plot {
         }
     }
 
-    private void seedDefaultRoleDefinitions() {
-        roleDefinitions.clear();
-        for (Role role : Role.values()) {
-            roleDefinitions.put(role.getId(), copyPermissions(DEFAULT_ROLE_PERMISSIONS.get(role)));
-        }
+    public String getPlotId() {
+        return plotId;
     }
 
-    public String getPlotId() { return plotId; }
-    public int getCenterX() { return centerX; }
-    public int getCenterZ() { return centerZ; }
-    public int getSize() { return size; }
-    public UUID getOwner() { return owner; }
-    public long getCreatedAt() { return createdAt; }
-    public int getSpawnY() { return spawnY; }
-    public PlotState getState() { return state; }
-    public AreaType getAreaType() { return state.toAreaType(); }
-
-    public boolean createRole(String roleId, Set<Permission> permissions) {
-        String normalized = normalizeRoleId(roleId);
-        if (normalized == null || roleDefinitions.containsKey(normalized)) {
-            return false;
-        }
-        roleDefinitions.put(normalized, copyPermissions(permissions));
-        return true;
+    public int getCenterX() {
+        return centerX;
     }
 
-    public boolean updateRole(String roleId, Set<Permission> permissions) {
-        String normalized = normalizeRoleId(roleId);
-        if (normalized == null || Role.isCoreRole(normalized)) {
-            return false;
-        }
-        if (!roleDefinitions.containsKey(normalized)) {
-            return false;
-        }
-        roleDefinitions.put(normalized, copyPermissions(permissions));
-        return true;
+    public int getCenterZ() {
+        return centerZ;
     }
 
-    public boolean removeRoleDefinition(String roleId) {
-        String normalized = normalizeRoleId(roleId);
-        if (normalized == null || Role.isCoreRole(normalized)) {
-            return false;
-        }
-        if (roleDefinitions.remove(normalized) == null) {
-            return false;
-        }
-        for (Iterator<Map.Entry<UUID, Set<String>>> it = playerRoles.entrySet().iterator(); it.hasNext();) {
-            Map.Entry<UUID, Set<String>> entry = it.next();
-            entry.getValue().remove(normalized);
-            if (entry.getValue().isEmpty()) {
-                it.remove();
-            }
-        }
-        return true;
+    public int getSize() {
+        return size;
+    }
+
+    public UUID getOwner() {
+        return owner;
+    }
+
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
+    public int getSpawnY() {
+        return spawnY;
+    }
+
+    public PlotState getState() {
+        return state;
+    }
+
+    public AreaType getAreaType() {
+        return state.toAreaType();
     }
 
     public void assignRole(UUID player, Role role) {
@@ -123,6 +115,13 @@ public class Plot {
             return;
         }
         playerRoles.computeIfAbsent(player, ignored -> new LinkedHashSet<>()).add(normalized);
+    }
+
+    public void addTrusted(UUID player) {
+        if (player == null) {
+            return;
+        }
+        assignRole(player, Role.BUILDER);
     }
 
     public void removeRole(UUID player) {
@@ -154,6 +153,10 @@ public class Plot {
         }
     }
 
+    public void removeTrusted(UUID player) {
+        removeRole(player);
+    }
+
     public boolean isAllowed(UUID player) {
         return isAllowed(player, Permission.BUILD);
     }
@@ -161,20 +164,6 @@ public class Plot {
     public boolean isAllowed(UUID player, Permission permission) {
         if (state == PlotState.UNCLAIMED) {
             return true;
-        }
-        return getResolvedPermissions(player).contains(permission);
-    }
-
-    public Set<Permission> getResolvedPermissions(UUID player) {
-        if (state == PlotState.UNCLAIMED) {
-            return EnumSet.allOf(Permission.class);
-        }
-        EnumSet<Permission> resolved = EnumSet.noneOf(Permission.class);
-        for (String roleId : getAssignedRoleIds(player)) {
-            Set<Permission> permissions = roleDefinitions.get(roleId);
-            if (permissions != null) {
-                resolved.addAll(permissions);
-            }
         }
         return resolved;
     }
@@ -201,6 +190,16 @@ public class Plot {
             copy.put(entry.getKey(), copyPermissions(entry.getValue()));
         }
         return copy;
+    }
+
+    public Set<UUID> getTrustedPlayers() {
+        Set<UUID> trusted = new HashSet<>();
+        for (Map.Entry<UUID, Role> entry : roles.entrySet()) {
+            if (entry.getValue() != Role.OWNER) {
+                trusted.add(entry.getKey());
+            }
+        }
+        return Collections.unmodifiableSet(trusted);
     }
 
     public Role getRole(UUID player) {
@@ -331,14 +330,31 @@ public class Plot {
         return x >= minX && x < maxX && z >= minZ && z < maxZ;
     }
 
-    public int getMinX() { return centerX - (size / 2); }
-    public int getMaxX() { return centerX + (size / 2); }
-    public int getMinZ() { return centerZ - (size / 2); }
-    public int getMaxZ() { return centerZ + (size / 2); }
+    public int getMinX() {
+        return centerX - (size / 2);
+    }
+
+    public int getMaxX() {
+        return centerX + (size / 2);
+    }
+
+    public int getMinZ() {
+        return centerZ - (size / 2);
+    }
+
+    public int getMaxZ() {
+        return centerZ + (size / 2);
+    }
 
     public double distance(Plot other) {
         double dx = this.centerX - other.centerX;
         double dz = this.centerZ - other.centerZ;
         return Math.sqrt(dx * dx + dz * dz);
+    }
+
+    @Override
+    public String toString() {
+        return String.format(Locale.ROOT, "Plot{id='%s', center=(%d,%d), size=%d, owner=%s}",
+                plotId, centerX, centerZ, size, owner);
     }
 }
