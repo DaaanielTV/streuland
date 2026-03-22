@@ -24,12 +24,16 @@ district:
   error:
     only_players: "§cOnly players can use district commands!"
     not_in_district: "§cYou are not in a district!"
+    no_plot: "§cYou are not standing on a plot!"
+    unknown_district: "§cUnknown district {0}."
   info:
     header: "§6=== District ==="
     name: "§eName: §f{0}"
     id: "§eID: §f{0}"
     level: "§eLevel: §f{0}"
     plots: "§ePlots: §f{0}"
+    bank: "§eShared bank: §f{0}"
+    spawn: "§eDistrict spawn: §f{0}"
   progress:
     header: "§6=== Progress ==="
     blocks: "§eBlocks: §f{0}"
@@ -40,9 +44,24 @@ district:
     max_level: "§aMaximum level reached."
   list:
     header: "§6=== Districts ==="
-    entry: "§e{0}§f ({1}) - {2}"
+    entry: "§e{0}§f ({1}) - {2} - plots: {3}"
+  manage:
+    created: "§aCreated district {0} ({1})."
+    added: "§aAdded plot {0} to {1}."
+    removed: "§eRemoved plot {0} from {1}."
+    renamed: "§aRenamed {0} to {1}."
+    rule: "§aSet district rule {0} to {1}."
+    bank: "§aShared bank enabled={0}, balance={1}."
+    spawn: "§aSet district spawn for {0}."
   help:
     header: "§6=== District Commands ==="
     info: "§e/district info§f - Show current district"
     progress: "§e/district progress§f - Show progress"
     list: "§e/district list§f - List all districts"
+    create: "§e/district create <name>§f - Create a district from the current plot"
+    add: "§e/district add <districtId>§f - Add the current plot to a district"
+    remove: "§e/district remove§f - Remove the current plot from its district"
+    rename: "§e/district rename <name>§f - Rename the current district"
+    setrule: "§e/district setrule <key> <true|false>§f - Set a district rule override"
+    bank: "§e/district bank <true|false> <balance>§f - Configure shared bank"
+    setspawn: "§e/district setspawn§f - Use current plot as district spawn"

@@ -1,5 +1,7 @@
 package de.streuland.dashboard;
 
+import de.streuland.district.District;
+import de.streuland.district.DistrictManager;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotData;
 import de.streuland.plot.PlotStorage;
@@ -15,9 +17,15 @@ import java.util.UUID;
  */
 public class DashboardDataExporter {
     private final PlotStorage plotStorage;
+    private final DistrictManager districtManager;
 
     public DashboardDataExporter(PlotStorage plotStorage) {
+        this(plotStorage, null);
+    }
+
+    public DashboardDataExporter(PlotStorage plotStorage, DistrictManager districtManager) {
         this.plotStorage = plotStorage;
+        this.districtManager = districtManager;
     }
 
     public String toGeoJson(Collection<Plot> plots, World world) {
@@ -32,6 +40,7 @@ public class DashboardDataExporter {
             PlotData plotData = plotStorage.getPlotData(plot.getPlotId());
             Biome biome = world.getBlockAt(plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ()).getBiome();
             double level = plotData == null ? 1D : plotData.getStatBonuses().getOrDefault("plotLevel", 1D);
+            District district = districtManager == null ? null : districtManager.getDistrictForPlot(plot);
 
             json.append("{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[")
                 .append(plot.getMinX()).append(',').append(plot.getMinZ()).append("],[")
@@ -39,13 +48,19 @@ public class DashboardDataExporter {
                 .append(plot.getMaxX()).append(',').append(plot.getMaxZ()).append("],[")
                 .append(plot.getMinX()).append(',').append(plot.getMaxZ()).append("],[")
                 .append(plot.getMinX()).append(',').append(plot.getMinZ())
-                .append("]]},\"properties\":{")
+                .append("]]]},\"properties\":{")
                 .append("\"plotId\":\"").append(escape(plot.getPlotId())).append("\",")
                 .append("\"owner\":\"").append(formatOwner(plot.getOwner())).append("\",")
                 .append("\"biome\":\"").append(biome.name()).append("\",")
                 .append("\"state\":\"").append(plot.getState().name()).append("\",")
                 .append("\"level\":").append(String.format(Locale.US, "%.2f", level)).append(',')
-                .append("\"size\":").append(plot.getSize())
+                .append("\"size\":").append(plot.getSize()).append(',')
+                .append("\"districtId\":\"").append(district == null ? "" : escape(district.getId())).append("\",")
+                .append("\"districtName\":\"").append(district == null ? "" : escape(district.getName())).append("\",")
+                .append("\"districtLevel\":\"").append(district == null ? "" : district.getLevel().name()).append("\",")
+                .append("\"districtPlots\":").append(district == null ? 0 : district.getPlotIds().size()).append(',')
+                .append("\"districtSharedBank\":").append(district != null && district.isSharedBankEnabled()).append(',')
+                .append("\"districtHasSpawn\":").append(district != null && district.hasSpawn())
                 .append("}}");
         }
         json.append("]}");

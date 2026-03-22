@@ -70,6 +70,8 @@ public class PlotData {
 
     public Map<String, Boolean> getFlagOverrides() {
         return flagOverrides;
+    }
+
     public boolean isFeatured() {
         return featured;
     }
