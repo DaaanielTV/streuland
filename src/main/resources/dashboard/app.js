@@ -31,7 +31,8 @@ async function loadPlots() {
   plotsLayer = L.geoJSON(geo, {
     style: f => ({ color: ownerColor(f.properties.owner), weight: 2, fillOpacity: 0.25 }),
     onEachFeature: (f, layer) => {
-      layer.bindPopup(`Plot ${f.properties.plotId}<br>Biome: ${f.properties.biome}<br>Level: ${f.properties.level}`);
+      const district = f.properties.districtId ? `<br>District: ${f.properties.districtName} (${f.properties.districtId})<br>District Level: ${f.properties.districtLevel}<br>Members: ${f.properties.districtPlots}<br>Shared Bank: ${f.properties.districtSharedBank ? 'enabled' : 'disabled'}<br>District Spawn: ${f.properties.districtHasSpawn ? 'set' : 'unset'}` : '<br>District: none';
+      layer.bindPopup(`Plot ${f.properties.plotId}<br>Biome: ${f.properties.biome}<br>Level: ${f.properties.level}${district}`);
     }
   }).addTo(map);
   const bounds = plotsLayer.getBounds();

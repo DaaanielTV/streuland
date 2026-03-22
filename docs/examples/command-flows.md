@@ -1,30 +1,28 @@
-# Beispiele: typische Command-Flows
+# Beispiele für Befehlsabläufe
 
-## 1) Neuer Plot (`/plot create`)
+## Ablauf: Plot erstellen
 
-1. Spieler führt Command aus.
-2. System prüft Plotlimit.
-3. System sucht asynchron:
-   - erst unbeanspruchte Plots,
-   - danach neue gültige Position.
-4. Plot wird geclaimt.
-5. Weg zum Zielpunkt wird gebaut.
+1. Spieler: `/plot create`
+2. Plugin prüft Limit, Standort und Umgebungsregeln
+3. Plot wird erstellt und gespeichert
+4. Spieler wird informiert (ID, Position, nächste Schritte)
 
-## 2) Plot am Standort claimen (`/plot claim`)
+## Ablauf: Spieler vertrauen
 
-1. Spieler steht in Plotbereich.
-2. Zustand muss `UNCLAIMED` sein.
-3. Claim erfolgt inklusive Grid-Synchronisierung.
-4. Spieler erhält Erfolgsmeldung.
+1. Besitzer: `/plot trust <spieler>`
+2. Plugin prüft Besitz und Zielspielernamen
+3. Zielspieler erhält Build-Rechte
+4. Aktion wird bestätigt und persistiert
 
-## 3) Teleport (`/plot home`)
+## Ablauf: Plot löschen
 
-- 1 Plot: direkt teleportieren.
-- Mehrere Plots: Liste oder Index (`/plot home 2`).
+1. Besitzer: `/plot delete [plotId]`
+2. Plugin startet Bestätigungsfenster
+3. Besitzer: `/plot confirm` oder `/plot cancel`
+4. Bei Bestätigung wird der Plot gelöscht und freigegeben
 
-## 4) Trust-Verwaltung
+## Fehlerfälle
 
-- `/plot trust <Spieler>`
-- `/plot untrust <Spieler>`
-
-Voraussetzung: Ausführender Spieler ist Owner des Plots.
+- Kein Plot vorhanden: freundliche Fehlermeldung
+- Keine Berechtigung: Aktion wird abgebrochen
+- Persistenzfehler: Fehler protokollieren + Spieler informieren

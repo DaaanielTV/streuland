@@ -3,10 +3,20 @@ package de.streuland;
 import de.streuland.admin.AdminPlotService;
 import de.streuland.admin.BlockChangeLogger;
 import de.streuland.admin.DailyPlotBackupService;
+import de.streuland.backup.SnapshotService;
+import de.streuland.commands.PlotPortalCommand;
+import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.command.PlotCommandExecutor;
+import de.streuland.commands.PlotApprovalCommand;
+import de.streuland.commands.PlotBackupCommand;
 import de.streuland.command.DistrictCommandExecutor;
+import de.streuland.history.PlotChangeJournal;
+import de.streuland.history.JournalManager;
+import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.district.DistrictClusterService;
+import de.streuland.discord.DiscordNotifier;
+import de.streuland.approval.PlotApprovalService;
 import de.streuland.district.DistrictManager;
 import de.streuland.district.DistrictProgressService;
 import de.streuland.district.TraderNpcService;
@@ -16,9 +26,11 @@ import de.streuland.quest.QuestTracker;
 import de.streuland.weather.ParticleEffectScheduler;
 import de.streuland.weather.SeasonalEffectListener;
 import de.streuland.weather.SeasonalWeatherService;
+import de.streuland.web.WebServer;
 import de.streuland.dashboard.RestApiController;
 import de.streuland.flags.PlotFlagManager;
 import de.streuland.listener.BlockChangeListener;
+import de.streuland.i18n.MessageProvider;
 import de.streuland.listener.ProtectionListener;
 import de.streuland.compat.WorldGuardCompat;
 import de.streuland.neighborhood.NeighborhoodService;
@@ -32,13 +44,29 @@ import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.biome.BiomeEffectScheduler;
 import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.plot.market.PlotMarketService;
+import de.streuland.pricing.PricingEngine;
+import de.streuland.commands.PlotPriceCommand;
+import de.streuland.commands.PlotMarketCommand;
+import de.streuland.economy.PlotEconomyHook;
+import de.streuland.market.MarketManager;
 import de.streuland.rules.DefaultPlotLevelProvider;
 import de.streuland.rules.ExampleRules;
 import de.streuland.rules.RuleEngine;
 import de.streuland.rules.listener.RuleListener;
+import de.streuland.warp.CooldownManager;
+import de.streuland.warp.PlotEconomyHook;
+import de.streuland.warp.PortalManager;
+import de.streuland.transaction.TransactionManager;
+import de.streuland.storage.SqlitePlotStorage;
+import de.streuland.storage.YamlPlotStorage;
+import de.streuland.schematic.SchematicLoader;
+import de.streuland.schematic.SchematicPaster;
+import de.streuland.schematic.SchematicPreview;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import net.milkbowl.vault.economy.Economy;
+
+import java.nio.file.Path;
 
 /**
  * Streuland Main Plugin Class
@@ -66,12 +94,20 @@ public class StreulandPlugin extends JavaPlugin {
     private QuestService questService;
     private QuestTracker questTracker;
     private PlotMarketService plotMarketService;
+    private PricingEngine pricingEngine;
+    private PlotPriceCommand plotPriceCommand;
     private Economy economy;
+    private PlotEconomyHook plotEconomyHook;
+    private MarketManager marketManager;
+    private PlotMarketCommand plotMarketCommand;
     private BlockChangeLogger blockChangeLogger;
     private AdminPlotService adminPlotService;
     private DailyPlotBackupService dailyPlotBackupService;
+    private SnapshotService snapshotService;
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
+    private PlotChangeJournal plotChangeJournal;
+    private JournalManager journalManager;
     private ParticleEffectScheduler particleEffectScheduler;
     private PlotFlagManager plotFlagManager;
     private WorldGuardCompat worldGuardCompat;
@@ -84,19 +120,25 @@ public class StreulandPlugin extends JavaPlugin {
         
         // Load configuration
         saveDefaultConfig();
-        
+        initializeStorageAdapter();
+
         try {
             // Initialize components in dependency order
+            messageProvider = new MessageProvider(this);
             plotManager = new PlotManager(this);
             getLogger().info("✓ PlotManager initialized");
 
             pathGenerator = new PathGenerator(this, plotManager);
             getLogger().info("✓ PathGenerator initialized");
 
+            discordNotifier = new DiscordNotifier(this);
+            plotApprovalService = new PlotApprovalService(this, plotManager, pathGenerator, discordNotifier);
+
             snapshotStorage = new SnapshotStorage(this);
             getLogger().info("✓ SnapshotStorage initialized");
 
             snapshotManager = new SnapshotManager(this, plotManager, snapshotStorage);
+            snapshotService = new SnapshotService(this, plotManager, snapshotManager);
             getLogger().info("✓ SnapshotManager initialized");
 
             ruleEngine = new RuleEngine(plotManager, new DefaultPlotLevelProvider());
@@ -123,7 +165,12 @@ public class StreulandPlugin extends JavaPlugin {
             particleEffectScheduler.start();
             getLogger().info("✓ ParticleEffectScheduler initialized");
 
+            transactionManager = new TransactionManager(this);
+            getLogger().info("✓ TransactionManager initialized");
+
             blockChangeLogger = new BlockChangeLogger(this, plotManager);
+            plotChangeJournal = new PlotChangeJournal(this, plotManager);
+            journalManager = new JournalManager(this, plotChangeJournal);
             adminPlotService = new AdminPlotService(plotManager, snapshotManager, blockChangeLogger);
 
             plotFlagManager = new PlotFlagManager(plotManager);
@@ -142,11 +189,14 @@ public class StreulandPlugin extends JavaPlugin {
             getLogger().info("✓ SeasonalEffectListener registered");
 
             setupEconomy();
+            plotEconomyHook = new PlotEconomyHook(this);
             if (economy == null) {
                 getLogger().warning("Vault Economy provider not found. Plot market will be disabled.");
             } else {
                 getLogger().info("✓ Vault economy connected: " + economy.getName());
             }
+            marketManager = new MarketManager(this, plotManager.getStorage(), plotEconomyHook);
+            plotMarketCommand = new PlotMarketCommand(plotManager, marketManager);
             questService = new QuestService(this, plotManager.getStorage(), ruleEngine);
             getLogger().info("✓ QuestService initialized");
             neighborhoodService = new NeighborhoodService(this, plotManager, new DistrictClusterService(), analyticsService);
@@ -171,23 +221,53 @@ public class StreulandPlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(questTracker, this);
             getLogger().info("✓ District system initialized");
 
+            plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy, discordNotifier);
+
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotApprovalService, discordNotifier);
+            pricingEngine = new PricingEngine(this, plotManager, neighborhoodService);
+            plotPriceCommand = new PlotPriceCommand(pricingEngine);
+            plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy, pricingEngine);
+
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, plotPriceCommand, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService);
             plotMarketService = new PlotMarketService(this, plotManager, districtManager, analyticsService, economy);
+            portalManager = new PortalManager(this, plotManager, new PlotEconomyHook(economy), new CooldownManager());
+            getServer().getPluginManager().registerEvents(portalManager, this);
+            PlotPortalCommand plotPortalCommand = new PlotPortalCommand(plotManager, portalManager);
+
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, messageProvider);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotPortalCommand);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, new PlotHistoryCommand(journalManager));
+            SchematicLoader schematicLoader = new SchematicLoader(this);
+            SchematicPreview schematicPreview = new SchematicPreview();
+            SchematicPaster schematicPaster = new SchematicPaster(this);
+            PlotSchematicCommand plotSchematicCommand = new PlotSchematicCommand(schematicLoader, schematicPreview, schematicPaster);
 
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotFlagManager);
             getCommand("plot").setExecutor(commandExecutor);
+            if (getCommand("plotapprove") != null) {
+                getCommand("plotapprove").setExecutor(new PlotApprovalCommand(plotApprovalService));
+            }
 
             // Register district command
-            getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager));
+            getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager, messageProvider));
             getLogger().info("✓ Commands registered");
 
-            dailyPlotBackupService = new DailyPlotBackupService(this, plotManager, snapshotManager);
+            dailyPlotBackupService = new DailyPlotBackupService(this, snapshotService);
             dailyPlotBackupService.start();
             getLogger().info("✓ Daily backup scheduler initialized");
 
             DashboardDataExporter dataExporter = new DashboardDataExporter(plotManager.getStorage());
-            restApiController = new RestApiController(this, plotManager, neighborhoodService, analyticsService, dataExporter, plotMarketService);
+            restApiController = new RestApiController(this, plotManager, neighborhoodService, analyticsService, dataExporter, plotMarketService, plotApprovalService);
             restApiController.start();
             getLogger().info("✓ Dashboard API initialized");
+
+            if (getConfig().getBoolean("web.enabled", false)) {
+                String token = getConfig().getString("web.token", "");
+                int webPort = getConfig().getInt("web.port", 8090);
+                webServer = new WebServer("0.0.0.0", webPort, token, new WebServer.PlotGatewayAdapter(plotManager), getLogger());
+                webServer.start();
+                getLogger().info("✓ Admin web server listening on http://0.0.0.0:" + webPort);
+            }
             
             getLogger().info("===============================================");
             getLogger().info("Streuland enabled successfully!");
@@ -201,6 +281,29 @@ public class StreulandPlugin extends JavaPlugin {
         }
     }
     
+
+    private void initializeStorageAdapter() {
+        String type = getConfig().getString("storage.type", "yaml").toLowerCase();
+        String dataFolderName = getConfig().getString("storage.data-folder", "plots");
+        Path yamlDir = getDataFolder().toPath().resolve(dataFolderName);
+
+        if ("sqlite".equals(type)) {
+            String sqliteFile = getConfig().getString("storage.sqlite-file", "db.sqlite");
+            Path sqlitePath = getDataFolder().toPath().resolve(sqliteFile);
+            SqlitePlotStorage sqliteStorage = new SqlitePlotStorage(sqlitePath);
+            if (getConfig().getBoolean("storage.migrate-yaml-on-startup", false)) {
+                int migrated = sqliteStorage.migrateFromYaml(yamlDir);
+                getLogger().info("SQLite migration completed. Migrated plots: " + migrated);
+            }
+            configuredStorageAdapter = sqliteStorage;
+            getLogger().info("Configured plot storage adapter: sqlite (" + sqlitePath + ")");
+            return;
+        }
+
+        configuredStorageAdapter = new YamlPlotStorage(yamlDir);
+        getLogger().info("Configured plot storage adapter: yaml (" + yamlDir + ")");
+    }
+
     private void setupEconomy() {
         if (getServer().getPluginManager().getPlugin("Vault") == null) {
             economy = null;
@@ -233,6 +336,9 @@ public class StreulandPlugin extends JavaPlugin {
         if (dailyPlotBackupService != null) {
             dailyPlotBackupService.stop();
         }
+        if (webServer != null) {
+            webServer.stop();
+        }
         getLogger().info("Streuland disabled");
     }
     
@@ -246,5 +352,9 @@ public class StreulandPlugin extends JavaPlugin {
     
     public PathGenerator getPathGenerator() {
         return pathGenerator;
+    }
+
+    public TransactionManager getTransactionManager() {
+        return transactionManager;
     }
 }

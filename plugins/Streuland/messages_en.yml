@@ -1,0 +1,48 @@
+error:
+  no_permission: "§cYou do not have permission."
+plot:
+  lang:
+    usage: "§cUsage: /plot lang <locale>"
+    invalid: "§cUnknown language '{0}'. Available: {1}"
+    set: "§aYour language was set to {0}."
+  serverlang:
+    usage: "§cUsage: /plot serverlang <locale>"
+    invalid: "§cUnknown server language '{0}'. Available: {1}"
+    set: "§aServer default language set to {0}."
+protection:
+  break:
+    path: "§cYou cannot break path blocks!"
+    only_plot: "§cYou can only break blocks in plot areas!"
+  place:
+    path: "§cYou cannot build on paths!"
+    only_plot: "§cYou can only build in plot areas!"
+  plot:
+    protected: "§cThis plot is protected!"
+  interact:
+    visitor_blocked: "§cVisitors cannot interact here!"
+district:
+  error:
+    only_players: "§cOnly players can use district commands!"
+    not_in_district: "§cYou are not in a district!"
+  info:
+    header: "§6=== District ==="
+    name: "§eName: §f{0}"
+    id: "§eID: §f{0}"
+    level: "§eLevel: §f{0}"
+    plots: "§ePlots: §f{0}"
+  progress:
+    header: "§6=== Progress ==="
+    blocks: "§eBlocks: §f{0}"
+    active_players: "§eActive players: §f{0}"
+    goals: "§eGoals: §f{0}"
+    next_level: "§eNext level: §f{0}"
+    required: "§7Required: {0} blocks, {1} players, {2} goals"
+    max_level: "§aMaximum level reached."
+  list:
+    header: "§6=== Districts ==="
+    entry: "§e{0}§f ({1}) - {2}"
+  help:
+    header: "§6=== District Commands ==="
+    info: "§e/district info§f - Show current district"
+    progress: "§e/district progress§f - Show progress"
+    list: "§e/district list§f - List all districts"

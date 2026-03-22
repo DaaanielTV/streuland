@@ -7,8 +7,10 @@ import de.streuland.analytics.PlotAnalyticsRecord;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.district.District;
 import de.streuland.district.DistrictManager;
+import de.streuland.discord.DiscordNotifier;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
+import de.streuland.pricing.PricingEngine;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.Bukkit;
@@ -47,7 +49,9 @@ public class PlotMarketService {
     private final DistrictManager districtManager;
     private final PlotAnalyticsService analyticsService;
     private final Economy economy;
+    private final PricingEngine pricingEngine;
     private final Gson gson;
+    private final DiscordNotifier discordNotifier;
     private final java.io.File marketFile;
 
     private final Map<String, MarketListing> listings;
@@ -57,13 +61,17 @@ public class PlotMarketService {
                              PlotManager plotManager,
                              DistrictManager districtManager,
                              PlotAnalyticsService analyticsService,
-                             Economy economy) {
+                             Economy economy, DiscordNotifier discordNotifier) {
+                             Economy economy,
+                             PricingEngine pricingEngine) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.districtManager = districtManager;
         this.analyticsService = analyticsService;
         this.economy = economy;
+        this.pricingEngine = pricingEngine;
         this.gson = new GsonBuilder().setPrettyPrinting().create();
+        this.discordNotifier = discordNotifier;
         this.marketFile = new java.io.File(plugin.getDataFolder(), "market.json");
         this.listings = new HashMap<>();
         this.salesHistory = new ArrayList<>();
@@ -254,9 +262,17 @@ public class PlotMarketService {
         MarketSale sale = new MarketSale(plotId, listing.getSellerId(), player.getUniqueId(), price, fee,
                 Instant.now().toEpochMilli(), listing.getBiome(), listing.getLevel(), listing.getDistrictTier());
         salesHistory.add(sale);
+        if (pricingEngine != null) {
+            pricingEngine.recordSale(plotId, price);
+        }
         save();
 
         analyticsService.record(new PlotAnalyticsRecord(plotId, player.getUniqueId(), "MARKET_SALE", Instant.now(), price));
+
+        Map<String, Object> extras = new HashMap<>();
+        extras.put("title", "Auction finished");
+        extras.put("description", plotId + " sold for " + formatMoney(price));
+        discordNotifier.sendWebhook("plot-market", "Plot auction finished: " + plotId, extras);
 
         player.sendMessage("§aPlot gekauft: " + plotId + " für " + formatMoney(price));
         player.sendMessage("§7Gebühr: " + formatMoney(fee) + " (5%), Verkäufer erhielt " + formatMoney(sellerPayout));
