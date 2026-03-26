@@ -33,6 +33,17 @@ plot:
   # Cooldown in seconds for /plot teleport <world> <plot_id>
   world-teleport-cooldown-seconds: 15
 
+# Player-driven market configuration
+market:
+  # Percentage fee charged on each sale (0.05 = 5%)
+  tax-rate: 0.05
+  # Additional flat fee per sale
+  flat-fee: 0.0
+  # Requires buy confirmation when price is >= threshold
+  confirmation-threshold: 25000.0
+  # Plot IDs that can never be sold via /plot sell
+  blocked-plot-ids: []
+
 # Path settings
 path:
   # Width of paths in blocks
