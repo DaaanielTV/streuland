@@ -69,6 +69,20 @@ public class PlotCommandExecutor implements CommandExecutor {
         }
     }
 
+    private static class RestoreConfirmation {
+        private final String plotId;
+        private final String snapshotId;
+        private final boolean delayed;
+        private final long expiresAt;
+
+        private RestoreConfirmation(String plotId, String snapshotId, boolean delayed, long expiresAt) {
+            this.plotId = plotId;
+            this.snapshotId = snapshotId;
+            this.delayed = delayed;
+            this.expiresAt = expiresAt;
+        }
+    }
+
     private final JavaPlugin plugin;
     private final PlotManager plotManager;
     private final PathGenerator pathGenerator;
@@ -87,8 +101,10 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final SeasonalWeatherService seasonalWeatherService;
     private final PlotFlagManager plotFlagManager;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
+    private final Map<UUID, RestoreConfirmation> pendingRestores;
     private final PlotMergeCommand plotMergeCommand;
     private final long deleteConfirmTimeoutMs;
+    private final long restoreConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
     
     public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator,
@@ -116,8 +132,10 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.seasonalWeatherService = seasonalWeatherService;
         this.plotFlagManager = plotFlagManager;
         this.pendingDeletes = new HashMap<>();
+        this.pendingRestores = new HashMap<>();
         this.plotMergeCommand = new PlotMergeCommand(new PlotMergeService(plugin, plotManager));
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
+        this.restoreConfirmTimeoutMs = plugin.getConfig().getLong("plot.restore-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
     }
 
@@ -154,6 +172,8 @@ public class PlotCommandExecutor implements CommandExecutor {
             case "snapshots":
                 return handleSnapshot(player, new String[]{"snapshot", "list"});
             case "rollback":
+                return handleSnapshot(player, prependSnapshotRestore(args));
+            case "restore":
                 return handleSnapshot(player, prependSnapshotRestore(args));
             case "rules":
                 return handleRules(player, args);
@@ -695,6 +715,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
         player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle"
         );
+        player.sendMessage("§e/plot restore <snapshotId|confirm>§f - Rollback mit Bestätigung");
         player.sendMessage("§e/plot backup <take|list|restore> <plotId> [snapshotId]§f - Schematic Backups");
         player.sendMessage(" ");
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
@@ -890,22 +911,68 @@ public class PlotCommandExecutor implements CommandExecutor {
         }
         if ("restore".equals(action)) {
             if (args.length < 3) {
-                player.sendMessage("§cVerwendung: /plot snapshot restore <id> [instant]");
-                player.sendMessage("§7Oder nutze: /plot rollback <id>");
+                player.sendMessage("§cVerwendung: /plot snapshot restore <id|confirm> [instant]");
+                player.sendMessage("§7Aliase: /plot rollback <id>, /plot restore <id>");
                 return true;
             }
+            if ("confirm".equalsIgnoreCase(args[2])) {
+                return handleRestoreConfirm(player, plot);
+            }
+
             String snapshotId = args[2];
             boolean delayed = args.length < 4 || !args[3].equalsIgnoreCase("instant");
-            player.sendMessage("§eSnapshot wird wiederhergestellt...");
-            snapshotManager.restoreSnapshot(plot.getPlotId(), snapshotId, delayed).thenRun(() -> {
-                player.sendMessage("§aSnapshot wiederhergestellt!");
-            }).exceptionally(ex -> {
-                player.sendMessage("§cSnapshot konnte nicht wiederhergestellt werden: " + ex.getMessage());
-                return null;
-            });
+            long expiresAt = System.currentTimeMillis() + restoreConfirmTimeoutMs;
+            pendingRestores.put(player.getUniqueId(), new RestoreConfirmation(plot.getPlotId(), snapshotId, delayed, expiresAt));
+            plugin.getLogger().info("[AUDIT] restore-request player=" + player.getUniqueId() + " plot=" + plot.getPlotId() + " snapshot=" + snapshotId);
+            player.sendMessage("§eRollback für Snapshot §f" + snapshotId + " §ewurde vorbereitet.");
+            player.sendMessage("§eBitte bestätige mit §f/plot restore confirm§e.");
+            player.sendMessage("§7Vor dem Rollback wird automatisch ein Restore-Point erzeugt (Timeout " + (restoreConfirmTimeoutMs / 1000L) + "s).");
             return true;
         }
         player.sendMessage("§cVerwendung: /plot snapshot <create|list|restore>");
+        return true;
+    }
+
+    private boolean handleRestoreConfirm(Player player, Plot currentPlot) {
+        RestoreConfirmation confirmation = pendingRestores.get(player.getUniqueId());
+        if (confirmation == null) {
+            player.sendMessage("§cKeine Rollback-Aktion ausstehend.");
+            return true;
+        }
+        if (!confirmation.plotId.equals(currentPlot.getPlotId())) {
+            player.sendMessage("§cDu musst dich im Ziel-Plot befinden, um den Rollback zu bestätigen.");
+            return true;
+        }
+        if (System.currentTimeMillis() > confirmation.expiresAt) {
+            pendingRestores.remove(player.getUniqueId());
+            player.sendMessage("§cRollback-Bestätigung ist abgelaufen.");
+            return true;
+        }
+
+        pendingRestores.remove(player.getUniqueId());
+        String restorePointNote = "before rollback to " + confirmation.snapshotId;
+        player.sendMessage("§eErstelle Restore-Point vor Rollback...");
+        snapshotManager.createRestorePoint(currentPlot, player.getUniqueId(), player.getName(), restorePointNote)
+                .thenCompose(restorePoint -> {
+                    plugin.getLogger().info("[AUDIT] restore-point-created player=" + player.getUniqueId()
+                            + " plot=" + confirmation.plotId
+                            + " snapshot=" + restorePoint.getId()
+                            + " forTarget=" + confirmation.snapshotId);
+                    player.sendMessage("§7Restore-Point: §f" + restorePoint.getId());
+                    return snapshotManager.restoreSnapshot(confirmation.plotId, confirmation.snapshotId, confirmation.delayed);
+                })
+                .thenRun(() -> {
+                    plugin.getLogger().info("[AUDIT] restore-success player=" + player.getUniqueId() + " plot=" + confirmation.plotId + " snapshot=" + confirmation.snapshotId);
+                    player.sendMessage("§aSnapshot wiederhergestellt!");
+                })
+                .exceptionally(ex -> {
+                    plugin.getLogger().warning("[AUDIT] restore-failed player=" + player.getUniqueId()
+                            + " plot=" + confirmation.plotId
+                            + " snapshot=" + confirmation.snapshotId
+                            + " reason=" + ex.getMessage());
+                    player.sendMessage("§cSnapshot konnte nicht wiederhergestellt werden: " + ex.getMessage());
+                    return null;
+                });
         return true;
     }
 

@@ -12,9 +12,12 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,6 +27,7 @@ import java.util.concurrent.CompletableFuture;
 public class SnapshotStorage {
     private final JavaPlugin plugin;
     private final File rootFolder;
+    private final Object indexLock = new Object();
 
     public SnapshotStorage(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -66,7 +70,7 @@ public class SnapshotStorage {
         config.set("blocks", blocks);
 
         try {
-            config.save(snapshotFile);
+            saveAtomically(config, snapshotFile);
         } catch (IOException e) {
             plugin.getLogger().severe("Failed to save snapshot " + snapshot.getId() + ": " + e.getMessage());
         }
@@ -112,17 +116,19 @@ public class SnapshotStorage {
         if (!indexFile.exists()) {
             return new ArrayList<>();
         }
-        FileConfiguration config = YamlConfiguration.loadConfiguration(indexFile);
-        List<Map<?, ?>> entries = config.getMapList("snapshots");
         List<SnapshotMeta> result = new ArrayList<>();
-        for (Map<?, ?> entry : entries) {
-            String id = (String) entry.get("id");
-            long createdAt = ((Number) entry.get("createdAt")).longValue();
-            String creatorStr = (String) entry.get("creator");
-            UUID creator = creatorStr != null ? UUID.fromString(creatorStr) : null;
-            String authorName = (String) entry.get("authorName");
-            String note = (String) entry.get("note");
-            result.add(new SnapshotMeta(id, createdAt, creator, authorName, note));
+        synchronized (indexLock) {
+            FileConfiguration config = YamlConfiguration.loadConfiguration(indexFile);
+            List<Map<?, ?>> entries = config.getMapList("snapshots");
+            for (Map<?, ?> entry : entries) {
+                String id = (String) entry.get("id");
+                long createdAt = ((Number) entry.get("createdAt")).longValue();
+                String creatorStr = (String) entry.get("creator");
+                UUID creator = creatorStr != null ? UUID.fromString(creatorStr) : null;
+                String authorName = (String) entry.get("authorName");
+                String note = (String) entry.get("note");
+                result.add(new SnapshotMeta(id, createdAt, creator, authorName, note));
+            }
         }
         result.sort(Comparator.comparingLong(SnapshotMeta::getCreatedAt).reversed());
         return result;
@@ -152,59 +158,73 @@ public class SnapshotStorage {
     }
 
     private void updateIndex(String plotId, String snapshotId, long createdAt, UUID creator, PlotSnapshotMetadata metadata) {
-        File indexFile = getIndexFile(plotId);
-        FileConfiguration config = indexFile.exists() ? YamlConfiguration.loadConfiguration(indexFile) : new YamlConfiguration();
-        List<Map<String, Object>> entries = new ArrayList<>();
-        for (Map<?, ?> entry : config.getMapList("snapshots")) {
-            Map<String, Object> copy = new HashMap<>();
-            copy.put("id", entry.get("id"));
-            copy.put("createdAt", entry.get("createdAt"));
-            copy.put("creator", entry.get("creator"));
-            copy.put("authorName", entry.get("authorName"));
-            copy.put("note", entry.get("note"));
-            entries.add(copy);
-        }
-        Map<String, Object> newEntry = new HashMap<>();
-        newEntry.put("id", snapshotId);
-        newEntry.put("createdAt", createdAt);
-        newEntry.put("creator", creator != null ? creator.toString() : null);
-        newEntry.put("authorName", metadata != null ? metadata.getAuthorName() : null);
-        newEntry.put("note", metadata != null ? metadata.getNote() : null);
-        entries.add(newEntry);
-        config.set("snapshots", entries);
-        try {
-            config.save(indexFile);
-        } catch (IOException e) {
-            plugin.getLogger().severe("Failed to update snapshot index: " + e.getMessage());
-        }
-    }
-
-    private void removeFromIndex(String plotId, String snapshotId) {
-        File indexFile = getIndexFile(plotId);
-        if (!indexFile.exists()) {
-            return;
-        }
-        FileConfiguration config = YamlConfiguration.loadConfiguration(indexFile);
-        List<Map<?, ?>> entries = config.getMapList("snapshots");
-        List<Map<String, Object>> updated = new ArrayList<>();
-        for (Map<?, ?> entry : entries) {
-            String id = (String) entry.get("id");
-            if (!snapshotId.equals(id)) {
+        synchronized (indexLock) {
+            File indexFile = getIndexFile(plotId);
+            FileConfiguration config = indexFile.exists() ? YamlConfiguration.loadConfiguration(indexFile) : new YamlConfiguration();
+            Map<String, Map<String, Object>> deduplicated = new LinkedHashMap<>();
+            for (Map<?, ?> entry : config.getMapList("snapshots")) {
                 Map<String, Object> copy = new HashMap<>();
                 copy.put("id", entry.get("id"));
                 copy.put("createdAt", entry.get("createdAt"));
                 copy.put("creator", entry.get("creator"));
                 copy.put("authorName", entry.get("authorName"));
                 copy.put("note", entry.get("note"));
-                updated.add(copy);
+                deduplicated.put(String.valueOf(entry.get("id")), copy);
+            }
+            Map<String, Object> newEntry = new HashMap<>();
+            newEntry.put("id", snapshotId);
+            newEntry.put("createdAt", createdAt);
+            newEntry.put("creator", creator != null ? creator.toString() : null);
+            newEntry.put("authorName", metadata != null ? metadata.getAuthorName() : null);
+            newEntry.put("note", metadata != null ? metadata.getNote() : null);
+            deduplicated.put(snapshotId, newEntry);
+            config.set("snapshots", new ArrayList<>(deduplicated.values()));
+            try {
+                saveAtomically(config, indexFile);
+            } catch (IOException e) {
+                plugin.getLogger().severe("Failed to update snapshot index: " + e.getMessage());
             }
         }
-        config.set("snapshots", updated);
-        try {
-            config.save(indexFile);
-        } catch (IOException e) {
-            plugin.getLogger().severe("Failed to update snapshot index: " + e.getMessage());
+    }
+
+    private void removeFromIndex(String plotId, String snapshotId) {
+        synchronized (indexLock) {
+            File indexFile = getIndexFile(plotId);
+            if (!indexFile.exists()) {
+                return;
+            }
+            FileConfiguration config = YamlConfiguration.loadConfiguration(indexFile);
+            List<Map<?, ?>> entries = config.getMapList("snapshots");
+            List<Map<String, Object>> updated = new ArrayList<>();
+            for (Map<?, ?> entry : entries) {
+                String id = (String) entry.get("id");
+                if (!snapshotId.equals(id)) {
+                    Map<String, Object> copy = new HashMap<>();
+                    copy.put("id", entry.get("id"));
+                    copy.put("createdAt", entry.get("createdAt"));
+                    copy.put("creator", entry.get("creator"));
+                    copy.put("authorName", entry.get("authorName"));
+                    copy.put("note", entry.get("note"));
+                    updated.add(copy);
+                }
+            }
+            config.set("snapshots", updated);
+            try {
+                saveAtomically(config, indexFile);
+            } catch (IOException e) {
+                plugin.getLogger().severe("Failed to update snapshot index: " + e.getMessage());
+            }
         }
+    }
+
+    private void saveAtomically(FileConfiguration config, File file) throws IOException {
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+        File temp = new File(file.getAbsolutePath() + ".tmp");
+        config.save(temp);
+        Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     private void writeMetadata(FileConfiguration config, PlotSnapshotMetadata metadata) {
