@@ -1,15 +1,17 @@
 package de.streuland.dashboard;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
-import de.streuland.approval.PlotApprovalService;
 import de.streuland.analytics.PlotAnalyticsRecord;
 import de.streuland.api.event.PlotUpgradedEvent;
+import de.streuland.approval.PlotApprovalService;
 import de.streuland.event.PlotCreatedEvent;
 import de.streuland.neighborhood.NeighborhoodService;
+import de.streuland.plot.Permission;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
 import de.streuland.plot.market.MarketListing;
@@ -28,7 +30,15 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.UUID;
 
 /**
  * Hosts dashboard REST endpoints and static assets.
@@ -40,8 +50,10 @@ public class RestApiController implements Listener {
     private final InMemoryPlotAnalyticsService analyticsService;
     private final DashboardDataExporter dataExporter;
     private final PlotMarketService marketService;
-    private final Gson gson;
     private final PlotApprovalService approvalService;
+    private final PlotDashboardService plotDashboardService;
+    private final DashboardAuthService authService;
+    private final Gson gson;
     private HttpServer httpServer;
     private DashboardWebSocketServer webSocketServer;
 
@@ -58,25 +70,32 @@ public class RestApiController implements Listener {
         this.analyticsService = analyticsService;
         this.dataExporter = dataExporter;
         this.marketService = marketService;
-        this.gson = new Gson();
         this.approvalService = approvalService;
+        this.plotDashboardService = new PlotDashboardService(plotManager, marketService);
+        this.authService = new DashboardAuthService(plugin);
+        this.gson = new Gson();
     }
 
     public void start() throws IOException {
         int port = plugin.getConfig().getInt("dashboard.port", 8080);
         int wsPort = plugin.getConfig().getInt("dashboard.websocket-port", 8081);
         httpServer = HttpServer.create(new InetSocketAddress(port), 0);
+
         httpServer.createContext("/api/map/plots", exchange -> writeJson(exchange, dataExporter.toGeoJson(plotManager.getAllPlots(), plotManager.getWorld())));
         httpServer.createContext("/api/map/heatmap", exchange -> writeJson(exchange, buildLiveHeatmapJson()));
         httpServer.createContext("/api/neighborhoods", new NeighborhoodHandler());
         httpServer.createContext("/api/market/listings", exchange -> writeJson(exchange, buildMarketListingsJson()));
         httpServer.createContext("/api/biomes/stats", exchange -> writeJson(exchange, buildBiomeStatsJson()));
+
+        httpServer.createContext("/api/dashboard/plots", new PlotCollectionHandler());
+        httpServer.createContext("/api/dashboard/plots/", new PlotDetailHandler());
+
         httpServer.createContext("/streuland-dashboard", new DashboardStaticHandler());
         httpServer.createContext("/api/approval/approve", exchange -> handleApproval(exchange, true));
         httpServer.createContext("/api/approval/reject", exchange -> handleApproval(exchange, false));
         httpServer.start();
 
-        webSocketServer = new DashboardWebSocketServer(wsPort, plugin.getLogger());
+        webSocketServer = new DashboardWebSocketServer(wsPort, plugin.getLogger(), authService);
         webSocketServer.start();
 
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
@@ -113,9 +132,10 @@ public class RestApiController implements Listener {
         if (webSocketServer == null) {
             return;
         }
-        Map<String, Object> event = new HashMap<>();
+        Map<String, Object> event = new HashMap<String, Object>();
         event.put("type", type);
         event.put("plotId", plotId);
+        event.put("plot", plotDashboardService.getPlotDetails(plotId));
         event.put("ts", System.currentTimeMillis());
         webSocketServer.broadcastJson(gson.toJson(event));
     }
@@ -123,18 +143,18 @@ public class RestApiController implements Listener {
     private String buildLiveHeatmapJson() {
         List<PlotAnalyticsRecord> records = analyticsService.getRecordsSnapshot();
         long cutoff = Instant.now().minusSeconds(15 * 60).toEpochMilli();
-        Map<String, Integer> byPlot = new HashMap<>();
+        Map<String, Integer> byPlot = new HashMap<String, Integer>();
         for (PlotAnalyticsRecord record : records) {
             if (record.getTimestamp().toEpochMilli() >= cutoff && record.getPlotId() != null) {
                 byPlot.put(record.getPlotId(), byPlot.getOrDefault(record.getPlotId(), 0) + 1);
             }
         }
 
-        List<Map<String, Object>> points = new ArrayList<>();
+        List<Map<String, Object>> points = new ArrayList<Map<String, Object>>();
         for (Plot plot : plotManager.getAllPlots()) {
             int intensity = byPlot.getOrDefault(plot.getPlotId(), 0);
             if (intensity > 0) {
-                Map<String, Object> point = new HashMap<>();
+                Map<String, Object> point = new HashMap<String, Object>();
                 point.put("plotId", plot.getPlotId());
                 point.put("x", plot.getCenterX());
                 point.put("z", plot.getCenterZ());
@@ -142,7 +162,7 @@ public class RestApiController implements Listener {
                 points.add(point);
             }
         }
-        Map<String, Object> payload = new HashMap<>();
+        Map<String, Object> payload = new HashMap<String, Object>();
         payload.put("windowMinutes", 15);
         payload.put("points", points);
         return gson.toJson(payload);
@@ -152,9 +172,9 @@ public class RestApiController implements Listener {
         List<MarketListing> listings = marketService.getActiveListingsSnapshot();
         List<MarketSale> sales = marketService.getSalesHistorySnapshot();
 
-        List<Map<String, Object>> payload = new ArrayList<>();
+        List<Map<String, Object>> payload = new ArrayList<Map<String, Object>>();
         for (MarketListing listing : listings) {
-            Map<String, Object> row = new HashMap<>();
+            Map<String, Object> row = new HashMap<String, Object>();
             row.put("plotId", listing.getPlotId());
             row.put("price", listing.getPrice());
             row.put("biome", listing.getBiome());
@@ -162,10 +182,10 @@ public class RestApiController implements Listener {
             row.put("districtTier", listing.getDistrictTier());
             row.put("valuation", listing.getValuation());
             row.put("listedAt", listing.getTimestamp());
-            List<Map<String, Object>> history = new ArrayList<>();
+            List<Map<String, Object>> history = new ArrayList<Map<String, Object>>();
             for (MarketSale sale : sales) {
                 if (listing.getPlotId().equalsIgnoreCase(sale.getPlotId())) {
-                    Map<String, Object> p = new HashMap<>();
+                    Map<String, Object> p = new HashMap<String, Object>();
                     p.put("price", sale.getPrice());
                     p.put("timestamp", sale.getTimestamp());
                     history.add(p);
@@ -179,11 +199,11 @@ public class RestApiController implements Listener {
 
     private String buildBiomeStatsJson() {
         World world = plotManager.getWorld();
-        Map<String, Map<String, Object>> data = new TreeMap<>();
+        Map<String, Map<String, Object>> data = new TreeMap<String, Map<String, Object>>();
         for (Plot plot : plotManager.getAllPlots()) {
             Biome biome = world.getBlockAt(plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ()).getBiome();
             Map<String, Object> aggregate = data.computeIfAbsent(biome.name(), ignored -> {
-                Map<String, Object> init = new HashMap<>();
+                Map<String, Object> init = new HashMap<String, Object>();
                 init.put("biome", biome.name());
                 init.put("totalArea", 0);
                 init.put("playerCount", 0);
@@ -196,7 +216,7 @@ public class RestApiController implements Listener {
             }
         }
 
-        List<Map<String, Object>> rows = new ArrayList<>();
+        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> aggregate : data.values()) {
             Set<String> owners = (Set<String>) aggregate.remove("owners");
             aggregate.put("playerCount", owners.size());
@@ -217,8 +237,87 @@ public class RestApiController implements Listener {
         writeText(exchange, approve ? "Approval successful" : "Rejection successful", "text/plain");
     }
 
+    private class PlotCollectionHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                return;
+            }
+            if (!authService.isAuthorized(exchange)) {
+                exchange.sendResponseHeaders(401, -1);
+                return;
+            }
+            Map<String, String> query = parseQuery(exchange.getRequestURI().getRawQuery());
+            List<Map<String, Object>> plots = plotDashboardService.listPlots(
+                    query.get("search"),
+                    query.get("owner"),
+                    query.get("areaType"),
+                    query.get("marketStatus"));
+            writeJson(exchange, gson.toJson(Collections.singletonMap("plots", plots)));
+        }
+    }
+
+    private class PlotDetailHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!authService.isAuthorized(exchange)) {
+                exchange.sendResponseHeaders(401, -1);
+                return;
+            }
+            String path = exchange.getRequestURI().getPath();
+            String suffix = path.substring("/api/dashboard/plots/".length());
+            String[] parts = suffix.split("/");
+            if (parts.length == 0 || parts[0].trim().isEmpty()) {
+                exchange.sendResponseHeaders(404, -1);
+                return;
+            }
+
+            String plotId = parts[0];
+            if (parts.length == 1 && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                Map<String, Object> detail = plotDashboardService.getPlotDetails(plotId);
+                if (detail == null) {
+                    exchange.sendResponseHeaders(404, -1);
+                    return;
+                }
+                writeJson(exchange, gson.toJson(detail));
+                return;
+            }
+
+            if (parts.length == 2 && "permissions".equals(parts[1]) && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                Map<String, String> query = parseQuery(exchange.getRequestURI().getRawQuery());
+                UUID player = toUuid(query.get("player"));
+                Permission permission = toPermission(query.get("permission"));
+                Map<String, Object> result = plotDashboardService.checkPermission(plotId, player, permission);
+                if (result == null) {
+                    exchange.sendResponseHeaders(404, -1);
+                    return;
+                }
+                writeJson(exchange, gson.toJson(result));
+                return;
+            }
+
+            if (parts.length == 2 && "trusted".equals(parts[1]) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                JsonObject payload = gson.fromJson(readBody(exchange), JsonObject.class);
+                UUID actor = payload != null && payload.has("actor") ? toUuid(payload.get("actor").getAsString()) : null;
+                UUID target = payload != null && payload.has("target") ? toUuid(payload.get("target").getAsString()) : null;
+                String action = payload != null && payload.has("action") ? payload.get("action").getAsString() : null;
+                boolean success = plotDashboardService.mutateTrustedPlayer(plotId, actor, target, action);
+                if (!success) {
+                    exchange.sendResponseHeaders(403, -1);
+                    return;
+                }
+                broadcast("plot_updated", plotId);
+                writeJson(exchange, gson.toJson(Collections.singletonMap("success", true)));
+                return;
+            }
+
+            exchange.sendResponseHeaders(404, -1);
+        }
+    }
+
     private Map<String, String> parseQuery(String raw) {
-        Map<String, String> map = new HashMap<>();
+        Map<String, String> map = new HashMap<String, String>();
         if (raw == null || raw.isEmpty()) {
             return map;
         }
@@ -230,6 +329,45 @@ public class RestApiController implements Listener {
             }
         }
         return map;
+    }
+
+    private UUID toUuid(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw.trim());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private Permission toPermission(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return Permission.BUILD;
+        }
+        try {
+            return Permission.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return Permission.BUILD;
+        }
+    }
+
+    private String readBody(HttpExchange exchange) throws IOException {
+        try (InputStream input = exchange.getRequestBody()) {
+            byte[] bytes = readAllBytes(input);
+            return new String(bytes, StandardCharsets.UTF_8);
+        }
+    }
+
+    private byte[] readAllBytes(InputStream input) throws IOException {
+        byte[] buffer = new byte[4096];
+        int read;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        while ((read = input.read(buffer)) != -1) {
+            out.write(buffer, 0, read);
+        }
+        return out.toByteArray();
     }
 
     private void writeJson(HttpExchange exchange, String json) throws IOException {
@@ -253,6 +391,10 @@ public class RestApiController implements Listener {
     private class NeighborhoodHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            if (!authService.isAuthorized(exchange)) {
+                exchange.sendResponseHeaders(401, -1);
+                return;
+            }
             String path = exchange.getRequestURI().getPath();
             String[] parts = path.split("/");
             if (parts.length == 4) {
@@ -300,16 +442,6 @@ public class RestApiController implements Listener {
                     output.write(content);
                 }
             }
-        }
-
-        private byte[] readAllBytes(InputStream input) throws IOException {
-            byte[] buffer = new byte[4096];
-            int read;
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            while ((read = input.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-            }
-            return out.toByteArray();
         }
     }
 }

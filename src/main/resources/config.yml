@@ -226,6 +226,8 @@ dashboard:
   port: 8080
   websocket-port: 8081
   heatmap-cell-size: 64
+  auth:
+    token: "change-me-dashboard-token"
 
 # Dynamic seasonal weather system
 weather:
