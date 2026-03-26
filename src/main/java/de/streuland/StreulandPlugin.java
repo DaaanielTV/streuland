@@ -244,6 +244,7 @@ public class StreulandPlugin extends JavaPlugin {
 
             PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotFlagManager);
             getCommand("plot").setExecutor(commandExecutor);
+            getCommand("plot").setTabCompleter(commandExecutor);
             if (getCommand("plotapprove") != null) {
                 getCommand("plotapprove").setExecutor(new PlotApprovalCommand(plotApprovalService));
             }

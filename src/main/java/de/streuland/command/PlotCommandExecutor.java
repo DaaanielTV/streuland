@@ -41,22 +41,27 @@ import de.streuland.commands.PlotMarketCommand;
 import de.streuland.economy.PlotEconomyHook;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import net.md_5.bungee.api.chat.ClickEvent;
+import net.md_5.bungee.api.chat.TextComponent;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.stream.Collectors;
 import java.util.List;
 import java.util.*;
 
 /**
  * Handles /plot command and subcommands.
  */
-public class PlotCommandExecutor implements CommandExecutor {
+public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
     private static final DateTimeFormatter SNAPSHOT_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
 
     private static class DeleteConfirmation {
@@ -90,6 +95,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final PlotMergeCommand plotMergeCommand;
     private final long deleteConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
+    private final Map<UUID, String> lastVisitedPlotIds;
     
     public PlotCommandExecutor(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator,
                                SnapshotManager snapshotManager, RuleEngine ruleEngine, PlotSkinService plotSkinService,
@@ -119,6 +125,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.plotMergeCommand = new PlotMergeCommand(new PlotMergeService(plugin, plotManager));
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
+        this.lastVisitedPlotIds = new HashMap<>();
     }
 
     @Override
@@ -147,6 +154,12 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return plotTeamCommand.execute(player, args);
             case "home":
                 return handleHome(player, args);
+            case "nearby":
+                return handleNearby(player, args);
+            case "tp":
+                return handleTeleportById(player, args);
+            case "last":
+                return handleLast(player);
             case "list":
                 return handleList(player);
             case "snapshot":
@@ -216,14 +229,14 @@ public class PlotCommandExecutor implements CommandExecutor {
                 if ("template".equals(subcommand)) {
                     return plotSchematicCommand.handle(player, args);
                 }
-                player.sendMessage("§cUnbekannter Befehl. Nutze /plot help");
+                sendInvalidUsage(player, msg("messages.plot.error.invalid-command", "&cUnknown plot command. Use /plot help."));
                 return true;
         }
     }
 
     private boolean handlePendingApprovals(Player player) {
         if (!player.hasPermission("streuland.plot.approval")) {
-            player.sendMessage("§cKeine Berechtigung.");
+            sendNoPermission(player, msg("messages.plot.error.permission-approval", "Missing permission: streuland.plot.approval"));
             return true;
         }
         List<PlotApprovalRequest> pending = plotApprovalService.listPending();
@@ -240,11 +253,11 @@ public class PlotCommandExecutor implements CommandExecutor {
 
     private boolean handleApprovalAction(Player player, String[] args, boolean approve) {
         if (!player.hasPermission("streuland.plot.approval")) {
-            player.sendMessage("§cKeine Berechtigung.");
+            sendNoPermission(player, msg("messages.plot.error.permission-approval", "Missing permission: streuland.plot.approval"));
             return true;
         }
         if (args.length < 2) {
-            player.sendMessage("§cVerwendung: /plot " + (approve ? "approve" : "reject") + " <id>");
+            sendInvalidUsage(player, "/plot " + (approve ? "approve" : "reject") + " <id>");
             return true;
         }
         boolean success = approve ? plotApprovalService.approve(args[1]) : plotApprovalService.reject(args[1]);
@@ -274,6 +287,8 @@ public class PlotCommandExecutor implements CommandExecutor {
                     pathGenerator.buildPathBlocks(pathBlocks);
                     player.sendMessage("§aPlot erstellt und beansprucht! Lage: " + plot.getCenterX() + ", " + plot.getCenterZ());
                     player.sendMessage("§aNutze /plot home um dorthin zu teleportieren");
+                    sendActionBar(player, msg("messages.plot.action.created", "&aPlot created at X {0}, Z {1}.", plot.getCenterX(), plot.getCenterZ()));
+                    sendTeleportHint(player, plot.getPlotId());
                     notifyLargeClaim(player.getName(), plot);
                 });
             } else {
@@ -312,6 +327,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
             pathGenerator.buildPathBlocks(pathBlocks);
             player.sendMessage("§aPlot beansprucht! Verwende /plot info für mehr Informationen.");
+            sendActionBar(player, msg("messages.plot.action.claimed", "&aPlot claimed."));
+            sendTeleportHint(player, claimedPlot.getPlotId());
         });
         return true;
     }
@@ -319,18 +336,85 @@ public class PlotCommandExecutor implements CommandExecutor {
     private boolean handleInfo(Player player) {
         Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (plot == null) {
-            player.sendMessage("§cDu stehst in keinem Plot!");
+            sendPlotNotFound(player, msg("messages.plot.error.no-plot-here", "&cYou are not standing in a plot."));
             return true;
         }
 
-        player.sendMessage("§6=== Plot Informationen ===");
-        player.sendMessage("§eID: §f" + plot.getPlotId());
-        player.sendMessage("§ePosition: §f" + plot.getCenterX() + ", " + plot.getCenterZ());
-        player.sendMessage("§eGröße: §f" + plot.getSize() + "x" + plot.getSize());
-        player.sendMessage("§eZustand: §f" + (plot.getState() == Plot.PlotState.UNCLAIMED ? "§eUNBEANSPRUCHT" : "§aBEANSPRUCHT"));
-        player.sendMessage("§eEigentümer: §f" + (plot.getOwner() != null ? plot.getOwner() : "Niemand"));
-        player.sendMessage("§eTeammitglieder: §f" + Math.max(0, plot.getRoles().size() - 1) + " Spieler");
-        player.sendMessage("§eNachbarschaft: §f" + neighborhoodService.getAnalyticsSummary(plot.getPlotId()));
+        String owner = "none";
+        if (plot.getOwner() != null) {
+            OfflinePlayer ownerPlayer = Bukkit.getOfflinePlayer(plot.getOwner());
+            owner = ownerPlayer.getName() != null ? ownerPlayer.getName() : plot.getOwner().toString();
+        }
+        boolean trusted = plot.isAllowed(player.getUniqueId());
+        String trustLabel = trusted ? msg("messages.plot.info.trusted-yes", "&aTrusted") : msg("messages.plot.info.trusted-no", "&cNot trusted");
+        player.sendMessage(color(msg("messages.plot.info.header", "&6=== Plot Info ===")));
+        player.sendMessage(color(msg("messages.plot.info.id", "&eID: &f{0}", plot.getPlotId())));
+        player.sendMessage(color(msg("messages.plot.info.coordinates", "&eCoordinates: &fX {0}, Z {1}", plot.getCenterX(), plot.getCenterZ())));
+        player.sendMessage(color(msg("messages.plot.info.size", "&eSize: &f{0}x{0}", plot.getSize())));
+        player.sendMessage(color(msg("messages.plot.info.status", "&eStatus: &f{0}", plot.getState().name())));
+        player.sendMessage(color(msg("messages.plot.info.owner", "&eOwner: &f{0}", owner)));
+        player.sendMessage(color(msg("messages.plot.info.trust", "&eTrust status: &f{0}", ChatColor.stripColor(color(trustLabel)))));
+        player.sendMessage(color(msg("messages.plot.info.team-size", "&eTeam members: &f{0}", Math.max(0, plot.getRoles().size() - 1))));
+        player.sendMessage(color(msg("messages.plot.info.neighborhood", "&eNeighborhood: &f{0}", neighborhoodService.getAnalyticsSummary(plot.getPlotId()))));
+        return true;
+    }
+
+    private boolean handleNearby(Player player, String[] args) {
+        int limit = 5;
+        if (args.length > 1) {
+            try {
+                limit = Math.max(1, Math.min(10, Integer.parseInt(args[1])));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        List<Plot> nearby = plotManager.getAllPlots(player.getWorld()).stream()
+                .sorted(Comparator.comparingDouble(plot -> distanceSquared(player, plot)))
+                .limit(limit)
+                .collect(Collectors.toList());
+        if (nearby.isEmpty()) {
+            sendPlotNotFound(player, msg("messages.plot.error.no-nearby-plots", "&cNo nearby plots found."));
+            return true;
+        }
+        player.sendMessage(color(msg("messages.plot.nearby.header", "&6=== Nearby plots ===")));
+        for (Plot plot : nearby) {
+            int distance = (int) Math.sqrt(distanceSquared(player, plot));
+            String line = color(msg("messages.plot.nearby.entry", "&e{0} &7({1}m) &f@ {2}, {3}", plot.getPlotId(), distance, plot.getCenterX(), plot.getCenterZ()));
+            TextComponent text = new TextComponent(line + " ");
+            TextComponent click = new TextComponent(color(msg("messages.plot.nearby.click", "&a[Teleport]")));
+            click.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/plot tp " + plot.getPlotId()));
+            text.addExtra(click);
+            player.spigot().sendMessage(text);
+        }
+        sendActionBar(player, msg("messages.plot.action.nearby-shown", "&eUse /plot tp <id> to teleport."));
+        return true;
+    }
+
+    private boolean handleTeleportById(Player player, String[] args) {
+        if (args.length < 2) {
+            sendInvalidUsage(player, msg("messages.plot.error.usage-tp", "&cUsage: /plot tp <id>"));
+            return true;
+        }
+        Plot plot = plotManager.getStorage(player.getWorld()).getPlot(args[1]);
+        if (plot == null) {
+            sendPlotNotFound(player, msg("messages.plot.error.plot-id-not-found", "&cPlot ''{0}'' was not found.", args[1]));
+            return true;
+        }
+        teleportToPlot(player, plot, color(msg("messages.plot.success.teleported-id", "&aTeleported to plot {0}.", plot.getPlotId())));
+        return true;
+    }
+
+    private boolean handleLast(Player player) {
+        String lastPlotId = lastVisitedPlotIds.get(player.getUniqueId());
+        if (lastPlotId == null) {
+            sendPlotNotFound(player, msg("messages.plot.error.no-last-plot", "&cNo last plot recorded yet."));
+            return true;
+        }
+        Plot plot = plotManager.getStorage(player.getWorld()).getPlot(lastPlotId);
+        if (plot == null) {
+            sendPlotNotFound(player, msg("messages.plot.error.last-plot-missing", "&cYour last plot no longer exists."));
+            return true;
+        }
+        teleportToPlot(player, plot, color(msg("messages.plot.success.teleported-last", "&aTeleported to your last plot ({0}).", plot.getPlotId())));
         return true;
     }
 
@@ -386,7 +470,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private boolean handleUnclaim(Player player, String[] args) {
         Plot target = resolvePlotFromArgsOrLocation(player, args, 1);
         if (target == null) {
-            player.sendMessage("§cKein Plot gefunden. Stehe im Plot oder nutze /plot unclaim <plotId>");
+            sendPlotNotFound(player, msg("messages.plot.error.unclaim-not-found", "Stand in a plot or use /plot unclaim <plotId>."));
             return true;
         }
 
@@ -403,7 +487,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private boolean handleDelete(Player player, String[] args) {
         Plot target = resolvePlotFromArgsOrLocation(player, args, 1);
         if (target == null) {
-            player.sendMessage("§cKein Plot gefunden. Stehe im Plot oder nutze /plot delete <plotId>");
+            sendPlotNotFound(player, msg("messages.plot.error.delete-not-found", "Stand in a plot or use /plot delete <plotId>."));
             return true;
         }
 
@@ -416,6 +500,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         pendingDeletes.put(player.getUniqueId(), new DeleteConfirmation(target.getPlotId(), expiresAt));
         player.sendMessage("§eBestätige mit /plot confirm, um " + target.getPlotId() + " zu löschen.");
         player.sendMessage("§7Abbrechen mit /plot cancel (läuft in " + (deleteConfirmTimeoutMs / 1000L) + "s ab).");
+        sendActionBar(player, msg("messages.plot.action.delete-pending", "&eDelete confirmation pending for {0}.", target.getPlotId()));
         return true;
     }
 
@@ -455,12 +540,12 @@ public class PlotCommandExecutor implements CommandExecutor {
 
     private boolean handleGenerate(Player player, String[] args) {
         if (!player.isOp()) {
-            player.sendMessage("§cNur OPs können Plot-Pools generieren.");
+            sendNoPermission(player, msg("messages.plot.error.permission-generate", "Only operators can generate plot pools."));
             return true;
         }
 
         if (args.length < 3) {
-            player.sendMessage("§cVerwendung: /plot generate <gridSize> <spacing>");
+            sendInvalidUsage(player, "/plot generate <gridSize> <spacing>");
             return true;
         }
 
@@ -682,7 +767,9 @@ public class PlotCommandExecutor implements CommandExecutor {
     private void teleportToPlot(Player player, Plot plot, String message) {
         org.bukkit.World world = plotManager.getWorldForPlot(plot.getPlotId());
         player.teleport(world.getBlockAt(plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ()).getLocation());
+        lastVisitedPlotIds.put(player.getUniqueId(), plot.getPlotId());
         player.sendMessage(message);
+        sendActionBar(player, msg("messages.plot.action.teleported", "&aTeleported to {0}.", plot.getPlotId()));
     }
 
     private void showHelp(Player player) {
@@ -690,6 +777,9 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot create§f - Generiere und beanspruche einen neuen Plot");
         player.sendMessage("§e/plot claim§f - Beanspruche einen ungeclaimten Plot unter deinen Füßen");
         player.sendMessage("§e/plot info§f - Zeige Informationen zum aktuellen Plot");
+        player.sendMessage("§e/plot nearby [Anzahl]§f - Zeigt nahe Plots mit Klick-Teleport");
+        player.sendMessage("§e/plot tp <plotId>§f - Teleportiere direkt zu einer Plot-ID");
+        player.sendMessage("§e/plot last§f - Teleportiere zum zuletzt besuchten Plot");
         player.sendMessage("§e/plot team <...>§f - Verwalte Plot-Teamrollen");
         player.sendMessage("§e/plot home [Nummer]§f - Teleportiere dich zu einem eigenen Plot");
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
@@ -921,15 +1011,83 @@ public class PlotCommandExecutor implements CommandExecutor {
 
     private boolean handleRules(Player player, String[] args) {
         if (args.length < 2 || !"reload".equalsIgnoreCase(args[1])) {
-            player.sendMessage("§cVerwendung: /plot rules reload");
+            sendInvalidUsage(player, "/plot rules reload");
             return true;
         }
         if (!player.hasPermission("streuland.rules.reload")) {
-            player.sendMessage("§cKeine Berechtigung!");
+            sendNoPermission(player, msg("messages.plot.error.permission-rules", "Missing permission: streuland.rules.reload"));
             return true;
         }
         ruleEngine.reload();
         player.sendMessage("§aRegeln neu geladen!");
         return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!(sender instanceof Player player)) {
+            return Collections.emptyList();
+        }
+        if (args.length == 1) {
+            return filterPrefix(args[0], Arrays.asList("help", "create", "claim", "info", "nearby", "tp", "last", "team", "home", "list", "unclaim", "delete"));
+        }
+        if (args.length == 2 && ("tp".equalsIgnoreCase(args[0]) || "unclaim".equalsIgnoreCase(args[0]) || "delete".equalsIgnoreCase(args[0]))) {
+            List<String> ids = plotManager.getAllPlots(player.getWorld()).stream().map(Plot::getPlotId).collect(Collectors.toList());
+            return filterPrefix(args[1], ids);
+        }
+        if (args.length == 3 && "neighbor".equalsIgnoreCase(args[0]) && "add".equalsIgnoreCase(args[1])) {
+            List<String> names = Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList());
+            return filterPrefix(args[2], names);
+        }
+        if (args.length == 3 && "team".equalsIgnoreCase(args[0]) && ("add".equalsIgnoreCase(args[1]) || "remove".equalsIgnoreCase(args[1]) || "promote".equalsIgnoreCase(args[1]))) {
+            List<String> names = Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList());
+            return filterPrefix(args[2], names);
+        }
+        return Collections.emptyList();
+    }
+
+    private List<String> filterPrefix(String token, List<String> options) {
+        String lower = token == null ? "" : token.toLowerCase(Locale.ROOT);
+        return options.stream().filter(s -> s.toLowerCase(Locale.ROOT).startsWith(lower)).sorted().collect(Collectors.toList());
+    }
+
+    private double distanceSquared(Player player, Plot plot) {
+        double dx = player.getLocation().getX() - plot.getCenterX();
+        double dz = player.getLocation().getZ() - plot.getCenterZ();
+        return dx * dx + dz * dz;
+    }
+
+    private void sendActionBar(Player player, String message) {
+        player.sendActionBar(color(message));
+    }
+
+    private void sendTeleportHint(Player player, String plotId) {
+        TextComponent hint = new TextComponent(color(msg("messages.plot.hint.teleport", "&7Quick jump: ")));
+        TextComponent button = new TextComponent(color(msg("messages.plot.hint.teleport-button", "&a[ /plot tp {0} ]", plotId)));
+        button.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/plot tp " + plotId));
+        hint.addExtra(button);
+        player.spigot().sendMessage(hint);
+    }
+
+    private void sendNoPermission(Player player, String detail) {
+        player.sendMessage(color(msg("messages.plot.error.no-permission", "&cYou do not have permission. {0}", detail == null ? "" : detail)));
+        sendActionBar(player, msg("messages.plot.action.permission-denied", "&cPermission denied."));
+    }
+
+    private void sendPlotNotFound(Player player, String detail) {
+        player.sendMessage(color(msg("messages.plot.error.plot-not-found", "&cPlot not found. {0}", detail == null ? "" : detail)));
+    }
+
+    private void sendInvalidUsage(Player player, String usage) {
+        player.sendMessage(color(msg("messages.plot.error.invalid-usage", "&cInvalid usage: {0}", usage)));
+    }
+
+    private String msg(String path, String fallback, Object... args) {
+        String template = plugin.getConfig().getString(path, fallback);
+        return java.text.MessageFormat.format(template == null ? fallback : template, args == null ? new Object[0] : args);
+    }
+
+    private String color(String message) {
+        return ChatColor.translateAlternateColorCodes('&', message);
     }
 }
