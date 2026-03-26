@@ -5,6 +5,7 @@ import de.streuland.commands.PlotPriceCommand;
 import de.streuland.commands.PlotBackupCommand;
 import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.commands.PlotTeamCommand;
+import de.streuland.commands.PlotUpgradeCommand;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.approval.PlotApprovalRequest;
 import de.streuland.approval.PlotApprovalService;
@@ -86,6 +87,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
     private final PlotFlagManager plotFlagManager;
+    private final PlotUpgradeCommand plotUpgradeCommand;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final PlotMergeCommand plotMergeCommand;
     private final long deleteConfirmTimeoutMs;
@@ -97,7 +99,7 @@ public class PlotCommandExecutor implements CommandExecutor {
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
-                               PlotFlagManager plotFlagManager) {
+                               PlotFlagManager plotFlagManager, PlotUpgradeCommand plotUpgradeCommand) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -115,6 +117,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
         this.plotFlagManager = plotFlagManager;
+        this.plotUpgradeCommand = plotUpgradeCommand;
         this.pendingDeletes = new HashMap<>();
         this.plotMergeCommand = new PlotMergeCommand(new PlotMergeService(plugin, plotManager));
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
@@ -212,6 +215,9 @@ public class PlotCommandExecutor implements CommandExecutor {
                 return handleDashboardUrl(player, args);
             case "flag":
                 return handleFlag(player, args);
+            case "upgrade":
+            case "upgrades":
+                return plotUpgradeCommand.handle(player, args);
             default:
                 if ("template".equals(subcommand)) {
                     return plotSchematicCommand.handle(player, args);
@@ -716,6 +722,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
         player.sendMessage("§e/plot dashboard url§f - Zeige den Web-Dashboard Link");
         player.sendMessage("§e/plot flag <name> <on|off|default> [plotId]§f - Setzt Plot-Flags");
+        player.sendMessage("§e/plot upgrade|upgrades|upgrade buy <id>§f - Verwalte Plot-Upgrades");
     }
 
 

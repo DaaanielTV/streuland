@@ -2,9 +2,7 @@ package de.streuland.plot.upgrade;
 
 public enum PlotUpgradeType {
     SIZE_EXPANSION,
-    BIOME_SELECTION,
-    BORDER_STYLE,
-    LIGHTING_THEME,
-    PARTICLE_EFFECT,
-    GAMEPLAY_RULE
+    TRUSTED_MEMBERS,
+    AUTO_CLEANUP,
+    COSMETIC_TITLE_EFFECT
 }

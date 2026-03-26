@@ -5,6 +5,7 @@ import de.streuland.admin.BlockChangeLogger;
 import de.streuland.admin.DailyPlotBackupService;
 import de.streuland.backup.SnapshotService;
 import de.streuland.commands.PlotPortalCommand;
+import de.streuland.commands.PlotUpgradeCommand;
 import de.streuland.commands.PlotSchematicCommand;
 import de.streuland.command.PlotCommandExecutor;
 import de.streuland.commands.PlotApprovalCommand;
@@ -44,6 +45,12 @@ import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.biome.BiomeEffectScheduler;
 import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.plot.market.PlotMarketService;
+import de.streuland.plot.upgrade.DefaultPlotUpgradeService;
+import de.streuland.plot.upgrade.PlotOwnershipResolver;
+import de.streuland.plot.upgrade.PlotStorageBackedUpgradeStorage;
+import de.streuland.plot.upgrade.PlotUpgradeService;
+import de.streuland.plot.upgrade.PlotUpgradeTree;
+import de.streuland.plot.upgrade.YamlPlotUpgradeCatalog;
 import de.streuland.pricing.PricingEngine;
 import de.streuland.commands.PlotPriceCommand;
 import de.streuland.commands.PlotMarketCommand;
@@ -67,6 +74,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import net.milkbowl.vault.economy.Economy;
 
 import java.nio.file.Path;
+import java.io.File;
 
 /**
  * Streuland Main Plugin Class
@@ -110,6 +118,7 @@ public class StreulandPlugin extends JavaPlugin {
     private JournalManager journalManager;
     private ParticleEffectScheduler particleEffectScheduler;
     private PlotFlagManager plotFlagManager;
+    private PlotUpgradeService plotUpgradeService;
     private WorldGuardCompat worldGuardCompat;
     
     @Override
@@ -242,7 +251,20 @@ public class StreulandPlugin extends JavaPlugin {
             SchematicPaster schematicPaster = new SchematicPaster(this);
             PlotSchematicCommand plotSchematicCommand = new PlotSchematicCommand(schematicLoader, schematicPreview, schematicPaster);
 
-            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotFlagManager);
+            saveResource("plot-upgrades.yml", false);
+            PlotUpgradeTree upgradeTree = YamlPlotUpgradeCatalog.load(new File(getDataFolder(), "plot-upgrades.yml"));
+            PlotOwnershipResolver ownershipResolver = (plotId, playerId) -> {
+                de.streuland.plot.Plot plot = plotManager.getStorage(plotManager.getWorldForPlot(plotId)).getPlot(plotId);
+                return plot != null && playerId != null && playerId.equals(plot.getOwner());
+            };
+            plotUpgradeService = new DefaultPlotUpgradeService(
+                    upgradeTree,
+                    new PlotStorageBackedUpgradeStorage(plotManager.getStorage()),
+                    plotEconomyHook,
+                    ownershipResolver
+            );
+            PlotUpgradeCommand plotUpgradeCommand = new PlotUpgradeCommand(plotManager, plotUpgradeService);
+            PlotCommandExecutor commandExecutor = new PlotCommandExecutor(this, plotManager, pathGenerator, snapshotManager, ruleEngine, plotSkinService, biomeBonusService, neighborhoodService, questService, questTracker, plotMarketService, adminPlotService, analyticsService, traderNpcService, seasonalWeatherService, plotFlagManager, plotUpgradeCommand);
             getCommand("plot").setExecutor(commandExecutor);
             if (getCommand("plotapprove") != null) {
                 getCommand("plotapprove").setExecutor(new PlotApprovalCommand(plotApprovalService));
