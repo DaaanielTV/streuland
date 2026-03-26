@@ -20,6 +20,9 @@ commands:
   plotapprove:
     description: Manage pending plot approvals
     usage: /plotapprove <list|approve|reject> <id>
+  streuland:
+    description: Admin diagnostics and maintenance
+    usage: /streuland <debug|reload|scan|repair>
 
 softdepend:
   - Vault
@@ -38,6 +41,9 @@ permissions:
 
   streuland.admin:
     description: Grants admin-level dashboard controls
+    default: op
+  streuland.admin.diagnostics:
+    description: Allows diagnostics and maintenance commands
     default: op
 
   streuland.plot.approval:

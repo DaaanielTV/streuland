@@ -479,11 +479,40 @@ public class PlotManager {
 
     public PlotStorage getStorage(World world) { return contextFor(world).storage; }
     public PlotStorage getStorage() { return getStorage(getWorld()); }
+    public PlotStorage getStorage(String worldName) {
+        WorldContext ctx = contexts.get(worldName);
+        if (ctx == null) {
+            throw new IllegalArgumentException("Unknown managed world: " + worldName);
+        }
+        return ctx.storage;
+    }
 
     public SpatialGrid getSpatialGrid(World world) { return contextFor(world).spatialGrid; }
     public SpatialGrid getSpatialGrid() { return getSpatialGrid(getWorld()); }
+    public SpatialGrid getSpatialGrid(String worldName) {
+        WorldContext ctx = contexts.get(worldName);
+        if (ctx == null) {
+            throw new IllegalArgumentException("Unknown managed world: " + worldName);
+        }
+        return ctx.spatialGrid;
+    }
 
     public Collection<String> getManagedWorlds() { return new ArrayList<>(contexts.keySet()); }
+
+    public void reloadWorld(String worldName) {
+        WorldContext ctx = contexts.get(worldName);
+        if (ctx == null) {
+            throw new IllegalArgumentException("Unknown managed world: " + worldName);
+        }
+        ctx.storage.reload();
+        ctx.spatialGrid.rebuild(ctx.storage.getAllPlots());
+    }
+
+    public void reloadAllWorlds() {
+        for (String worldName : contexts.keySet()) {
+            reloadWorld(worldName);
+        }
+    }
 
     public void generateUnclaimedPlots(World world, int gridSize, int spacing) {
         WorldContext ctx = contextFor(world);

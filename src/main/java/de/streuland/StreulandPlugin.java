@@ -10,9 +10,11 @@ import de.streuland.command.PlotCommandExecutor;
 import de.streuland.commands.PlotApprovalCommand;
 import de.streuland.commands.PlotBackupCommand;
 import de.streuland.command.DistrictCommandExecutor;
+import de.streuland.command.StreulandCommandExecutor;
 import de.streuland.history.PlotChangeJournal;
 import de.streuland.history.JournalManager;
 import de.streuland.commands.PlotHistoryCommand;
+import de.streuland.admin.StreulandDiagnosticsService;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.district.DistrictClusterService;
 import de.streuland.discord.DiscordNotifier;
@@ -250,6 +252,9 @@ public class StreulandPlugin extends JavaPlugin {
 
             // Register district command
             getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager, messageProvider));
+            if (getCommand("streuland") != null) {
+                getCommand("streuland").setExecutor(new StreulandCommandExecutor(plotManager, new StreulandDiagnosticsService(plotManager, getLogger())));
+            }
             getLogger().info("✓ Commands registered");
 
             dailyPlotBackupService = new DailyPlotBackupService(this, snapshotService);
