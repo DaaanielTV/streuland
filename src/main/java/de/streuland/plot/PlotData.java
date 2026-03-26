@@ -1,13 +1,13 @@
 package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
-import de.streuland.plot.upgrade.PlotProgressionState;
 import de.streuland.quest.QuestProgress;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
@@ -26,6 +26,19 @@ public class PlotData {
     private final Map<String, QuestProgress> questProgress;
     private final Map<String, Boolean> flagOverrides;
 
+    private boolean featured;
+    private boolean publicVisitEnabled;
+    private String showcaseTitle;
+    private String showcaseDescription;
+    private final Set<String> showcaseTags;
+    private int showcaseSpawnX;
+    private int showcaseSpawnY;
+    private int showcaseSpawnZ;
+
+    private String selectedBiome;
+    private boolean weatherLocked;
+    private final Map<String, String> environmentCosmetics;
+
     public PlotData() {
         this(PlotTheme.NATURE);
     }
@@ -38,6 +51,11 @@ public class PlotData {
         this.statBonuses = new HashMap<>();
         this.questProgress = new HashMap<>();
         this.flagOverrides = new HashMap<>();
+        this.showcaseTags = new LinkedHashSet<>();
+        this.showcaseTitle = "";
+        this.showcaseDescription = "";
+        this.selectedBiome = "";
+        this.environmentCosmetics = new LinkedHashMap<>();
     }
 
     public PlotTheme getTheme() { return theme; }
@@ -49,16 +67,21 @@ public class PlotData {
     public Map<String, Double> getStatBonuses() { return statBonuses; }
     public Map<String, QuestProgress> getQuestProgress() { return questProgress; }
     public Map<String, Boolean> getFlagOverrides() { return flagOverrides; }
+
     public boolean isFeatured() { return featured; }
     public void setFeatured(boolean featured) { this.featured = featured; }
 
     public boolean isPublicVisitEnabled() { return publicVisitEnabled; }
     public void setPublicVisitEnabled(boolean publicVisitEnabled) { this.publicVisitEnabled = publicVisitEnabled; }
+
     public String getShowcaseTitle() { return showcaseTitle; }
     public void setShowcaseTitle(String showcaseTitle) { this.showcaseTitle = normalizeText(showcaseTitle, 64); }
+
     public String getShowcaseDescription() { return showcaseDescription; }
     public void setShowcaseDescription(String showcaseDescription) { this.showcaseDescription = normalizeText(showcaseDescription, 280); }
+
     public Set<String> getShowcaseTags() { return Collections.unmodifiableSet(showcaseTags); }
+
     public void setShowcaseTags(Set<String> tags) {
         showcaseTags.clear();
         if (tags != null) {
@@ -70,26 +93,51 @@ public class PlotData {
             }
         }
     }
+
     public void setShowcaseTagsFromText(String rawTags) {
         if (rawTags == null || rawTags.trim().isEmpty()) {
-            setShowcaseTags(Collections.<String>emptySet());
+            setShowcaseTags(Collections.emptySet());
             return;
         }
         setShowcaseTags(Arrays.stream(rawTags.split(","))
                 .map(String::trim)
                 .collect(Collectors.toCollection(LinkedHashSet::new)));
     }
+
     public String getShowcaseTagsAsText() { return String.join(", ", showcaseTags); }
+
     public int getShowcaseSpawnX() { return showcaseSpawnX; }
     public int getShowcaseSpawnY() { return showcaseSpawnY; }
     public int getShowcaseSpawnZ() { return showcaseSpawnZ; }
+
     public void setShowcaseSpawn(int x, int y, int z) {
         this.showcaseSpawnX = x;
         this.showcaseSpawnY = y;
         this.showcaseSpawnZ = z;
     }
+
     public boolean hasCustomShowcaseSpawn() {
         return showcaseSpawnX != 0 || showcaseSpawnY != 0 || showcaseSpawnZ != 0;
+    }
+
+    public String getSelectedBiome() {
+        return selectedBiome;
+    }
+
+    public void setSelectedBiome(String selectedBiome) {
+        this.selectedBiome = selectedBiome == null ? "" : selectedBiome.trim().toUpperCase(Locale.ROOT);
+    }
+
+    public boolean isWeatherLocked() {
+        return weatherLocked;
+    }
+
+    public void setWeatherLocked(boolean weatherLocked) {
+        this.weatherLocked = weatherLocked;
+    }
+
+    public Map<String, String> getEnvironmentCosmetics() {
+        return environmentCosmetics;
     }
 
     private static String normalizeText(String input, int maxLength) {
@@ -103,13 +151,5 @@ public class PlotData {
     private static String normalizeTag(String input) {
         String tag = normalizeText(input, 24).toLowerCase(Locale.ROOT).replace(' ', '-');
         return tag.replaceAll("[^a-z0-9:_-]", "");
-    }
-
-    public Map<String, QuestProgress> getQuestProgress() {
-        return questProgress;
-    }
-
-    public Map<String, Boolean> getFlagOverrides() {
-        return flagOverrides;
     }
 }

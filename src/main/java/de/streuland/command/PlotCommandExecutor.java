@@ -24,6 +24,7 @@ import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
 import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.plot.biome.BiomeRuleSet;
+import de.streuland.plot.environment.PlotEnvironmentService;
 import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.skin.PlotTheme;
 import de.streuland.plot.snapshot.SnapshotManager;
@@ -86,6 +87,7 @@ public class PlotCommandExecutor implements CommandExecutor {
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
     private final PlotFlagManager plotFlagManager;
+    private final PlotEnvironmentService plotEnvironmentService;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final PlotMergeCommand plotMergeCommand;
     private final long deleteConfirmTimeoutMs;
@@ -115,6 +117,7 @@ public class PlotCommandExecutor implements CommandExecutor {
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
         this.plotFlagManager = plotFlagManager;
+        this.plotEnvironmentService = new PlotEnvironmentService(plotManager, plugin.getConfig());
         this.pendingDeletes = new HashMap<>();
         this.plotMergeCommand = new PlotMergeCommand(new PlotMergeService(plugin, plotManager));
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
@@ -591,8 +594,35 @@ public class PlotCommandExecutor implements CommandExecutor {
     }
 
     private boolean handleBiomeBonus(Player player, String[] args) {
-        if (args.length < 2 || !"bonus".equalsIgnoreCase(args[1])) {
-            player.sendMessage("§cVerwendung: /plot biome bonus");
+        if (args.length < 2) {
+            player.sendMessage("§cVerwendung: /plot biome <bonus|set>");
+            return true;
+        }
+        if ("set".equalsIgnoreCase(args[1])) {
+            if (args.length < 3) {
+                player.sendMessage("§cVerwendung: /plot biome set <biome>");
+                return true;
+            }
+            Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+            PlotEnvironmentService.ChangeResult result = plotEnvironmentService.setBiome(plot, player.getUniqueId(),
+                    player.hasPermission(PlotEnvironmentService.PERMISSION_MANAGE), args[2]);
+            if (result == PlotEnvironmentService.ChangeResult.SUCCESS) {
+                player.sendMessage("§aBiome gesetzt: §f" + args[2].toUpperCase(Locale.ROOT));
+            } else if (result == PlotEnvironmentService.ChangeResult.BIOME_NOT_ALLOWED) {
+                player.sendMessage("§cBiome nicht erlaubt. Erlaubt: §f" + plotEnvironmentService.getAllowedBiomes());
+            } else if (result == PlotEnvironmentService.ChangeResult.UPGRADE_REQUIRED) {
+                player.sendMessage("§cDu benötigst ein Plot-Upgrade für diese Funktion.");
+            } else if (result == PlotEnvironmentService.ChangeResult.MISSING_PERMISSION) {
+                player.sendMessage("§cKeine Berechtigung: " + PlotEnvironmentService.PERMISSION_MANAGE);
+            } else if (result == PlotEnvironmentService.ChangeResult.NOT_OWNER) {
+                player.sendMessage("§cNur der Plot-Besitzer kann die Umgebung ändern.");
+            } else {
+                player.sendMessage("§cUngültiges Biom oder kein beanspruchtes Plot.");
+            }
+            return true;
+        }
+        if (!"bonus".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§cVerwendung: /plot biome <bonus|set>");
             return true;
         }
         Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
@@ -614,8 +644,32 @@ public class PlotCommandExecutor implements CommandExecutor {
 
 
     private boolean handleWeather(Player player, String[] args) {
-        if (args.length < 2 || !"current".equalsIgnoreCase(args[1])) {
-            player.sendMessage("§cVerwendung: /plot weather current");
+        if (args.length < 2) {
+            player.sendMessage("§cVerwendung: /plot weather <current|lock|unlock>");
+            return true;
+        }
+
+        if ("lock".equalsIgnoreCase(args[1]) || "unlock".equalsIgnoreCase(args[1])) {
+            boolean lock = "lock".equalsIgnoreCase(args[1]);
+            Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+            PlotEnvironmentService.ChangeResult result = plotEnvironmentService.lockWeather(plot, player.getUniqueId(),
+                    player.hasPermission(PlotEnvironmentService.PERMISSION_MANAGE), lock);
+            if (result == PlotEnvironmentService.ChangeResult.SUCCESS) {
+                player.sendMessage(lock ? "§aPlot-Wetter fixiert." : "§aPlot-Wetter wieder dynamisch.");
+            } else if (result == PlotEnvironmentService.ChangeResult.UPGRADE_REQUIRED) {
+                player.sendMessage("§cDu benötigst ein Plot-Upgrade für diese Funktion.");
+            } else if (result == PlotEnvironmentService.ChangeResult.MISSING_PERMISSION) {
+                player.sendMessage("§cKeine Berechtigung: " + PlotEnvironmentService.PERMISSION_MANAGE);
+            } else if (result == PlotEnvironmentService.ChangeResult.NOT_OWNER) {
+                player.sendMessage("§cNur der Plot-Besitzer kann das Wetter verwalten.");
+            } else {
+                player.sendMessage("§cDu stehst in keinem beanspruchten Plot.");
+            }
+            return true;
+        }
+
+        if (!"current".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§cVerwendung: /plot weather <current|lock|unlock>");
             return true;
         }
 
@@ -700,7 +754,8 @@ public class PlotCommandExecutor implements CommandExecutor {
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
         player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
-        player.sendMessage("§e/plot weather current§f - Zeigt aktuelle Saison-Effekte");
+        player.sendMessage("§e/plot biome set <biome>§f - Setzt Plot-Biom innerhalb sicherer Grenzen");
+        player.sendMessage("§e/plot weather <current|lock|unlock>§f - Saisonstatus und Plot-Wettersteuerung");
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
         player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
         player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots"

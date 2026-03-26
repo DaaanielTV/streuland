@@ -86,6 +86,9 @@ public class PlotStorage {
         config.set("rewards.cosmetics", new ArrayList<>(data.getCosmeticInventory()));
         config.set("rewards.stats", new HashMap<>(data.getStatBonuses()));
         config.set("flags", new HashMap<>(data.getFlagOverrides()));
+        config.set("environment.selectedBiome", data.getSelectedBiome());
+        config.set("environment.weatherLocked", data.isWeatherLocked());
+        config.set("environment.cosmetics", new HashMap<>(data.getEnvironmentCosmetics()));
 
         for (Map.Entry<String, QuestProgress> entry : data.getQuestProgress().entrySet()) {
             String base = "quests.progress." + entry.getKey();
@@ -142,6 +145,13 @@ public class PlotStorage {
                         config.getInt("showcase.spawn.x", 0),
                         config.getInt("showcase.spawn.y", 0),
                         config.getInt("showcase.spawn.z", 0));
+                data.setSelectedBiome(config.getString("environment.selectedBiome", ""));
+                data.setWeatherLocked(config.getBoolean("environment.weatherLocked", false));
+                if (config.isConfigurationSection("environment.cosmetics")) {
+                    for (String key : config.getConfigurationSection("environment.cosmetics").getKeys(false)) {
+                        data.getEnvironmentCosmetics().put(key, config.getString("environment.cosmetics." + key, ""));
+                    }
+                }
                 if (config.isConfigurationSection("rewards.stats")) {
                     for (String key : config.getConfigurationSection("rewards.stats").getKeys(false)) {
                         data.getStatBonuses().put(key, config.getDouble("rewards.stats." + key));
@@ -448,6 +458,9 @@ public class PlotStorage {
         }
         copy.getFlagOverrides().putAll(source.getFlagOverrides());
         copy.setFeatured(source.isFeatured());
+        copy.setSelectedBiome(source.getSelectedBiome());
+        copy.setWeatherLocked(source.isWeatherLocked());
+        copy.getEnvironmentCosmetics().putAll(source.getEnvironmentCosmetics());
         return copy;
     }
 
