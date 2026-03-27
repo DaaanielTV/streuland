@@ -9,7 +9,7 @@ api-version: 1.13
 commands:
   plot:
     description: Main plot command
-    usage: /plot <help|create|claim|info|nearby|tp|last|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|flag>
+    usage: /plot <help|create|claim|info|trust|untrust|home|list|style|biome|weather|neighbor|quest|market|upgrade|upgrades|trader|inspect|admin|unclaim|delete|confirm|cancel|generate|stats|dashboard|flag>
     aliases:
       - p
   district:
@@ -20,6 +20,9 @@ commands:
   plotapprove:
     description: Manage pending plot approvals
     usage: /plotapprove <list|approve|reject> <id>
+  streuland:
+    description: Admin diagnostics and maintenance
+    usage: /streuland <debug|reload|scan|repair>
 
 softdepend:
   - Vault
@@ -39,10 +42,16 @@ permissions:
   streuland.admin:
     description: Grants admin-level dashboard controls
     default: op
+  streuland.admin.diagnostics:
+    description: Allows diagnostics and maintenance commands
+    default: op
 
   streuland.plot.approval:
     description: Allows managing pending plot approvals
     default: op
+  streuland.plot.environment.manage:
+    description: Allows changing biome/weather environment settings on owned plots
+    default: true
   streuland.portal.admin:
     description: Allows managing plot portals everywhere
     default: op
@@ -61,4 +70,7 @@ permissions:
     default: true
   streuland.market.bid:
     description: Allows bidding in plot auctions
+    default: true
+  streuland.plot.upgrade:
+    description: Allows buying and listing plot upgrades
     default: true

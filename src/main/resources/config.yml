@@ -32,6 +32,35 @@ plot:
 
   # Cooldown in seconds for /plot teleport <world> <plot_id>
   world-teleport-cooldown-seconds: 15
+  environment:
+    # Permission+ownership gated environment customization
+    minimum-upgrade-level: 0
+    # Optional ability token from quest/upgrades (empty disables ability gate)
+    required-ability: ""
+    # Allowed biome options for /plot biome set; empty list means all Bukkit biomes
+    biome-options:
+      - PLAINS
+      - FOREST
+      - CHERRY_GROVE
+      - DESERT
+      - JUNGLE
+      - SNOWY_PLAINS
+    # Keep a border around plot edges untouched to avoid path/protection breakage
+    protected-path-border: 2
+    # Vertical biome update range
+    biome-apply-min-y: 0
+    biome-apply-max-y: 319
+
+# Player-driven market configuration
+market:
+  # Percentage fee charged on each sale (0.05 = 5%)
+  tax-rate: 0.05
+  # Additional flat fee per sale
+  flat-fee: 0.0
+  # Requires buy confirmation when price is >= threshold
+  confirmation-threshold: 25000.0
+  # Plot IDs that can never be sold via /plot sell
+  blocked-plot-ids: []
 
 # Path settings
 path:
@@ -226,6 +255,8 @@ dashboard:
   port: 8080
   websocket-port: 8081
   heatmap-cell-size: 64
+  auth:
+    token: "change-me-dashboard-token"
 
 # Dynamic seasonal weather system
 weather:

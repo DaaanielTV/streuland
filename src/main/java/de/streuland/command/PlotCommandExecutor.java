@@ -5,6 +5,7 @@ import de.streuland.commands.PlotPriceCommand;
 import de.streuland.commands.PlotBackupCommand;
 import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.commands.PlotTeamCommand;
+import de.streuland.commands.PlotUpgradeCommand;
 import de.streuland.analytics.PlotAnalyticsService;
 import de.streuland.approval.PlotApprovalRequest;
 import de.streuland.approval.PlotApprovalService;
@@ -24,6 +25,7 @@ import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
 import de.streuland.plot.biome.BiomeBonusService;
 import de.streuland.plot.biome.BiomeRuleSet;
+import de.streuland.plot.environment.PlotEnvironmentService;
 import de.streuland.plot.skin.PlotSkinService;
 import de.streuland.plot.skin.PlotTheme;
 import de.streuland.plot.snapshot.SnapshotManager;
@@ -74,6 +76,20 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         }
     }
 
+    private static class RestoreConfirmation {
+        private final String plotId;
+        private final String snapshotId;
+        private final boolean delayed;
+        private final long expiresAt;
+
+        private RestoreConfirmation(String plotId, String snapshotId, boolean delayed, long expiresAt) {
+            this.plotId = plotId;
+            this.snapshotId = snapshotId;
+            this.delayed = delayed;
+            this.expiresAt = expiresAt;
+        }
+    }
+
     private final JavaPlugin plugin;
     private final PlotManager plotManager;
     private final PathGenerator pathGenerator;
@@ -91,9 +107,12 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
     private final TraderNpcService traderNpcService;
     private final SeasonalWeatherService seasonalWeatherService;
     private final PlotFlagManager plotFlagManager;
+    private final PlotUpgradeCommand plotUpgradeCommand;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
+    private final Map<UUID, RestoreConfirmation> pendingRestores;
     private final PlotMergeCommand plotMergeCommand;
     private final long deleteConfirmTimeoutMs;
+    private final long restoreConfirmTimeoutMs;
     private final Map<UUID, Long> worldTeleportCooldowns;
     private final Map<UUID, String> lastVisitedPlotIds;
     
@@ -103,7 +122,7 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
                                QuestService questService, QuestTracker questTracker, PlotMarketService plotMarketService,
                                AdminPlotService adminPlotService, PlotAnalyticsService plotAnalyticsService,
                                TraderNpcService traderNpcService, SeasonalWeatherService seasonalWeatherService,
-                               PlotFlagManager plotFlagManager) {
+                               PlotFlagManager plotFlagManager, PlotUpgradeCommand plotUpgradeCommand) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.pathGenerator = pathGenerator;
@@ -121,9 +140,12 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
         this.plotFlagManager = plotFlagManager;
+        this.plotUpgradeCommand = plotUpgradeCommand;
         this.pendingDeletes = new HashMap<>();
+        this.pendingRestores = new HashMap<>();
         this.plotMergeCommand = new PlotMergeCommand(new PlotMergeService(plugin, plotManager));
         this.deleteConfirmTimeoutMs = plugin.getConfig().getLong("plot.delete-confirm-timeout-seconds", 30L) * 1000L;
+        this.restoreConfirmTimeoutMs = plugin.getConfig().getLong("plot.restore-confirm-timeout-seconds", 30L) * 1000L;
         this.worldTeleportCooldowns = new HashMap<>();
         this.lastVisitedPlotIds = new HashMap<>();
     }
@@ -167,6 +189,8 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
             case "snapshots":
                 return handleSnapshot(player, new String[]{"snapshot", "list"});
             case "rollback":
+                return handleSnapshot(player, prependSnapshotRestore(args));
+            case "restore":
                 return handleSnapshot(player, prependSnapshotRestore(args));
             case "rules":
                 return handleRules(player, args);
@@ -225,6 +249,9 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
                 return handleDashboardUrl(player, args);
             case "flag":
                 return handleFlag(player, args);
+            case "upgrade":
+            case "upgrades":
+                return plotUpgradeCommand.handle(player, args);
             default:
                 if ("template".equals(subcommand)) {
                     return plotSchematicCommand.handle(player, args);
@@ -676,8 +703,35 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
     }
 
     private boolean handleBiomeBonus(Player player, String[] args) {
-        if (args.length < 2 || !"bonus".equalsIgnoreCase(args[1])) {
-            player.sendMessage("§cVerwendung: /plot biome bonus");
+        if (args.length < 2) {
+            player.sendMessage("§cVerwendung: /plot biome <bonus|set>");
+            return true;
+        }
+        if ("set".equalsIgnoreCase(args[1])) {
+            if (args.length < 3) {
+                player.sendMessage("§cVerwendung: /plot biome set <biome>");
+                return true;
+            }
+            Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+            PlotEnvironmentService.ChangeResult result = plotEnvironmentService.setBiome(plot, player.getUniqueId(),
+                    player.hasPermission(PlotEnvironmentService.PERMISSION_MANAGE), args[2]);
+            if (result == PlotEnvironmentService.ChangeResult.SUCCESS) {
+                player.sendMessage("§aBiome gesetzt: §f" + args[2].toUpperCase(Locale.ROOT));
+            } else if (result == PlotEnvironmentService.ChangeResult.BIOME_NOT_ALLOWED) {
+                player.sendMessage("§cBiome nicht erlaubt. Erlaubt: §f" + plotEnvironmentService.getAllowedBiomes());
+            } else if (result == PlotEnvironmentService.ChangeResult.UPGRADE_REQUIRED) {
+                player.sendMessage("§cDu benötigst ein Plot-Upgrade für diese Funktion.");
+            } else if (result == PlotEnvironmentService.ChangeResult.MISSING_PERMISSION) {
+                player.sendMessage("§cKeine Berechtigung: " + PlotEnvironmentService.PERMISSION_MANAGE);
+            } else if (result == PlotEnvironmentService.ChangeResult.NOT_OWNER) {
+                player.sendMessage("§cNur der Plot-Besitzer kann die Umgebung ändern.");
+            } else {
+                player.sendMessage("§cUngültiges Biom oder kein beanspruchtes Plot.");
+            }
+            return true;
+        }
+        if (!"bonus".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§cVerwendung: /plot biome <bonus|set>");
             return true;
         }
         Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
@@ -699,8 +753,32 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
 
 
     private boolean handleWeather(Player player, String[] args) {
-        if (args.length < 2 || !"current".equalsIgnoreCase(args[1])) {
-            player.sendMessage("§cVerwendung: /plot weather current");
+        if (args.length < 2) {
+            player.sendMessage("§cVerwendung: /plot weather <current|lock|unlock>");
+            return true;
+        }
+
+        if ("lock".equalsIgnoreCase(args[1]) || "unlock".equalsIgnoreCase(args[1])) {
+            boolean lock = "lock".equalsIgnoreCase(args[1]);
+            Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+            PlotEnvironmentService.ChangeResult result = plotEnvironmentService.lockWeather(plot, player.getUniqueId(),
+                    player.hasPermission(PlotEnvironmentService.PERMISSION_MANAGE), lock);
+            if (result == PlotEnvironmentService.ChangeResult.SUCCESS) {
+                player.sendMessage(lock ? "§aPlot-Wetter fixiert." : "§aPlot-Wetter wieder dynamisch.");
+            } else if (result == PlotEnvironmentService.ChangeResult.UPGRADE_REQUIRED) {
+                player.sendMessage("§cDu benötigst ein Plot-Upgrade für diese Funktion.");
+            } else if (result == PlotEnvironmentService.ChangeResult.MISSING_PERMISSION) {
+                player.sendMessage("§cKeine Berechtigung: " + PlotEnvironmentService.PERMISSION_MANAGE);
+            } else if (result == PlotEnvironmentService.ChangeResult.NOT_OWNER) {
+                player.sendMessage("§cNur der Plot-Besitzer kann das Wetter verwalten.");
+            } else {
+                player.sendMessage("§cDu stehst in keinem beanspruchten Plot.");
+            }
+            return true;
+        }
+
+        if (!"current".equalsIgnoreCase(args[1])) {
+            player.sendMessage("§cVerwendung: /plot weather <current|lock|unlock>");
             return true;
         }
 
@@ -785,12 +863,14 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
         player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle"
         );
+        player.sendMessage("§e/plot restore <snapshotId|confirm>§f - Rollback mit Bestätigung");
         player.sendMessage("§e/plot backup <take|list|restore> <plotId> [snapshotId]§f - Schematic Backups");
         player.sendMessage(" ");
         player.sendMessage("§e/plot rules reload§f - Regeln neu laden");
         player.sendMessage("§e/plot style set <theme>§f - Setze das Plot-Theme");
         player.sendMessage("§e/plot biome bonus§f - Zeigt aktive Biom-Boni");
-        player.sendMessage("§e/plot weather current§f - Zeigt aktuelle Saison-Effekte");
+        player.sendMessage("§e/plot biome set <biome>§f - Setzt Plot-Biom innerhalb sicherer Grenzen");
+        player.sendMessage("§e/plot weather <current|lock|unlock>§f - Saisonstatus und Plot-Wettersteuerung");
         player.sendMessage("§e/plot neighbor <add|list|map>§f - Nachbarschaftshandel verwalten");
         player.sendMessage("§e/plot quest <list|progress>§f - Quest-Übersicht und Fortschritt");
         player.sendMessage("§e/plot market <list|sell|buy|history>§f - Spieler-Marktplatz für Plots"
@@ -806,6 +886,7 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         player.sendMessage("§e/plot admin <rollback|log> ...§f - Admin-Tools für Logs und Rollbacks");
         player.sendMessage("§e/plot dashboard url§f - Zeige den Web-Dashboard Link");
         player.sendMessage("§e/plot flag <name> <on|off|default> [plotId]§f - Setzt Plot-Flags");
+        player.sendMessage("§e/plot upgrade|upgrades|upgrade buy <id>§f - Verwalte Plot-Upgrades");
     }
 
 
@@ -980,22 +1061,68 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         }
         if ("restore".equals(action)) {
             if (args.length < 3) {
-                player.sendMessage("§cVerwendung: /plot snapshot restore <id> [instant]");
-                player.sendMessage("§7Oder nutze: /plot rollback <id>");
+                player.sendMessage("§cVerwendung: /plot snapshot restore <id|confirm> [instant]");
+                player.sendMessage("§7Aliase: /plot rollback <id>, /plot restore <id>");
                 return true;
             }
+            if ("confirm".equalsIgnoreCase(args[2])) {
+                return handleRestoreConfirm(player, plot);
+            }
+
             String snapshotId = args[2];
             boolean delayed = args.length < 4 || !args[3].equalsIgnoreCase("instant");
-            player.sendMessage("§eSnapshot wird wiederhergestellt...");
-            snapshotManager.restoreSnapshot(plot.getPlotId(), snapshotId, delayed).thenRun(() -> {
-                player.sendMessage("§aSnapshot wiederhergestellt!");
-            }).exceptionally(ex -> {
-                player.sendMessage("§cSnapshot konnte nicht wiederhergestellt werden: " + ex.getMessage());
-                return null;
-            });
+            long expiresAt = System.currentTimeMillis() + restoreConfirmTimeoutMs;
+            pendingRestores.put(player.getUniqueId(), new RestoreConfirmation(plot.getPlotId(), snapshotId, delayed, expiresAt));
+            plugin.getLogger().info("[AUDIT] restore-request player=" + player.getUniqueId() + " plot=" + plot.getPlotId() + " snapshot=" + snapshotId);
+            player.sendMessage("§eRollback für Snapshot §f" + snapshotId + " §ewurde vorbereitet.");
+            player.sendMessage("§eBitte bestätige mit §f/plot restore confirm§e.");
+            player.sendMessage("§7Vor dem Rollback wird automatisch ein Restore-Point erzeugt (Timeout " + (restoreConfirmTimeoutMs / 1000L) + "s).");
             return true;
         }
         player.sendMessage("§cVerwendung: /plot snapshot <create|list|restore>");
+        return true;
+    }
+
+    private boolean handleRestoreConfirm(Player player, Plot currentPlot) {
+        RestoreConfirmation confirmation = pendingRestores.get(player.getUniqueId());
+        if (confirmation == null) {
+            player.sendMessage("§cKeine Rollback-Aktion ausstehend.");
+            return true;
+        }
+        if (!confirmation.plotId.equals(currentPlot.getPlotId())) {
+            player.sendMessage("§cDu musst dich im Ziel-Plot befinden, um den Rollback zu bestätigen.");
+            return true;
+        }
+        if (System.currentTimeMillis() > confirmation.expiresAt) {
+            pendingRestores.remove(player.getUniqueId());
+            player.sendMessage("§cRollback-Bestätigung ist abgelaufen.");
+            return true;
+        }
+
+        pendingRestores.remove(player.getUniqueId());
+        String restorePointNote = "before rollback to " + confirmation.snapshotId;
+        player.sendMessage("§eErstelle Restore-Point vor Rollback...");
+        snapshotManager.createRestorePoint(currentPlot, player.getUniqueId(), player.getName(), restorePointNote)
+                .thenCompose(restorePoint -> {
+                    plugin.getLogger().info("[AUDIT] restore-point-created player=" + player.getUniqueId()
+                            + " plot=" + confirmation.plotId
+                            + " snapshot=" + restorePoint.getId()
+                            + " forTarget=" + confirmation.snapshotId);
+                    player.sendMessage("§7Restore-Point: §f" + restorePoint.getId());
+                    return snapshotManager.restoreSnapshot(confirmation.plotId, confirmation.snapshotId, confirmation.delayed);
+                })
+                .thenRun(() -> {
+                    plugin.getLogger().info("[AUDIT] restore-success player=" + player.getUniqueId() + " plot=" + confirmation.plotId + " snapshot=" + confirmation.snapshotId);
+                    player.sendMessage("§aSnapshot wiederhergestellt!");
+                })
+                .exceptionally(ex -> {
+                    plugin.getLogger().warning("[AUDIT] restore-failed player=" + player.getUniqueId()
+                            + " plot=" + confirmation.plotId
+                            + " snapshot=" + confirmation.snapshotId
+                            + " reason=" + ex.getMessage());
+                    player.sendMessage("§cSnapshot konnte nicht wiederhergestellt werden: " + ex.getMessage());
+                    return null;
+                });
         return true;
     }
 

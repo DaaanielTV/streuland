@@ -86,6 +86,7 @@ public class PlotStorage {
         config.set("rewards.cosmetics", new ArrayList<>(data.getCosmeticInventory()));
         config.set("rewards.stats", new HashMap<>(data.getStatBonuses()));
         config.set("flags", new HashMap<>(data.getFlagOverrides()));
+        config.set("upgrades", PlotUpgradePersistence.serialize(data.getProgressionState()));
 
         for (Map.Entry<String, QuestProgress> entry : data.getQuestProgress().entrySet()) {
             String base = "quests.progress." + entry.getKey();
@@ -142,6 +143,13 @@ public class PlotStorage {
                         config.getInt("showcase.spawn.x", 0),
                         config.getInt("showcase.spawn.y", 0),
                         config.getInt("showcase.spawn.z", 0));
+                data.setSelectedBiome(config.getString("environment.selectedBiome", ""));
+                data.setWeatherLocked(config.getBoolean("environment.weatherLocked", false));
+                if (config.isConfigurationSection("environment.cosmetics")) {
+                    for (String key : config.getConfigurationSection("environment.cosmetics").getKeys(false)) {
+                        data.getEnvironmentCosmetics().put(key, config.getString("environment.cosmetics." + key, ""));
+                    }
+                }
                 if (config.isConfigurationSection("rewards.stats")) {
                     for (String key : config.getConfigurationSection("rewards.stats").getKeys(false)) {
                         data.getStatBonuses().put(key, config.getDouble("rewards.stats." + key));
@@ -151,6 +159,12 @@ public class PlotStorage {
                     for (String key : config.getConfigurationSection("flags").getKeys(false)) {
                         data.getFlagOverrides().put(key, config.getBoolean("flags." + key));
                     }
+                }
+                if (config.isConfigurationSection("upgrades")) {
+                    Map<String, Object> serializedUpgrades = config.getConfigurationSection("upgrades").getValues(true);
+                    data.setProgressionState(PlotUpgradePersistence.deserialize(serializedUpgrades));
+                } else {
+                    data.setProgressionState(PlotProgressionState.initial());
                 }
                 if (config.isConfigurationSection("quests.progress")) {
                     for (String questId : config.getConfigurationSection("quests.progress").getKeys(false)) {
@@ -264,6 +278,18 @@ public class PlotStorage {
 
     public synchronized Collection<Plot> getAllPlots() {
         return new ArrayList<>(cachedPlots.values());
+    }
+
+    public synchronized Set<String> getPlotDataIds() {
+        return new HashSet<>(plotData.keySet());
+    }
+
+    public synchronized boolean deletePlotData(String plotId) {
+        return plotData.remove(plotId) != null;
+    }
+
+    public synchronized void reload() {
+        loadAllPlots();
     }
 
     public synchronized boolean exists(String plotId) {
@@ -447,7 +473,11 @@ public class PlotStorage {
             copy.getQuestProgress().put(entry.getKey(), progress);
         }
         copy.getFlagOverrides().putAll(source.getFlagOverrides());
+        copy.setProgressionState(source.getProgressionState());
         copy.setFeatured(source.isFeatured());
+        copy.setSelectedBiome(source.getSelectedBiome());
+        copy.setWeatherLocked(source.isWeatherLocked());
+        copy.getEnvironmentCosmetics().putAll(source.getEnvironmentCosmetics());
         return copy;
     }
 
