@@ -1,13 +1,13 @@
 package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
-import de.streuland.plot.upgrade.PlotProgressionState;
 import de.streuland.quest.QuestProgress;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
@@ -34,6 +34,19 @@ public class PlotData {
     private int showcaseSpawnY;
     private int showcaseSpawnZ;
     private PlotProgressionState progressionState;
+
+    private boolean featured;
+    private boolean publicVisitEnabled;
+    private String showcaseTitle;
+    private String showcaseDescription;
+    private final Set<String> showcaseTags;
+    private int showcaseSpawnX;
+    private int showcaseSpawnY;
+    private int showcaseSpawnZ;
+
+    private String selectedBiome;
+    private boolean weatherLocked;
+    private final Map<String, String> environmentCosmetics;
 
     public PlotData() {
         this(PlotTheme.NATURE);
@@ -67,16 +80,21 @@ public class PlotData {
     public Map<String, Double> getStatBonuses() { return statBonuses; }
     public Map<String, QuestProgress> getQuestProgress() { return questProgress; }
     public Map<String, Boolean> getFlagOverrides() { return flagOverrides; }
+
     public boolean isFeatured() { return featured; }
     public void setFeatured(boolean featured) { this.featured = featured; }
 
     public boolean isPublicVisitEnabled() { return publicVisitEnabled; }
     public void setPublicVisitEnabled(boolean publicVisitEnabled) { this.publicVisitEnabled = publicVisitEnabled; }
+
     public String getShowcaseTitle() { return showcaseTitle; }
     public void setShowcaseTitle(String showcaseTitle) { this.showcaseTitle = normalizeText(showcaseTitle, 64); }
+
     public String getShowcaseDescription() { return showcaseDescription; }
     public void setShowcaseDescription(String showcaseDescription) { this.showcaseDescription = normalizeText(showcaseDescription, 280); }
+
     public Set<String> getShowcaseTags() { return Collections.unmodifiableSet(showcaseTags); }
+
     public void setShowcaseTags(Set<String> tags) {
         showcaseTags.clear();
         if (tags != null) {
@@ -91,7 +109,7 @@ public class PlotData {
 
     public void setShowcaseTagsFromText(String rawTags) {
         if (rawTags == null || rawTags.trim().isEmpty()) {
-            setShowcaseTags(Collections.<String>emptySet());
+            setShowcaseTags(Collections.emptySet());
             return;
         }
         setShowcaseTags(Arrays.stream(rawTags.split(","))
@@ -100,6 +118,7 @@ public class PlotData {
     }
 
     public String getShowcaseTagsAsText() { return String.join(", ", showcaseTags); }
+
     public int getShowcaseSpawnX() { return showcaseSpawnX; }
     public int getShowcaseSpawnY() { return showcaseSpawnY; }
     public int getShowcaseSpawnZ() { return showcaseSpawnZ; }

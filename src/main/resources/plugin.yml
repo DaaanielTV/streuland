@@ -43,6 +43,9 @@ permissions:
   streuland.plot.approval:
     description: Allows managing pending plot approvals
     default: op
+  streuland.plot.environment.manage:
+    description: Allows changing biome/weather environment settings on owned plots
+    default: true
   streuland.portal.admin:
     description: Allows managing plot portals everywhere
     default: op
