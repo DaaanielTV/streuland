@@ -49,7 +49,21 @@ public class SnapshotService {
         if (!plotOptional.isPresent()) {
             return CompletableFuture.completedFuture(null);
         }
-        return takeSnapshot(plotOptional.get());
+        return takeSnapshot(plotOptional.get(), UUID.randomUUID(), null, "manual");
+    }
+
+    public CompletableFuture<String> createRestorePoint(String plotId, UUID actor, String actorName, String riskyAction) {
+        Optional<Plot> plotOptional = plotManager.getAllPlots().stream()
+                .filter(plot -> plot.getPlotId().equals(plotId))
+                .findFirst();
+        if (!plotOptional.isPresent()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        String note = "restore-point";
+        if (riskyAction != null && !riskyAction.trim().isEmpty()) {
+            note = note + ": " + riskyAction.trim();
+        }
+        return takeSnapshot(plotOptional.get(), actor, actorName, note);
     }
 
     public List<String> listSnapshots(int plotId) {
@@ -67,16 +81,19 @@ public class SnapshotService {
 
     public void runScheduledBackups() {
         for (Plot plot : plotManager.getAllPlots()) {
-            takeSnapshot(plot);
+            takeSnapshot(plot, UUID.randomUUID(), "SYSTEM", "scheduled");
         }
     }
 
-    private CompletableFuture<String> takeSnapshot(Plot plot) {
+    private CompletableFuture<String> takeSnapshot(Plot plot, UUID creator, String authorName, String note) {
         String plotId = plot.getPlotId();
-        return snapshotManager.createSnapshot(plot, UUID.randomUUID())
+        return snapshotManager.createSnapshot(plot, creator, authorName, note)
                 .thenApply(snapshot -> {
                     persistSnapshotArtifacts(plotId, snapshot.getId());
                     enforceRetention(plotId);
+                    plugin.getLogger().info("[AUDIT] Snapshot created plot=" + plotId
+                            + " snapshot=" + snapshot.getId()
+                            + " note=" + (note == null ? "" : note));
                     return snapshot.getId();
                 });
     }
