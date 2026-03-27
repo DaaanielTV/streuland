@@ -280,6 +280,18 @@ public class PlotStorage {
         return new ArrayList<>(cachedPlots.values());
     }
 
+    public synchronized Set<String> getPlotDataIds() {
+        return new HashSet<>(plotData.keySet());
+    }
+
+    public synchronized boolean deletePlotData(String plotId) {
+        return plotData.remove(plotId) != null;
+    }
+
+    public synchronized void reload() {
+        loadAllPlots();
+    }
+
     public synchronized boolean exists(String plotId) {
         return cachedPlots.containsKey(plotId);
     }
