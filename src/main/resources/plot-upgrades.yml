@@ -1,0 +1,72 @@
+upgrades:
+  size_1:
+    type: SIZE_EXPANSION
+    name: "Plot Size I"
+    level: 1
+    cost:
+      vault: 200
+    settings:
+      size: 96
+
+  size_2:
+    type: SIZE_EXPANSION
+    name: "Plot Size II"
+    level: 2
+    cost:
+      vault: 500
+    requirements:
+      - id: size_1
+        level: 1
+    settings:
+      size: 128
+
+  trusted_slots_1:
+    type: TRUSTED_MEMBERS
+    name: "Trusted Slots I"
+    level: 1
+    cost:
+      vault: 150
+    settings:
+      trusted.max: 8
+
+  trusted_slots_2:
+    type: TRUSTED_MEMBERS
+    name: "Trusted Slots II"
+    level: 2
+    cost:
+      vault: 325
+    requirements:
+      - id: trusted_slots_1
+        level: 1
+    settings:
+      trusted.max: 12
+
+  cleanup_speed_1:
+    type: AUTO_CLEANUP
+    name: "Auto Cleanup I"
+    level: 1
+    cost:
+      vault: 180
+    settings:
+      cleanup.interval-seconds: 600
+
+  cleanup_speed_2:
+    type: AUTO_CLEANUP
+    name: "Auto Cleanup II"
+    level: 2
+    cost:
+      vault: 360
+    requirements:
+      - id: cleanup_speed_1
+        level: 1
+    settings:
+      cleanup.interval-seconds: 300
+
+  title_glow_1:
+    type: COSMETIC_TITLE_EFFECT
+    name: "Title Glow"
+    level: 1
+    cost:
+      vault: 250
+    settings:
+      title.effect: GLOW

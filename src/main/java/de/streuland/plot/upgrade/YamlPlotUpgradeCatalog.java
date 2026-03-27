@@ -1,0 +1,77 @@
+package de.streuland.plot.upgrade;
+
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
+
+import java.io.File;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+public final class YamlPlotUpgradeCatalog {
+    private YamlPlotUpgradeCatalog() {
+    }
+
+    public static PlotUpgradeTree load(File file) {
+        FileConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+        return load(yaml);
+    }
+
+    public static PlotUpgradeTree load(FileConfiguration yaml) {
+        PlotUpgradeTree tree = new PlotUpgradeTree();
+        ConfigurationSection upgrades = yaml.getConfigurationSection("upgrades");
+        if (upgrades == null) {
+            return DefaultPlotUpgradeCatalog.create();
+        }
+
+        for (String id : upgrades.getKeys(false)) {
+            ConfigurationSection section = upgrades.getConfigurationSection(id);
+            if (section == null) {
+                continue;
+            }
+
+            PlotUpgradeType type = PlotUpgradeType.valueOf(section.getString("type", "COSMETIC_TITLE_EFFECT").toUpperCase(Locale.ROOT));
+            String displayName = section.getString("name", id);
+            int level = section.getInt("level", 1);
+            double price = section.getDouble("cost.vault", 0D);
+            long cooldown = section.getLong("cost.cooldown-seconds", 0L);
+
+            List<PlotUpgradeRequirement> requirements = new ArrayList<>();
+            for (Map<?, ?> req : section.getMapList("requirements")) {
+                String reqId = String.valueOf(req.getOrDefault("id", ""));
+                int minLevel = ((Number) req.getOrDefault("level", 1)).intValue();
+                if (!reqId.isEmpty()) {
+                    requirements.add(new PlotUpgradeRequirement(reqId, minLevel));
+                }
+            }
+
+            Map<String, String> settings = new LinkedHashMap<>();
+            ConfigurationSection settingsSection = section.getConfigurationSection("settings");
+            if (settingsSection != null) {
+                for (String key : settingsSection.getKeys(true)) {
+                    Object value = settingsSection.get(key);
+                    if (value != null && !(value instanceof ConfigurationSection)) {
+                        settings.put(key, String.valueOf(value));
+                    }
+                }
+            }
+
+            tree.addUpgrade(new PlotUpgradeDefinition(
+                    id,
+                    type,
+                    displayName,
+                    level,
+                    new PlotUpgradeCost(price, Collections.emptyMap(), Duration.ofSeconds(Math.max(0L, cooldown))),
+                    requirements,
+                    settings
+            ));
+        }
+
+        return tree;
+    }
+}
