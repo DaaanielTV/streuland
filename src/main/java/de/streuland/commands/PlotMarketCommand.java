@@ -1,21 +1,36 @@
 package de.streuland.commands;
 
+import de.streuland.market.MarketListing;
 import de.streuland.market.MarketManager;
-import de.streuland.market.PlotSale;
+import de.streuland.market.PlotMarketService;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
 import org.bukkit.entity.Player;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 public class PlotMarketCommand {
-    private final PlotManager plotManager;
-    private final MarketManager marketManager;
+    private static final long CONFIRM_WINDOW_MS = 20_000L;
 
-    public PlotMarketCommand(PlotManager plotManager, MarketManager marketManager) {
+    private record PendingBuy(String plotId, double quotedPrice, long expiresAt) {}
+
+    private final PlotManager plotManager;
+    private final PlotMarketService marketService;
+    private final Map<UUID, PendingBuy> pendingBuys = new HashMap<>();
+
+    public PlotMarketCommand(PlotManager plotManager, PlotMarketService marketService) {
         this.plotManager = plotManager;
-        this.marketManager = marketManager;
+        this.marketService = marketService;
+    }
+
+    // Backward-compatible constructor for partially migrated bootstrap code.
+    public PlotMarketCommand(PlotManager plotManager, MarketManager ignoredLegacyManager) {
+        this.plotManager = plotManager;
+        this.marketService = null;
     }
 
     public boolean handle(Player player, String[] args, boolean economyEnabled) {
@@ -23,27 +38,23 @@ public class PlotMarketCommand {
             player.sendMessage("§cEconomy disabled (Vault not available).");
             return true;
         }
-        if (args.length == 0) {
-            player.sendMessage("§cUsage: /plot <sell|buy|auction|bid>");
+        if (marketService == null) {
+            player.sendMessage("§cPlot market service is not initialized.");
             return true;
         }
-        String sub = args[0].toLowerCase(Locale.ROOT);
-        switch (sub) {
-            case "sell":
-                if (!player.hasPermission("streuland.market.sell") && !player.hasPermission("streuland.market.*")) { player.sendMessage("§cKeine Rechte."); return true; }
-                return sell(player, args);
-            case "buy":
-                if (!player.hasPermission("streuland.market.buy") && !player.hasPermission("streuland.market.*")) { player.sendMessage("§cKeine Rechte."); return true; }
-                return buy(player, args);
-            case "auction":
-                if (!player.hasPermission("streuland.market.auction") && !player.hasPermission("streuland.market.*")) { player.sendMessage("§cKeine Rechte."); return true; }
-                return auction(player, args);
-            case "bid":
-                if (!player.hasPermission("streuland.market.bid") && !player.hasPermission("streuland.market.*")) { player.sendMessage("§cKeine Rechte."); return true; }
-                return bid(player, args);
-            default:
-                return false;
+        if (args.length == 0) {
+            player.sendMessage("§cUsage: /plot <sell|unsell|market|buy>");
+            return true;
         }
+
+        String sub = args[0].toLowerCase(Locale.ROOT);
+        return switch (sub) {
+            case "sell" -> sell(player, args);
+            case "unsell" -> unsell(player, args);
+            case "market" -> market(player);
+            case "buy" -> buy(player, args);
+            default -> false;
+        };
     }
 
     private boolean sell(Player player, String[] args) {
@@ -56,18 +67,45 @@ public class PlotMarketCommand {
             player.sendMessage("§cInvalid price.");
             return true;
         }
+
         Plot plot = currentOwnedPlot(player);
         if (plot == null) {
             player.sendMessage("§cYou must stand on your own plot.");
             return true;
         }
-        Integer plotId = parsePlotId(plot.getPlotId());
-        if (plotId == null) {
-            player.sendMessage("§cPlot ID is not market-compatible.");
+
+        PlotMarketService.ListResult result = marketService.listPlot(plot, player.getUniqueId(), price);
+        switch (result) {
+            case OK -> player.sendMessage("§aListed " + plot.getPlotId() + " for " + format(price));
+            case ALREADY_LISTED -> player.sendMessage("§cThis plot is already listed.");
+            case INVALID_PRICE -> player.sendMessage("§cInvalid price.");
+            case NOT_OWNER -> player.sendMessage("§cYou are not the owner.");
+            case PROTECTED_PLOT -> player.sendMessage("§cProtected/system plots cannot be sold.");
+        }
+        return true;
+    }
+
+    private boolean unsell(Player player, String[] args) {
+        Plot owned = currentOwnedPlot(player);
+        if (owned == null) {
+            player.sendMessage("§cYou must stand on your own listed plot to unsell it.");
             return true;
         }
-        marketManager.createSale(new PlotSale(plotId, player.getUniqueId(), price, PlotSale.SaleType.FIXED, 0L, 0D, null));
-        player.sendMessage("§aPlot listed for sale: #" + plotId + " @ " + price);
+        boolean removed = marketService.unlistPlot(owned.getPlotId(), player.getUniqueId());
+        player.sendMessage(removed ? "§aListing removed." : "§cNo active listing found for this plot.");
+        return true;
+    }
+
+    private boolean market(Player player) {
+        List<MarketListing> listings = marketService.getListingsSnapshot();
+        if (listings.isEmpty()) {
+            player.sendMessage("§7No plots are currently listed.");
+            return true;
+        }
+        player.sendMessage("§6=== Plot Market ===");
+        for (MarketListing listing : listings) {
+            player.sendMessage("§e" + listing.getPlotId() + " §7- §f" + format(listing.getPrice()));
+        }
         return true;
     }
 
@@ -76,48 +114,46 @@ public class PlotMarketCommand {
             player.sendMessage("§cUsage: /plot buy <plotId>");
             return true;
         }
-        int plotId = Integer.parseInt(args[1]);
-        boolean success = marketManager.buyPlot(player.getUniqueId(), plotId);
-        player.sendMessage(success ? "§aPurchase completed." : "§cPurchase failed.");
-        return true;
-    }
 
-    private boolean auction(Player player, String[] args) {
-        if (args.length < 3) {
-            player.sendMessage("§cUsage: /plot auction <price> <durationMinutes>");
-            return true;
-        }
-        double price = parseDouble(args[1]);
-        long minutes = Long.parseLong(args[2]);
-        if (price <= 0D || minutes <= 0) {
-            player.sendMessage("§cInvalid auction arguments.");
-            return true;
-        }
-        Plot plot = currentOwnedPlot(player);
-        if (plot == null) {
-            player.sendMessage("§cYou must stand on your own plot.");
-            return true;
-        }
-        Integer plotId = parsePlotId(plot.getPlotId());
+        String plotId = normalizePlotId(args[1]);
         if (plotId == null) {
-            player.sendMessage("§cPlot ID is not market-compatible.");
+            player.sendMessage("§cUnknown plot id.");
             return true;
         }
-        long ends = System.currentTimeMillis() + (minutes * 60_000L);
-        marketManager.createSale(new PlotSale(plotId, player.getUniqueId(), price, PlotSale.SaleType.AUCTION, ends, 0D, null));
-        player.sendMessage("§aAuction started for plot #" + plotId + ".");
-        return true;
-    }
 
-    private boolean bid(Player player, String[] args) {
-        if (args.length < 3) {
-            player.sendMessage("§cUsage: /plot bid <plotId> <amount>");
+        MarketListing listing = marketService.getListing(plotId);
+        if (listing == null) {
+            player.sendMessage("§cThat plot is no longer listed.");
+            pendingBuys.remove(player.getUniqueId());
             return true;
         }
-        int plotId = Integer.parseInt(args[1]);
-        double amount = parseDouble(args[2]);
-        boolean success = marketManager.placeBid(player.getUniqueId(), plotId, amount);
-        player.sendMessage(success ? "§aBid placed." : "§cBid rejected.");
+
+        PendingBuy pending = pendingBuys.get(player.getUniqueId());
+        if (listing.getPrice() >= marketService.getConfirmationThreshold()
+                && (pending == null || pending.expiresAt < System.currentTimeMillis()
+                || !pending.plotId.equals(plotId)
+                || Math.abs(pending.quotedPrice - listing.getPrice()) > 0.009D)) {
+            pendingBuys.put(player.getUniqueId(), new PendingBuy(plotId, listing.getPrice(), System.currentTimeMillis() + CONFIRM_WINDOW_MS));
+            player.sendMessage("§eThis purchase is expensive (" + format(listing.getPrice()) + ").");
+            player.sendMessage("§eRepeat /plot buy " + plotId + " within 20 seconds to confirm.");
+            return true;
+        }
+
+        PlotMarketService.BuyOutcome outcome = marketService.buyPlot(player.getUniqueId(), plotId);
+        pendingBuys.remove(player.getUniqueId());
+
+        switch (outcome.result()) {
+            case OK -> {
+                player.sendMessage("§aPurchase complete: " + plotId + " for " + format(outcome.chargedAmount()));
+                player.sendMessage("§7Tax/Fee: " + format(outcome.taxAmount()) + " | Seller payout: " + format(outcome.sellerPayout()));
+            }
+            case OWN_LISTING -> player.sendMessage("§cYou cannot buy your own listing.");
+            case INSUFFICIENT_FUNDS -> player.sendMessage("§cInsufficient funds. Need: " + format(outcome.chargedAmount()));
+            case STALE_LISTING -> player.sendMessage("§cListing became invalid (seller changed/offline transfer). It was removed.");
+            case TRANSFER_FAILED -> player.sendMessage("§cOwnership transfer failed; transaction was reverted.");
+            case PAYMENT_FAILED -> player.sendMessage("§cPayment failed; no ownership change was made.");
+            case LISTING_NOT_FOUND -> player.sendMessage("§cThat plot is no longer listed.");
+        }
         return true;
     }
 
@@ -127,15 +163,24 @@ public class PlotMarketCommand {
         return owner != null && owner.equals(player.getUniqueId()) ? plot : null;
     }
 
-    private Integer parsePlotId(String raw) {
-        if (raw == null) {
+    private String normalizePlotId(String input) {
+        if (input == null || input.isBlank()) {
             return null;
         }
-        String digits = raw.replaceAll("^.*_(\\d+)$", "$1");
-        if (!digits.matches("\\d+")) {
-            return null;
+        Plot direct = plotManager.getStorage().getPlot(input);
+        if (direct != null) {
+            return direct.getPlotId();
         }
-        return Integer.parseInt(digits);
+        for (Plot plot : plotManager.getStorage().getAllPlots()) {
+            if (plot.getPlotId().equalsIgnoreCase(input)) {
+                return plot.getPlotId();
+            }
+            String numericSuffix = plot.getPlotId().replaceAll("^.*_(\\d+)$", "$1");
+            if (numericSuffix.equalsIgnoreCase(input)) {
+                return plot.getPlotId();
+            }
+        }
+        return null;
     }
 
     private double parseDouble(String raw) {
@@ -144,5 +189,9 @@ public class PlotMarketCommand {
         } catch (NumberFormatException e) {
             return -1D;
         }
+    }
+
+    private String format(double amount) {
+        return String.format(Locale.US, "%.2f$", amount);
     }
 }
