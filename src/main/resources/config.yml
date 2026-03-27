@@ -295,6 +295,49 @@ pricing:
   sales-lookback-days: 14
   nearby-sales-radius: 256
   spawn-falloff-distance: 5000
+
+messages:
+  plot:
+    error:
+      invalid-command: "&cUnknown plot command. Use /plot help."
+      invalid-usage: "&cInvalid usage: {0}"
+      no-permission: "&cYou do not have permission. {0}"
+      plot-not-found: "&cPlot not found. {0}"
+      no-plot-here: "&cYou are not standing in a plot."
+      no-nearby-plots: "&cNo nearby plots found."
+      usage-tp: "&cUsage: /plot tp <id>"
+      plot-id-not-found: "&cPlot {0} was not found."
+      no-last-plot: "&cNo last plot recorded yet."
+      last-plot-missing: "&cYour last plot no longer exists."
+    info:
+      header: "&6=== Plot Info ==="
+      id: "&eID: &f{0}"
+      coordinates: "&eCoordinates: &fX {0}, Z {1}"
+      size: "&eSize: &f{0}x{0}"
+      status: "&eStatus: &f{0}"
+      owner: "&eOwner: &f{0}"
+      trust: "&eTrust status: &f{0}"
+      trusted-yes: "&aTrusted"
+      trusted-no: "&cNot trusted"
+      team-size: "&eTeam members: &f{0}"
+      neighborhood: "&eNeighborhood: &f{0}"
+    nearby:
+      header: "&6=== Nearby plots ==="
+      entry: "&e{0} &7({1}m) &f@ {2}, {3}"
+      click: "&a[Teleport]"
+    hint:
+      teleport: "&7Quick jump: "
+      teleport-button: "&a[/plot tp {0}]"
+    success:
+      teleported-id: "&aTeleported to plot {0}."
+      teleported-last: "&aTeleported to your last plot ({0})."
+    action:
+      nearby-shown: "&eUse /plot tp <id> to teleport."
+      created: "&aPlot created at X {0}, Z {1}."
+      claimed: "&aPlot claimed."
+      delete-pending: "&eDelete confirmation pending for {0}."
+      teleported: "&aTeleported to {0}."
+      permission-denied: "&cPermission denied."
 # Scheduled schematic backups
 backups:
   enabled: true
