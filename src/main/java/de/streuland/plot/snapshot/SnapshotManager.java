@@ -55,6 +55,14 @@ public class SnapshotManager {
         return createSnapshot(plot, creator, null, null);
     }
 
+    public CompletableFuture<PlotSnapshot> createRestorePoint(Plot plot, UUID creator, String authorName, String riskyAction) {
+        String note = "restore-point";
+        if (riskyAction != null && !riskyAction.trim().isEmpty()) {
+            note = note + ": " + riskyAction.trim();
+        }
+        return createSnapshot(plot, creator, authorName, note);
+    }
+
     public CompletableFuture<PlotSnapshot> createSnapshot(Plot plot, UUID creator, String authorName, String note) {
         int limit = Math.max(0, maxSnapshotsPerPlot - 1);
         storage.enforceMaxSnapshots(plot.getPlotId(), limit);
@@ -138,7 +146,7 @@ public class SnapshotManager {
             }
         }
 
-        String id = "snapshot_" + System.currentTimeMillis();
+        String id = "snapshot_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
         return new PlotSnapshot(id, plot.getPlotId(), creator, System.currentTimeMillis(), blocks, metadata);
     }
 

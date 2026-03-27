@@ -3,45 +3,67 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Streuland Neighborhood Dashboard</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <title>Streuland Plot Dashboard</title>
   <link rel="stylesheet" href="/streuland-dashboard/style.css" />
 </head>
 <body>
   <main>
     <header>
-      <h1>Streuland District & Neighborhood Dashboard</h1>
-      <p id="roleBanner">Role: viewer (read-only)</p>
+      <h1>Streuland Plot Dashboard</h1>
+      <p>Live plot overview + management actions</p>
     </header>
 
-    <section class="panel">
-      <h2>District Map + Live Build Heatmap</h2>
-      <div id="map"></div>
+    <section class="panel auth-panel">
+      <label>API Token <input id="tokenInput" type="password" placeholder="dashboard.auth.token" /></label>
+      <button id="connectBtn">Connect</button>
+      <span id="authStatus">Not connected</span>
     </section>
 
-    <section class="grid">
-      <article class="panel">
-        <h2>Neighborhood Resource Graph</h2>
-        <label>Plot ID: <input id="plotIdInput" placeholder="plot_123" /></label>
-        <button id="loadNeighborhood">Load</button>
-        <canvas id="neighborhoodGraph" width="500" height="260"></canvas>
-      </article>
-
-      <article class="panel">
-        <h2>Market Listings + Price History</h2>
-        <select id="listingSelect"></select>
-        <canvas id="marketChart" width="500" height="260"></canvas>
-      </article>
+    <section class="panel filters">
+      <input id="searchInput" placeholder="Search plot, owner, trusted player" />
+      <input id="ownerInput" placeholder="Owner UUID" />
+      <select id="areaTypeFilter">
+        <option value="">All area types</option>
+        <option value="plot_claimed">Claimed</option>
+        <option value="plot_unclaimed">Unclaimed</option>
+      </select>
+      <select id="marketFilter">
+        <option value="">All market states</option>
+        <option value="listed">Listed</option>
+        <option value="not_listed">Not listed</option>
+      </select>
+      <button id="refreshBtn">Refresh</button>
     </section>
 
     <section class="panel">
-      <h2>Biome Statistics</h2>
-      <canvas id="biomeChart" width="900" height="260"></canvas>
+      <h2>Plots</h2>
+      <table id="plotTable">
+        <thead>
+          <tr>
+            <th>Plot</th>
+            <th>Owner</th>
+            <th>Trusted</th>
+            <th>Area Type</th>
+            <th>Upgrades</th>
+            <th>Market</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Plot Details</h2>
+      <pre id="plotDetails">Select a plot row.</pre>
+      <div class="mutate">
+        <input id="actorInput" placeholder="Actor UUID" />
+        <input id="targetInput" placeholder="Target UUID" />
+        <button data-action="add" class="trustedAction">Add Trusted</button>
+        <button data-action="remove" class="trustedAction">Remove Trusted</button>
+      </div>
     </section>
   </main>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="/streuland-dashboard/app.js"></script>
 </body>
 </html>

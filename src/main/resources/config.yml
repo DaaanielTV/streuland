@@ -51,6 +51,17 @@ plot:
     biome-apply-min-y: 0
     biome-apply-max-y: 319
 
+# Player-driven market configuration
+market:
+  # Percentage fee charged on each sale (0.05 = 5%)
+  tax-rate: 0.05
+  # Additional flat fee per sale
+  flat-fee: 0.0
+  # Requires buy confirmation when price is >= threshold
+  confirmation-threshold: 25000.0
+  # Plot IDs that can never be sold via /plot sell
+  blocked-plot-ids: []
+
 # Path settings
 path:
   # Width of paths in blocks
@@ -244,6 +255,8 @@ dashboard:
   port: 8080
   websocket-port: 8081
   heatmap-cell-size: 64
+  auth:
+    token: "change-me-dashboard-token"
 
 # Dynamic seasonal weather system
 weather:

@@ -29,4 +29,15 @@ class PlotUpgradePersistenceTest {
         assertEquals("QUARTZ", restored.getSetting("borderStyle"));
         assertEquals("false", restored.getSetting("rules.mobGriefing"));
     }
+
+    @Test
+    void storesIndependentStatePerPlot() {
+        InMemoryPlotUpgradeStorage storage = new InMemoryPlotUpgradeStorage();
+        storage.save("plot-a", new PlotProgressionState(1, Instant.ofEpochMilli(1), Map.of("size_1", 1), Map.of("size", "96")));
+        storage.save("plot-b", new PlotProgressionState(2, Instant.ofEpochMilli(2), Map.of("size_2", 2), Map.of("size", "128")));
+
+        assertEquals(1, storage.load("plot-a").orElseThrow().getLevel("size_1"));
+        assertEquals(0, storage.load("plot-a").orElseThrow().getLevel("size_2"));
+        assertEquals(2, storage.load("plot-b").orElseThrow().getLevel("size_2"));
+    }
 }

@@ -25,6 +25,15 @@ public class PlotData {
     private final Map<String, Double> statBonuses;
     private final Map<String, QuestProgress> questProgress;
     private final Map<String, Boolean> flagOverrides;
+    private boolean featured;
+    private boolean publicVisitEnabled;
+    private String showcaseTitle;
+    private String showcaseDescription;
+    private final Set<String> showcaseTags;
+    private int showcaseSpawnX;
+    private int showcaseSpawnY;
+    private int showcaseSpawnZ;
+    private PlotProgressionState progressionState;
 
     private boolean featured;
     private boolean publicVisitEnabled;
@@ -51,11 +60,15 @@ public class PlotData {
         this.statBonuses = new HashMap<>();
         this.questProgress = new HashMap<>();
         this.flagOverrides = new HashMap<>();
-        this.showcaseTags = new LinkedHashSet<>();
+        this.featured = false;
+        this.publicVisitEnabled = false;
         this.showcaseTitle = "";
         this.showcaseDescription = "";
-        this.selectedBiome = "";
-        this.environmentCosmetics = new LinkedHashMap<>();
+        this.showcaseTags = new LinkedHashSet<>();
+        this.showcaseSpawnX = 0;
+        this.showcaseSpawnY = 0;
+        this.showcaseSpawnZ = 0;
+        this.progressionState = PlotProgressionState.initial();
     }
 
     public PlotTheme getTheme() { return theme; }
@@ -120,24 +133,12 @@ public class PlotData {
         return showcaseSpawnX != 0 || showcaseSpawnY != 0 || showcaseSpawnZ != 0;
     }
 
-    public String getSelectedBiome() {
-        return selectedBiome;
+    public PlotProgressionState getProgressionState() {
+        return progressionState == null ? PlotProgressionState.initial() : progressionState;
     }
 
-    public void setSelectedBiome(String selectedBiome) {
-        this.selectedBiome = selectedBiome == null ? "" : selectedBiome.trim().toUpperCase(Locale.ROOT);
-    }
-
-    public boolean isWeatherLocked() {
-        return weatherLocked;
-    }
-
-    public void setWeatherLocked(boolean weatherLocked) {
-        this.weatherLocked = weatherLocked;
-    }
-
-    public Map<String, String> getEnvironmentCosmetics() {
-        return environmentCosmetics;
+    public void setProgressionState(PlotProgressionState progressionState) {
+        this.progressionState = progressionState == null ? PlotProgressionState.initial() : progressionState;
     }
 
     private static String normalizeText(String input, int maxLength) {

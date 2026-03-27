@@ -86,9 +86,7 @@ public class PlotStorage {
         config.set("rewards.cosmetics", new ArrayList<>(data.getCosmeticInventory()));
         config.set("rewards.stats", new HashMap<>(data.getStatBonuses()));
         config.set("flags", new HashMap<>(data.getFlagOverrides()));
-        config.set("environment.selectedBiome", data.getSelectedBiome());
-        config.set("environment.weatherLocked", data.isWeatherLocked());
-        config.set("environment.cosmetics", new HashMap<>(data.getEnvironmentCosmetics()));
+        config.set("upgrades", PlotUpgradePersistence.serialize(data.getProgressionState()));
 
         for (Map.Entry<String, QuestProgress> entry : data.getQuestProgress().entrySet()) {
             String base = "quests.progress." + entry.getKey();
@@ -161,6 +159,12 @@ public class PlotStorage {
                     for (String key : config.getConfigurationSection("flags").getKeys(false)) {
                         data.getFlagOverrides().put(key, config.getBoolean("flags." + key));
                     }
+                }
+                if (config.isConfigurationSection("upgrades")) {
+                    Map<String, Object> serializedUpgrades = config.getConfigurationSection("upgrades").getValues(true);
+                    data.setProgressionState(PlotUpgradePersistence.deserialize(serializedUpgrades));
+                } else {
+                    data.setProgressionState(PlotProgressionState.initial());
                 }
                 if (config.isConfigurationSection("quests.progress")) {
                     for (String questId : config.getConfigurationSection("quests.progress").getKeys(false)) {
@@ -457,6 +461,7 @@ public class PlotStorage {
             copy.getQuestProgress().put(entry.getKey(), progress);
         }
         copy.getFlagOverrides().putAll(source.getFlagOverrides());
+        copy.setProgressionState(source.getProgressionState());
         copy.setFeatured(source.isFeatured());
         copy.setSelectedBiome(source.getSelectedBiome());
         copy.setWeatherLocked(source.isWeatherLocked());
