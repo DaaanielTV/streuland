@@ -189,7 +189,7 @@ public class StreulandPlugin extends JavaPlugin {
             plotFlagManager.registerHook(worldGuardCompat);
             worldGuardCompat.syncAllPlots();
 
-            protectionListener = new ProtectionListener(this, plotManager, plotFlagManager);
+            protectionListener = new ProtectionListener(this, plotManager, plotFlagManager, messageProvider);
             blockChangeListener = new BlockChangeListener(this, plotManager, blockChangeLogger, analyticsService);
             getLogger().info("✓ Protection/BlockChange listeners registered");
 
