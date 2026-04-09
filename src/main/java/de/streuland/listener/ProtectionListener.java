@@ -32,11 +32,14 @@ public class ProtectionListener implements Listener {
     private final PlotFlagManager plotFlagManager;
     private final boolean allowVisitorInteract;
     private final MessageProvider messageProvider;
+    private final PlotAccessController accessController;
 
     public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, PlotFlagManager plotFlagManager) {
         this.plotManager = plotManager;
         this.plotFlagManager = plotFlagManager;
         this.allowVisitorInteract = plugin.getConfig().getBoolean("protection.allow-visitor-interact", false);
+        this.messageProvider = new MessageProvider(plugin);
+        this.accessController = new PlotAccessController(plotManager);
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -119,7 +122,7 @@ public class ProtectionListener implements Listener {
                 return;
             case PLOT_CLAIMED:
                 Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
-                if (plot != null && !plotManager.hasPermission(plot, player.getUniqueId(), Permission.BREAK)) {
+                if (!accessController.canBreak(plot, player.getUniqueId())) {
                     event.setCancelled(true);
                     player.sendMessage(messageProvider.t(player, "protection.plot.protected"));
                 }
@@ -148,7 +151,7 @@ public class ProtectionListener implements Listener {
                 return;
             case PLOT_CLAIMED:
                 Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
-                if (plot != null && !plotManager.hasPermission(plot, player.getUniqueId(), Permission.BUILD)) {
+                if (!accessController.canBuild(plot, player.getUniqueId())) {
                     event.setCancelled(true);
                     player.sendMessage(messageProvider.t(player, "protection.plot.protected"));
                 }
@@ -177,7 +180,7 @@ public class ProtectionListener implements Listener {
         }
 
         Plot plot = plotManager.getPlotAt(event.getClickedBlock().getWorld(), x, z);
-        if (plot == null || plotManager.hasPermission(plot, player.getUniqueId(), resolveInteractPermission(event.getClickedBlock().getType()))) {
+        if (plot == null || accessController.canInteract(plot, player.getUniqueId(), resolveInteractPermission(event.getClickedBlock().getType()))) {
             return;
         }
 

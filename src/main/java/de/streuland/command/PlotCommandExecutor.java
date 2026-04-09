@@ -1,6 +1,7 @@
 package de.streuland.command;
 
 import de.streuland.admin.AdminPlotService;
+import de.streuland.backup.SnapshotService;
 import de.streuland.commands.PlotPriceCommand;
 import de.streuland.commands.PlotBackupCommand;
 import de.streuland.commands.PlotHistoryCommand;
@@ -41,6 +42,12 @@ import de.streuland.commands.LocaleCommand;
 import de.streuland.i18n.MessageProvider;
 import de.streuland.commands.PlotMarketCommand;
 import de.streuland.economy.PlotEconomyHook;
+import de.streuland.history.JournalManager;
+import de.streuland.history.PlotChangeJournal;
+import de.streuland.pricing.PricingEngine;
+import de.streuland.schematic.SchematicLoader;
+import de.streuland.schematic.SchematicPaster;
+import de.streuland.schematic.SchematicPreview;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.ChatColor;
@@ -108,6 +115,15 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
     private final SeasonalWeatherService seasonalWeatherService;
     private final PlotFlagManager plotFlagManager;
     private final PlotUpgradeCommand plotUpgradeCommand;
+    private final PlotTeamCommand plotTeamCommand;
+    private final PlotSchematicCommand plotSchematicCommand;
+    private final PlotBackupCommand plotBackupCommand;
+    private final PlotHistoryCommand plotHistoryCommand;
+    private final PlotMarketCommand plotMarketCommand;
+    private final PlotEconomyHook plotEconomyHook;
+    private final PlotApprovalService plotApprovalService;
+    private final MessageProvider messageProvider;
+    private final Map<String, java.util.function.BiFunction<Player, String[], Boolean>> moduleCommands;
     private final Map<UUID, DeleteConfirmation> pendingDeletes;
     private final Map<UUID, RestoreConfirmation> pendingRestores;
     private final PlotMergeCommand plotMergeCommand;
@@ -134,13 +150,23 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         this.questService = questService;
         this.questTracker = questTracker;
         this.plotMarketService = plotMarketService;
-        this.plotPriceCommand = plotPriceCommand;
+        this.plotPriceCommand = new PlotPriceCommand(new PricingEngine(plugin, plotManager, neighborhoodService));
         this.adminPlotService = adminPlotService;
         this.plotAnalyticsService = plotAnalyticsService;
         this.traderNpcService = traderNpcService;
         this.seasonalWeatherService = seasonalWeatherService;
         this.plotFlagManager = plotFlagManager;
         this.plotUpgradeCommand = plotUpgradeCommand;
+        this.plotApprovalService = plugin instanceof de.streuland.StreulandPlugin ? ((de.streuland.StreulandPlugin) plugin).getPlotApprovalService() : null;
+        this.plotTeamCommand = new PlotTeamCommand(plotManager);
+        this.plotEconomyHook = new PlotEconomyHook(plugin);
+        this.plotMarketCommand = new PlotMarketCommand(plotManager, plotMarketService);
+        this.plotBackupCommand = new PlotBackupCommand(new SnapshotService(plugin, plotManager, snapshotManager));
+        PlotChangeJournal plotChangeJournal = new PlotChangeJournal(plugin, plotManager);
+        this.plotHistoryCommand = new PlotHistoryCommand(new JournalManager(plugin, plotChangeJournal));
+        this.plotSchematicCommand = new PlotSchematicCommand(new SchematicLoader(plugin), new SchematicPreview(), new SchematicPaster(plugin));
+        this.messageProvider = new MessageProvider(plugin);
+        this.moduleCommands = new HashMap<>();
         this.pendingDeletes = new HashMap<>();
         this.pendingRestores = new HashMap<>();
         this.plotMergeCommand = new PlotMergeCommand(new PlotMergeService(plugin, plotManager));
@@ -266,6 +292,10 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
             sendNoPermission(player, msg("messages.plot.error.permission-approval", "Missing permission: streuland.plot.approval"));
             return true;
         }
+        if (plotApprovalService == null) {
+            player.sendMessage("§cApproval module is disabled.");
+            return true;
+        }
         List<PlotApprovalRequest> pending = plotApprovalService.listPending();
         if (pending.isEmpty()) {
             player.sendMessage("§7Keine offenen Plot-Freigaben.");
@@ -287,6 +317,10 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
             sendInvalidUsage(player, "/plot " + (approve ? "approve" : "reject") + " <id>");
             return true;
         }
+        if (plotApprovalService == null) {
+            player.sendMessage("§cApproval module is disabled.");
+            return true;
+        }
         boolean success = approve ? plotApprovalService.approve(args[1]) : plotApprovalService.reject(args[1]);
         player.sendMessage(success ? "§aAntrag verarbeitet." : "§cAntrag nicht gefunden.");
         return true;
@@ -299,7 +333,7 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (plotApprovalService.requiresApproval(player)) {
+        if (plotApprovalService != null && plotApprovalService.requiresApproval(player)) {
             PlotApprovalRequest request = plotApprovalService.createPending(player);
             player.sendMessage("§eDein Plot-Antrag wurde eingereicht: §f" + request.getId());
             player.sendMessage("§7Ein Admin kann mit /plotapprove approve " + request.getId() + " freigeben.");
