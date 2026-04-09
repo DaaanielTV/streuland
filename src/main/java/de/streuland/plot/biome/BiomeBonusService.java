@@ -12,10 +12,12 @@ import java.util.Map;
 public class BiomeBonusService {
     private final PlotManager plotManager;
     private final Map<String, BiomeProfile> profiles;
+    private final BiomeBonusResolver bonusResolver;
 
     public BiomeBonusService(PlotManager plotManager, FileConfiguration config) {
         this.plotManager = plotManager;
         this.profiles = Collections.unmodifiableMap(new HashMap<>(new BiomeConfigLoader(config).loadProfiles()));
+        this.bonusResolver = new BiomeBonusResolver(this.profiles);
     }
 
     public BiomeRuleSet getRuleSetForPlot(Plot plot) {
@@ -27,11 +29,12 @@ public class BiomeBonusService {
     }
 
     public BiomeRuleSet getRuleSetForBiome(Biome biome) {
-        if (biome == null) {
-            return new BiomeRuleSet(null, null, null);
-        }
-        BiomeProfile profile = profiles.get(biome.name());
-        return profile == null ? new BiomeRuleSet(null, null, null) : profile.getCombinedRules();
+        return bonusResolver.resolveBase(biome);
+    }
+
+
+    public BiomeRuleSet getRuleSetForBiome(Biome biome, BiomeRuleSet override) {
+        return bonusResolver.resolve(biome, override);
     }
 
     public String describeBonuses(Biome biome) {

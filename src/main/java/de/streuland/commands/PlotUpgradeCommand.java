@@ -2,6 +2,7 @@ package de.streuland.commands;
 
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
+import de.streuland.plot.upgrade.PlotProgressionService;
 import de.streuland.plot.upgrade.PlotUpgradeService;
 import de.streuland.plot.upgrade.PlotUpgradeView;
 import org.bukkit.entity.Player;
@@ -11,10 +12,12 @@ import java.util.List;
 public class PlotUpgradeCommand {
     private final PlotManager plotManager;
     private final PlotUpgradeService plotUpgradeService;
+    private final PlotProgressionService progressionService;
 
     public PlotUpgradeCommand(PlotManager plotManager, PlotUpgradeService plotUpgradeService) {
         this.plotManager = plotManager;
         this.plotUpgradeService = plotUpgradeService;
+        this.progressionService = new PlotProgressionService(plotUpgradeService);
     }
 
     public boolean handle(Player player, String[] args) {
@@ -45,8 +48,9 @@ public class PlotUpgradeCommand {
     }
 
     private boolean listUpgrades(Player player, String plotId) {
-        List<PlotUpgradeView> upgrades = plotUpgradeService.getAvailableUpgrades(plotId, player.getUniqueId());
+        List<PlotUpgradeView> upgrades = progressionService.listUpgrades(plotId, player.getUniqueId());
         player.sendMessage("§6=== Plot Upgrades ===");
+        player.sendMessage("§7Current progression level: §a" + progressionService.getOverallLevel(plotId));
         for (PlotUpgradeView view : upgrades) {
             String status = view.isAvailable() ? "§aKaufbar" : "§7" + view.getReason();
             player.sendMessage("§e" + view.getDefinition().getId() + " §8- §f" + view.getDefinition().getDisplayName() + " §8(" + view.getDefinition().getCost().getVaultCost() + "$) §7" + status);
@@ -55,15 +59,13 @@ public class PlotUpgradeCommand {
     }
 
     private boolean buyUpgrade(Player player, String plotId, String upgradeId) {
-        if (!plotUpgradeService.canUpgrade(plotId, player.getUniqueId(), upgradeId)) {
-            player.sendMessage("§cUpgrade kann nicht gekauft werden.");
-            return true;
-        }
-        if (!plotUpgradeService.applyUpgrade(plotId, player.getUniqueId(), upgradeId)) {
-            player.sendMessage("§cUpgrade-Kauf fehlgeschlagen.");
+        java.util.Optional<String> failure = progressionService.buyUpgrade(plotId, player.getUniqueId(), upgradeId);
+        if (failure.isPresent()) {
+            player.sendMessage("§cUpgrade-Kauf fehlgeschlagen: " + failure.get());
             return true;
         }
         player.sendMessage("§aUpgrade erfolgreich gekauft: §f" + upgradeId);
+        player.sendMessage("§7Neues Gesamtlevel: §a" + progressionService.getOverallLevel(plotId));
         return true;
     }
 }
