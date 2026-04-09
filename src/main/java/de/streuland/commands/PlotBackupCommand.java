@@ -1,15 +1,19 @@
 package de.streuland.commands;
 
+import de.streuland.backup.PlotBackupCoordinator;
 import de.streuland.backup.SnapshotService;
+import de.streuland.plot.PlotManager;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 
 import java.util.List;
+import java.util.UUID;
 
 public class PlotBackupCommand {
-    private final SnapshotService snapshotService;
+    private final PlotBackupCoordinator backupCoordinator;
 
-    public PlotBackupCommand(SnapshotService snapshotService) {
-        this.snapshotService = snapshotService;
+    public PlotBackupCommand(PlotManager plotManager, SnapshotService snapshotService) {
+        this.backupCoordinator = new PlotBackupCoordinator(plotManager, snapshotService);
     }
 
     public boolean handle(CommandSender sender, String[] args) {
@@ -18,17 +22,13 @@ public class PlotBackupCommand {
             return true;
         }
         String action = args[1].toLowerCase();
-        int plotId;
-        try {
-            plotId = Integer.parseInt(args[2]);
-        } catch (NumberFormatException e) {
-            sender.sendMessage("§cPlotId muss eine Zahl sein.");
-            return true;
-        }
+        String plotRef = args[2];
 
         if ("take".equals(action)) {
             sender.sendMessage("§eBackup wird erstellt...");
-            snapshotService.takeSnapshot(plotId).thenAccept(snapshotId -> {
+            UUID actorId = sender instanceof Player ? ((Player) sender).getUniqueId() : UUID.randomUUID();
+            String actorName = sender instanceof Player ? sender.getName() : "CONSOLE";
+            backupCoordinator.takeSnapshot(plotRef, actorId, actorName, "manual-backup").thenAccept(snapshotId -> {
                 if (snapshotId == null) {
                     sender.sendMessage("§cPlot nicht gefunden.");
                     return;
@@ -39,12 +39,12 @@ public class PlotBackupCommand {
         }
 
         if ("list".equals(action)) {
-            List<String> snapshots = snapshotService.listSnapshots(plotId);
+            List<String> snapshots = backupCoordinator.listSnapshots(plotRef);
             if (snapshots.isEmpty()) {
                 sender.sendMessage("§cKeine Backups vorhanden.");
                 return true;
             }
-            sender.sendMessage("§6=== Backups (Plot " + plotId + ") ===");
+            sender.sendMessage("§6=== Backups (Plot " + plotRef + ") ===");
             for (String snapshot : snapshots) {
                 sender.sendMessage("§e" + snapshot);
             }
@@ -58,7 +58,7 @@ public class PlotBackupCommand {
             }
             String snapshotId = args[3];
             sender.sendMessage("§eBackup wird wiederhergestellt...");
-            snapshotService.restoreSnapshot(plotId, snapshotId).thenAccept(success -> {
+            backupCoordinator.restore(plotRef, snapshotId).thenAccept(success -> {
                 if (success) {
                     sender.sendMessage("§aBackup wiederhergestellt.");
                 } else {
