@@ -30,6 +30,7 @@ import de.streuland.weather.ParticleEffectScheduler;
 import de.streuland.weather.SeasonalEffectListener;
 import de.streuland.weather.SeasonalWeatherService;
 import de.streuland.web.WebServer;
+import de.streuland.web.AdminObservabilityService;
 import de.streuland.dashboard.RestApiController;
 import de.streuland.flags.PlotFlagManager;
 import de.streuland.listener.BlockChangeListener;
@@ -292,7 +293,9 @@ public class StreulandPlugin extends JavaPlugin {
             if (getConfig().getBoolean("web.enabled", false)) {
                 String token = getConfig().getString("web.token", "");
                 int webPort = getConfig().getInt("web.port", 8090);
-                webServer = new WebServer("0.0.0.0", webPort, token, new WebServer.PlotGatewayAdapter(plotManager), getLogger());
+                WebServer.PlotGatewayAdapter gateway = new WebServer.PlotGatewayAdapter(plotManager);
+                AdminObservabilityService observabilityService = new AdminObservabilityService(gateway, analyticsService);
+                webServer = new WebServer("0.0.0.0", webPort, token, gateway, observabilityService, getLogger());
                 webServer.start();
                 getLogger().info("✓ Admin web server listening on http://0.0.0.0:" + webPort);
             }
