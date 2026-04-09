@@ -11,6 +11,8 @@ import java.io.InputStream;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.stream.Stream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -39,10 +41,20 @@ public class YamlPlotStorage implements PlotStorage {
     public synchronized void save(Plot plot) {
         Path file = fileForId(plot.getPlotId());
         Map<String, Object> map = toMap(plot);
-        try (Writer writer = Files.newBufferedWriter(file)) {
+        Path tempFile = file.resolveSibling(file.getFileName() + ".tmp");
+        try (Writer writer = Files.newBufferedWriter(tempFile)) {
             yaml.dump(map, writer);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to save plot YAML: " + plot.getPlotId(), e);
+            throw new IllegalStateException("Failed to write temp plot YAML: " + plot.getPlotId(), e);
+        }
+        try {
+            Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException atomicMoveFailure) {
+            try {
+                Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to commit plot YAML: " + plot.getPlotId(), e);
+            }
         }
     }
 
@@ -87,10 +99,9 @@ public class YamlPlotStorage implements PlotStorage {
 
     @Override
     public synchronized Collection<Plot> listAll() {
-        try {
+        try (Stream<Path> files = Files.list(yamlDir)) {
             List<Plot> result = new ArrayList<>();
-            Files.list(yamlDir)
-                    .filter(path -> path.getFileName().toString().endsWith(".yml"))
+            files.filter(path -> path.getFileName().toString().endsWith(".yml"))
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
                     .forEach(path -> {
                         Plot plot = readPlot(path);
