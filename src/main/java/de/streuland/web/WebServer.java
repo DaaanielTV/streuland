@@ -29,15 +29,21 @@ public class WebServer {
     private final int port;
     private final String token;
     private final PlotGateway plotGateway;
+    private final AdminObservabilityService observabilityService;
     private final Logger logger;
     private final Gson gson = new Gson();
     private HttpServer server;
 
     public WebServer(String host, int port, String token, PlotGateway plotGateway, Logger logger) {
+        this(host, port, token, plotGateway, null, logger);
+    }
+
+    public WebServer(String host, int port, String token, PlotGateway plotGateway, AdminObservabilityService observabilityService, Logger logger) {
         this.host = host;
         this.port = port;
         this.token = token == null ? "" : token.trim();
         this.plotGateway = plotGateway;
+        this.observabilityService = observabilityService == null ? new AdminObservabilityService(plotGateway, null) : observabilityService;
         this.logger = logger;
     }
 
@@ -70,6 +76,10 @@ public class WebServer {
     String routeKey(String method, String path) {
         if ("GET".equalsIgnoreCase(method) && "/api/plots".equals(path)) return "plots_list";
         if ("GET".equalsIgnoreCase(method) && "/api/plots/export.csv".equals(path)) return "plots_export";
+        if ("GET".equalsIgnoreCase(method) && "/api/admin/plot-status".equals(path)) return "admin_plot_status";
+        if ("GET".equalsIgnoreCase(method) && "/api/admin/recent-changes".equals(path)) return "admin_recent_changes";
+        if ("GET".equalsIgnoreCase(method) && "/api/admin/health".equals(path)) return "admin_health";
+        if ("GET".equalsIgnoreCase(method) && "/api/admin/dashboard".equals(path)) return "admin_dashboard";
         if (path.startsWith("/api/plots/")) {
             String tail = path.substring("/api/plots/".length());
             if (tail.endsWith("/feature") && "POST".equalsIgnoreCase(method)) return "plot_feature";
@@ -103,6 +113,24 @@ public class WebServer {
                 String tail = path.substring("/api/plots/".length());
                 String id = tail.substring(0, tail.length() - "/feature".length());
                 handleToggle(exchange, id);
+                return;
+            }
+            if ("admin_plot_status".equals(route)) {
+                sendJson(exchange, 200, gson.toJson(observabilityService.buildPlotStatus()));
+                return;
+            }
+            if ("admin_recent_changes".equals(route)) {
+                Integer limit = parseLimit(exchange.getRequestURI().getRawQuery());
+                sendJson(exchange, 200, gson.toJson(observabilityService.buildRecentChanges(limit)));
+                return;
+            }
+            if ("admin_health".equals(route)) {
+                sendJson(exchange, 200, gson.toJson(observabilityService.buildHealth()));
+                return;
+            }
+            if ("admin_dashboard".equals(route)) {
+                Integer limit = parseLimit(exchange.getRequestURI().getRawQuery());
+                sendJson(exchange, 200, gson.toJson(observabilityService.buildSummary(limit)));
                 return;
             }
             if ("plot_detail".equals(route)) {
@@ -184,6 +212,24 @@ public class WebServer {
 
     private String q(String in) {
         return '"' + in.replace("\"", "\"\"") + '"';
+    }
+
+    private Integer parseLimit(String rawQuery) {
+        if (rawQuery == null || rawQuery.isEmpty()) {
+            return null;
+        }
+        for (String part : rawQuery.split("&")) {
+            String[] keyValue = part.split("=", 2);
+            if (keyValue.length != 2 || !"limit".equalsIgnoreCase(keyValue[0])) {
+                continue;
+            }
+            try {
+                return Integer.parseInt(keyValue[1]);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private boolean isAuthorized(HttpExchange exchange) {
