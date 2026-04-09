@@ -1,16 +1,20 @@
 package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
+import de.streuland.plot.snapshot.PlotSnapshotMetadata;
 import de.streuland.plot.upgrade.PlotProgressionState;
 import de.streuland.plot.upgrade.PlotUpgradePersistence;
 import de.streuland.quest.QuestProgress;
-import de.streuland.plot.snapshot.PlotSnapshotMetadata;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,7 +35,7 @@ public class PlotStorage {
     private final Map<String, Plot> cachedPlots;
     private final Map<String, PlotData> plotData;
     private final Map<UUID, Set<String>> ownerToPlotIds;
-    
+
     public PlotStorage(JavaPlugin plugin, String worldName, PlotStoragePartitioner partitioner) {
         this.plugin = plugin;
         this.worldName = worldName;
@@ -41,12 +45,7 @@ public class PlotStorage {
         this.plotData = new HashMap<>();
         this.ownerToPlotIds = new HashMap<>();
 
-        
-        // Create folders if they don't exist
-        if (!dataFolder.exists()) {
-            dataFolder.mkdirs();
-        }
-
+        ensureDataFolder();
         loadAllPlots();
     }
 
@@ -54,6 +53,11 @@ public class PlotStorage {
      * Saves a plot to disk with state persistence.
      */
     public synchronized void savePlot(Plot plot) {
+        if (plot == null) {
+            plugin.getLogger().warning("Refusing to save null plot for world " + worldName);
+            return;
+        }
+
         File plotFile = new File(dataFolder, plot.getPlotId() + ".yml");
         FileConfiguration config = new YamlConfiguration();
 
@@ -65,11 +69,13 @@ public class PlotStorage {
         config.set("state", plot.getState().name());
         config.set("createdAt", plot.getCreatedAt());
         config.set("spawnY", plot.getSpawnY());
+
         Map<String, List<String>> serializedAssignments = new HashMap<>();
         for (Map.Entry<UUID, Set<String>> entry : plot.getRoleAssignments().entrySet()) {
             serializedAssignments.put(entry.getKey().toString(), new ArrayList<>(entry.getValue()));
         }
         config.set("roleAssignments", serializedAssignments);
+
         Map<String, List<String>> serializedDefinitions = new LinkedHashMap<>();
         for (Map.Entry<String, Set<Permission>> entry : plot.getRoleDefinitions().entrySet()) {
             List<String> permissions = new ArrayList<>();
@@ -79,6 +85,7 @@ public class PlotStorage {
             serializedDefinitions.put(entry.getKey(), permissions);
         }
         config.set("roleDefinitions", serializedDefinitions);
+
         PlotData data = plotData.getOrDefault(plot.getPlotId(), new PlotData());
         config.set("theme", data.getTheme().name());
         config.set("rewards.storageSlots", data.getBonusStorageSlots());
@@ -96,10 +103,8 @@ public class PlotStorage {
             config.set(base + ".completedAt", progress.getCompletedAt());
         }
 
-        try {
-            config.save(plotFile);
-        } catch (IOException e) {
-            plugin.getLogger().severe("Failed to save plot " + plot.getPlotId() + ": " + e.getMessage());
+        if (!safeSaveConfiguration(config, plotFile, "plot " + plot.getPlotId())) {
+            return;
         }
 
         Plot oldPlot = cachedPlots.put(plot.getPlotId(), plot);
@@ -113,74 +118,93 @@ public class PlotStorage {
         plotData.clear();
         ownerToPlotIds.clear();
 
-        
         if (!dataFolder.exists()) {
             return;
         }
 
         File[] files = dataFolder.listFiles((dir, name) -> name.endsWith(".yml") && !name.equals("index.yml"));
         if (files == null) {
+            plugin.getLogger().warning("Could not list plot files for world " + worldName + " in " + dataFolder.getAbsolutePath());
             return;
         }
 
+        int skipped = 0;
         for (File file : files) {
             Plot plot = loadPlotFromFile(file);
-            if (plot != null) {
-                cachedPlots.put(plot.getPlotId(), plot);
-                FileConfiguration config = YamlConfiguration.loadConfiguration(file);
-                String themeRaw = config.getString("theme", PlotTheme.NATURE.name());
-                PlotTheme theme = PlotTheme.fromInput(themeRaw);
-                PlotData data = new PlotData(theme);
-                data.setBonusStorageSlots(config.getInt("rewards.storageSlots", 0));
-                data.getUnlockedAbilities().addAll(config.getStringList("rewards.abilities"));
-                data.getCosmeticInventory().addAll(config.getStringList("rewards.cosmetics"));
-                data.setFeatured(config.getBoolean("featured", false));
-                data.setPublicVisitEnabled(config.getBoolean("showcase.public", false));
-                data.setShowcaseTitle(config.getString("showcase.title", ""));
-                data.setShowcaseDescription(config.getString("showcase.description", ""));
-                data.setShowcaseTags(new LinkedHashSet<>(config.getStringList("showcase.tags")));
-                data.setShowcaseSpawn(
-                        config.getInt("showcase.spawn.x", 0),
-                        config.getInt("showcase.spawn.y", 0),
-                        config.getInt("showcase.spawn.z", 0));
-                data.setSelectedBiome(config.getString("environment.selectedBiome", ""));
-                data.setWeatherLocked(config.getBoolean("environment.weatherLocked", false));
-                if (config.isConfigurationSection("environment.cosmetics")) {
-                    for (String key : config.getConfigurationSection("environment.cosmetics").getKeys(false)) {
-                        data.getEnvironmentCosmetics().put(key, config.getString("environment.cosmetics." + key, ""));
-                    }
-                }
-                if (config.isConfigurationSection("rewards.stats")) {
-                    for (String key : config.getConfigurationSection("rewards.stats").getKeys(false)) {
-                        data.getStatBonuses().put(key, config.getDouble("rewards.stats." + key));
-                    }
-                }
-                if (config.isConfigurationSection("flags")) {
-                    for (String key : config.getConfigurationSection("flags").getKeys(false)) {
-                        data.getFlagOverrides().put(key, config.getBoolean("flags." + key));
-                    }
-                }
-                if (config.isConfigurationSection("upgrades")) {
-                    Map<String, Object> serializedUpgrades = config.getConfigurationSection("upgrades").getValues(true);
-                    data.setProgressionState(PlotUpgradePersistence.deserialize(serializedUpgrades));
-                } else {
-                    data.setProgressionState(PlotProgressionState.initial());
-                }
-                if (config.isConfigurationSection("quests.progress")) {
-                    for (String questId : config.getConfigurationSection("quests.progress").getKeys(false)) {
-                        QuestProgress progress = new QuestProgress();
-                        progress.setValue(config.getInt("quests.progress." + questId + ".value", 0));
-                        progress.setCompleted(config.getBoolean("quests.progress." + questId + ".completed", false));
-                        progress.setCompletedAt(config.getLong("quests.progress." + questId + ".completedAt", 0L));
-                        data.getQuestProgress().put(questId, progress);
-                    }
-                }
-                plotData.put(plot.getPlotId(), data);
-                addToOwnerIndex(plot);
+            if (plot == null) {
+                skipped++;
+                continue;
+            }
+
+            cachedPlots.put(plot.getPlotId(), plot);
+            plotData.put(plot.getPlotId(), loadPlotData(file));
+            addToOwnerIndex(plot);
+        }
+
+        plugin.getLogger().info("Loaded " + cachedPlots.size() + " plots from disk for world " + worldName
+                + (skipped > 0 ? " (skipped invalid files: " + skipped + ")" : ""));
+    }
+
+    private PlotData loadPlotData(File file) {
+        FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+        PlotTheme theme = PlotTheme.fromInput(config.getString("theme", PlotTheme.NATURE.name()));
+        PlotData data = new PlotData(theme);
+
+        data.setBonusStorageSlots(Math.max(0, config.getInt("rewards.storageSlots", 0)));
+        data.getUnlockedAbilities().addAll(config.getStringList("rewards.abilities"));
+        data.getCosmeticInventory().addAll(config.getStringList("rewards.cosmetics"));
+        data.setFeatured(config.getBoolean("featured", false));
+        data.setPublicVisitEnabled(config.getBoolean("showcase.public", false));
+        data.setShowcaseTitle(config.getString("showcase.title", ""));
+        data.setShowcaseDescription(config.getString("showcase.description", ""));
+        data.setShowcaseTags(new LinkedHashSet<>(config.getStringList("showcase.tags")));
+        data.setShowcaseSpawn(
+                config.getInt("showcase.spawn.x", 0),
+                config.getInt("showcase.spawn.y", 0),
+                config.getInt("showcase.spawn.z", 0));
+
+        data.setSelectedBiome(config.getString("environment.selectedBiome", ""));
+        data.setWeatherLocked(config.getBoolean("environment.weatherLocked", false));
+        ConfigurationSection cosmetics = config.getConfigurationSection("environment.cosmetics");
+        if (cosmetics != null) {
+            for (String key : cosmetics.getKeys(false)) {
+                data.getEnvironmentCosmetics().put(key, cosmetics.getString(key, ""));
             }
         }
 
-        plugin.getLogger().info("Loaded " + cachedPlots.size() + " plots from disk for world " + worldName);
+        ConfigurationSection stats = config.getConfigurationSection("rewards.stats");
+        if (stats != null) {
+            for (String key : stats.getKeys(false)) {
+                data.getStatBonuses().put(key, stats.getDouble(key));
+            }
+        }
+
+        ConfigurationSection flags = config.getConfigurationSection("flags");
+        if (flags != null) {
+            for (String key : flags.getKeys(false)) {
+                data.getFlagOverrides().put(key, flags.getBoolean(key));
+            }
+        }
+
+        ConfigurationSection upgrades = config.getConfigurationSection("upgrades");
+        if (upgrades != null) {
+            data.setProgressionState(PlotUpgradePersistence.deserialize(upgrades.getValues(true)));
+        } else {
+            data.setProgressionState(PlotProgressionState.initial());
+        }
+
+        ConfigurationSection questProgress = config.getConfigurationSection("quests.progress");
+        if (questProgress != null) {
+            for (String questId : questProgress.getKeys(false)) {
+                QuestProgress progress = new QuestProgress();
+                progress.setValue(config.getInt("quests.progress." + questId + ".value", 0));
+                progress.setCompleted(config.getBoolean("quests.progress." + questId + ".completed", false));
+                progress.setCompletedAt(config.getLong("quests.progress." + questId + ".completedAt", 0L));
+                data.getQuestProgress().put(questId, progress);
+            }
+        }
+
+        return data;
     }
 
     private Plot loadPlotFromFile(File file) {
@@ -188,28 +212,38 @@ public class PlotStorage {
             FileConfiguration config = YamlConfiguration.loadConfiguration(file);
 
             String id = config.getString("id");
+            if (id == null || id.isBlank()) {
+                plugin.getLogger().warning("Skipping plot file with missing id: " + file.getName());
+                return null;
+            }
+
+            int size = config.getInt("size", 0);
+            if (size <= 0) {
+                plugin.getLogger().warning("Skipping plot " + id + " due to invalid size: " + size);
+                return null;
+            }
+
             int centerX = config.getInt("centerX");
             int centerZ = config.getInt("centerZ");
-            int size = config.getInt("size");
-            String ownerStr = config.getString("owner");
-            UUID owner = ownerStr != null && !ownerStr.equals("null") ? UUID.fromString(ownerStr) : null;
-            long createdAt = config.getLong("createdAt");
+            UUID owner = parseUuid(config.getString("owner"), "owner", id);
+            long createdAt = config.getLong("createdAt", System.currentTimeMillis());
             int spawnY = config.getInt("spawnY", 64);
 
-            String stateStr = config.getString("state", owner == null ? "UNCLAIMED" : "CLAIMED");
-            Plot.PlotState state = Plot.PlotState.valueOf(stateStr);
+            String stateRaw = config.getString("state", owner == null ? "UNCLAIMED" : "CLAIMED");
+            Plot.PlotState state = parseEnum(Plot.PlotState.class, stateRaw, owner == null ? Plot.PlotState.UNCLAIMED : Plot.PlotState.CLAIMED,
+                    "state", id);
 
             Plot plot = new Plot(id, centerX, centerZ, size, owner, createdAt, spawnY, state);
 
-            if (config.isConfigurationSection("roleDefinitions")) {
+            ConfigurationSection roleDefinitions = config.getConfigurationSection("roleDefinitions");
+            if (roleDefinitions != null) {
                 Map<String, Set<Permission>> definitions = new LinkedHashMap<>();
-                for (String roleId : config.getConfigurationSection("roleDefinitions").getKeys(false)) {
+                for (String roleId : roleDefinitions.getKeys(false)) {
                     Set<Permission> permissions = EnumSet.noneOf(Permission.class);
                     for (String raw : config.getStringList("roleDefinitions." + roleId)) {
-                        try {
-                            permissions.add(Permission.valueOf(raw.toUpperCase(Locale.ROOT)));
-                        } catch (IllegalArgumentException ignored) {
-                            plugin.getLogger().warning("Invalid permission for role " + roleId + " on plot " + id + ": " + raw);
+                        Permission permission = parseEnum(Permission.class, raw, null, "permission", id);
+                        if (permission != null) {
+                            permissions.add(permission);
                         }
                     }
                     definitions.put(roleId, permissions);
@@ -217,46 +251,72 @@ public class PlotStorage {
                 plot.replaceRoleDefinitions(definitions);
             }
 
-            if (config.isConfigurationSection("roleAssignments")) {
+            ConfigurationSection assignmentsSection = config.getConfigurationSection("roleAssignments");
+            if (assignmentsSection != null) {
                 Map<UUID, Set<String>> assignments = new HashMap<>();
-                for (String uuidStr : config.getConfigurationSection("roleAssignments").getKeys(false)) {
-                    try {
-                        assignments.put(UUID.fromString(uuidStr), new LinkedHashSet<>(config.getStringList("roleAssignments." + uuidStr)));
-                    } catch (Exception e) {
-                        plugin.getLogger().warning("Invalid role assignment for plot " + id + ": " + uuidStr);
+                for (String uuidStr : assignmentsSection.getKeys(false)) {
+                    UUID playerId = parseUuid(uuidStr, "role assignment", id);
+                    if (playerId != null) {
+                        assignments.put(playerId, new LinkedHashSet<>(config.getStringList("roleAssignments." + uuidStr)));
                     }
                 }
                 plot.replaceRoleAssignments(assignments);
             } else {
-                Map<UUID, Role> loadedRoles = new HashMap<>();
-                if (config.isConfigurationSection("roles")) {
-                    for (String uuidStr : config.getConfigurationSection("roles").getKeys(false)) {
-                        try {
-                            UUID playerId = UUID.fromString(uuidStr);
-                            String roleRaw = config.getString("roles." + uuidStr, Role.VISITOR.name());
-                            Role role = Role.fromId(roleRaw).orElse(Role.VISITOR);
-                            loadedRoles.put(playerId, role);
-                        } catch (Exception e) {
-                            plugin.getLogger().warning("Invalid role entry for plot " + id + ": " + uuidStr);
-                        }
-                    }
-                } else {
-                    List<String> trustedList = config.getStringList("trusted");
-                    for (String uuidStr : trustedList) {
-                        try {
-                            loadedRoles.put(UUID.fromString(uuidStr), Role.BUILDER);
-                        } catch (IllegalArgumentException e) {
-                            plugin.getLogger().warning("Invalid UUID in trusted list for plot " + id + ": " + uuidStr);
-                        }
-                    }
-                }
-                plot.replaceRoles(loadedRoles);
+                loadLegacyRoles(config, plot, id);
             }
 
             return plot;
         } catch (Exception e) {
             plugin.getLogger().severe("Failed to load plot from " + file.getName() + ": " + e.getMessage());
             return null;
+        }
+    }
+
+    private void loadLegacyRoles(FileConfiguration config, Plot plot, String plotId) {
+        Map<UUID, Role> loadedRoles = new HashMap<>();
+        ConfigurationSection roles = config.getConfigurationSection("roles");
+        if (roles != null) {
+            for (String uuidStr : roles.getKeys(false)) {
+                UUID playerId = parseUuid(uuidStr, "role", plotId);
+                if (playerId == null) {
+                    continue;
+                }
+                String roleRaw = config.getString("roles." + uuidStr, Role.VISITOR.name());
+                Role role = Role.fromId(roleRaw).orElse(Role.VISITOR);
+                loadedRoles.put(playerId, role);
+            }
+        } else {
+            for (String uuidStr : config.getStringList("trusted")) {
+                UUID trusted = parseUuid(uuidStr, "trusted", plotId);
+                if (trusted != null) {
+                    loadedRoles.put(trusted, Role.BUILDER);
+                }
+            }
+        }
+        plot.replaceRoles(loadedRoles);
+    }
+
+    private UUID parseUuid(String raw, String source, String plotId) {
+        if (raw == null || raw.isBlank() || "null".equalsIgnoreCase(raw)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw);
+        } catch (IllegalArgumentException ex) {
+            plugin.getLogger().warning("Invalid " + source + " UUID for plot " + plotId + ": " + raw);
+            return null;
+        }
+    }
+
+    private <E extends Enum<E>> E parseEnum(Class<E> type, String raw, E fallback, String source, String plotId) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Enum.valueOf(type, raw.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            plugin.getLogger().warning("Invalid " + source + " value for plot " + plotId + ": " + raw);
+            return fallback;
         }
     }
 
@@ -296,9 +356,6 @@ public class PlotStorage {
         return cachedPlots.containsKey(plotId);
     }
 
-    /**
-     * Claims an unclaimed plot and returns the updated plot instance.
-     */
     public synchronized Plot claimPlot(String plotId, UUID player) {
         Plot plot = cachedPlots.get(plotId);
         if (plot == null || plot.getState() != Plot.PlotState.UNCLAIMED) {
@@ -310,15 +367,11 @@ public class PlotStorage {
                 Plot.PlotState.CLAIMED);
 
         claimedPlot.replaceRoles(plot.getRoles());
-
         savePlot(claimedPlot);
         plugin.getLogger().info("Plot " + plotId + " claimed by " + player);
         return claimedPlot;
     }
 
-    /**
-     * Releases a claimed plot back to unclaimed state.
-     */
     public synchronized Plot unclaimPlot(String plotId) {
         Plot plot = cachedPlots.get(plotId);
         if (plot == null || plot.getState() != Plot.PlotState.CLAIMED) {
@@ -334,9 +387,6 @@ public class PlotStorage {
         return unclaimedPlot;
     }
 
-    /**
-     * Transfers ownership to a new owner and resets trust/plot data for a fresh start.
-     */
     public synchronized Plot transferOwnership(String plotId, UUID expectedOwner, UUID newOwner) {
         Plot plot = cachedPlots.get(plotId);
         if (plot == null || plot.getState() != Plot.PlotState.CLAIMED || plot.getOwner() == null) {
@@ -355,9 +405,6 @@ public class PlotStorage {
         return transferred;
     }
 
-    /**
-     * Deletes a plot from storage and returns the removed plot if present.
-     */
     public synchronized Plot deletePlot(String plotId) {
         Plot plot = cachedPlots.remove(plotId);
         if (plot != null) {
@@ -371,7 +418,6 @@ public class PlotStorage {
         }
         return plot;
     }
-
 
     public synchronized void saveMany(List<Plot> plots) {
         if (plots == null) {
@@ -405,27 +451,19 @@ public class PlotStorage {
         }
     }
 
-    /**
-     * Determines the next plot number based on existing plot IDs.
-     */
     public synchronized int getNextPlotNumber() {
         int max = 0;
         for (String plotId : cachedPlots.keySet()) {
             Matcher matcher = NUMERIC_SUFFIX.matcher(plotId);
             if (matcher.matches()) {
                 try {
-                    int value = Integer.parseInt(matcher.group(1));
-                    if (value > max) {
-                        max = value;
-                    }
+                    max = Math.max(max, Integer.parseInt(matcher.group(1)));
                 } catch (NumberFormatException ignored) {
                 }
             }
         }
         return max + 1;
     }
-
-
 
     public synchronized PlotSnapshotMetadata snapshotMetadata(String plotId, String authorName, String note) {
         Plot plot = cachedPlots.get(plotId);
@@ -499,11 +537,38 @@ public class PlotStorage {
         config.set("plots", new ArrayList<>(cachedPlots.keySet()));
         config.set("count", cachedPlots.size());
         config.set("last-updated", System.currentTimeMillis());
+        safeSaveConfiguration(config, indexFile, "plot index for " + worldName);
+    }
 
+    private boolean safeSaveConfiguration(FileConfiguration config, File target, String label) {
+        File parent = target.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            plugin.getLogger().severe("Failed to create directory for " + label + ": " + parent.getAbsolutePath());
+            return false;
+        }
+
+        File tempFile = new File(parent, target.getName() + ".tmp");
         try {
-            config.save(indexFile);
+            config.save(tempFile);
+            try {
+                Files.move(tempFile.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(tempFile.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
         } catch (IOException e) {
-            plugin.getLogger().severe("Failed to save plot index: " + e.getMessage());
+            plugin.getLogger().severe("Failed to save " + label + ": " + e.getMessage());
+            return false;
+        } finally {
+            if (tempFile.exists() && !tempFile.equals(target) && !tempFile.delete()) {
+                tempFile.deleteOnExit();
+            }
+        }
+    }
+
+    private void ensureDataFolder() {
+        if (!dataFolder.exists() && !dataFolder.mkdirs()) {
+            plugin.getLogger().severe("Failed to create plot data folder: " + dataFolder.getAbsolutePath());
         }
     }
 
@@ -521,7 +586,6 @@ public class PlotStorage {
         }
         ownerToPlotIds.computeIfAbsent(owner, ignored -> new HashSet<>()).add(plot.getPlotId());
     }
-
 
     public String getWorldName() {
         return worldName;

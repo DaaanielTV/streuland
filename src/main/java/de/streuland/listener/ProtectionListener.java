@@ -34,9 +34,10 @@ public class ProtectionListener implements Listener {
     private final MessageProvider messageProvider;
     private final PlotAccessController accessController;
 
-    public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, PlotFlagManager plotFlagManager) {
+    public ProtectionListener(JavaPlugin plugin, PlotManager plotManager, PlotFlagManager plotFlagManager, MessageProvider messageProvider) {
         this.plotManager = plotManager;
         this.plotFlagManager = plotFlagManager;
+        this.messageProvider = messageProvider;
         this.allowVisitorInteract = plugin.getConfig().getBoolean("protection.allow-visitor-interact", false);
         this.messageProvider = new MessageProvider(plugin);
         this.accessController = new PlotAccessController(plotManager);
@@ -108,12 +109,15 @@ public class ProtectionListener implements Listener {
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
-        int x = event.getBlock().getX();
-        int y = event.getBlock().getY();
-        int z = event.getBlock().getZ();
-
-        AreaType areaType = plotManager.resolveAreaTypeAt(event.getBlock().getWorld(), x, y, z);
-        switch (areaType) {
+        PlotManager.AccessDecision decision = plotManager.evaluateAccess(
+                event.getBlock().getWorld(),
+                event.getBlock().getX(),
+                event.getBlock().getY(),
+                event.getBlock().getZ(),
+                player.getUniqueId(),
+                Permission.BREAK
+        );
+        switch (decision.getAreaType()) {
             case PATH:
                 event.setCancelled(true);
                 player.sendMessage(messageProvider.t(player, "protection.break.path"));
@@ -121,8 +125,7 @@ public class ProtectionListener implements Listener {
             case PLOT_UNCLAIMED:
                 return;
             case PLOT_CLAIMED:
-                Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
-                if (!accessController.canBreak(plot, player.getUniqueId())) {
+                if (!decision.isAllowed()) {
                     event.setCancelled(true);
                     player.sendMessage(messageProvider.t(player, "protection.plot.protected"));
                 }
@@ -137,12 +140,15 @@ public class ProtectionListener implements Listener {
     @EventHandler
     public void onBlockPlace(BlockPlaceEvent event) {
         Player player = event.getPlayer();
-        int x = event.getBlock().getX();
-        int y = event.getBlock().getY();
-        int z = event.getBlock().getZ();
-
-        AreaType areaType = plotManager.resolveAreaTypeAt(event.getBlock().getWorld(), x, y, z);
-        switch (areaType) {
+        PlotManager.AccessDecision decision = plotManager.evaluateAccess(
+                event.getBlock().getWorld(),
+                event.getBlock().getX(),
+                event.getBlock().getY(),
+                event.getBlock().getZ(),
+                player.getUniqueId(),
+                Permission.BUILD
+        );
+        switch (decision.getAreaType()) {
             case PATH:
                 event.setCancelled(true);
                 player.sendMessage(messageProvider.t(player, "protection.place.path"));
@@ -150,8 +156,7 @@ public class ProtectionListener implements Listener {
             case PLOT_UNCLAIMED:
                 return;
             case PLOT_CLAIMED:
-                Plot plot = plotManager.getPlotAt(event.getBlock().getWorld(), x, z);
-                if (!accessController.canBuild(plot, player.getUniqueId())) {
+                if (!decision.isAllowed()) {
                     event.setCancelled(true);
                     player.sendMessage(messageProvider.t(player, "protection.plot.protected"));
                 }
@@ -170,21 +175,27 @@ public class ProtectionListener implements Listener {
         }
 
         Player player = event.getPlayer();
-        int x = event.getClickedBlock().getX();
-        int y = event.getClickedBlock().getY();
-        int z = event.getClickedBlock().getZ();
-
-        AreaType areaType = plotManager.resolveAreaTypeAt(event.getClickedBlock().getWorld(), x, y, z);
-        if (areaType != AreaType.PLOT_CLAIMED) {
+        Material material = event.getClickedBlock().getType();
+        Permission permission = resolveInteractPermission(material);
+        PlotManager.AccessDecision decision = plotManager.evaluateAccess(
+                event.getClickedBlock().getWorld(),
+                event.getClickedBlock().getX(),
+                event.getClickedBlock().getY(),
+                event.getClickedBlock().getZ(),
+                player.getUniqueId(),
+                permission
+        );
+        if (decision.getAreaType() != AreaType.PLOT_CLAIMED) {
             return;
         }
 
-        Plot plot = plotManager.getPlotAt(event.getClickedBlock().getWorld(), x, z);
-        if (plot == null || accessController.canInteract(plot, player.getUniqueId(), resolveInteractPermission(event.getClickedBlock().getType()))) {
+        if (decision.isAllowed()) {
             return;
         }
 
-        if (!allowVisitorInteract && isInteractiveBlock(event.getClickedBlock().getType())) {
+        if (!allowVisitorInteract
+                && decision.getActor() == PlotManager.AccessActor.UNAUTHORIZED
+                && isInteractiveBlock(material)) {
             event.setCancelled(true);
             player.sendMessage(messageProvider.t(player, "protection.interact.visitor_blocked"));
         }
@@ -192,6 +203,20 @@ public class ProtectionListener implements Listener {
 
     private Permission resolveInteractPermission(Material material) {
         return isContainerBlock(material) ? Permission.CONTAINER_ACCESS : Permission.INTERACT;
+    }
+
+    private boolean isContainerBlock(Material material) {
+        String name = material.toString();
+        return name.contains("CHEST")
+                || name.contains("BARREL")
+                || name.contains("SHULKER_BOX")
+                || name.contains("HOPPER")
+                || name.contains("DROPPER")
+                || name.contains("DISPENSER")
+                || name.contains("FURNACE")
+                || name.contains("BREWING_STAND")
+                || name.contains("BLAST_FURNACE")
+                || name.contains("SMOKER");
     }
 
     private boolean isInteractiveBlock(Material material) {

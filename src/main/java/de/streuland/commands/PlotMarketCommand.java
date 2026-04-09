@@ -2,6 +2,7 @@ package de.streuland.commands;
 
 import de.streuland.market.MarketListing;
 import de.streuland.market.MarketManager;
+import de.streuland.market.PlotMarketFilter;
 import de.streuland.market.PlotMarketService;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
@@ -21,6 +22,7 @@ public class PlotMarketCommand {
     private final PlotManager plotManager;
     private final PlotMarketService marketService;
     private final Map<UUID, PendingBuy> pendingBuys = new HashMap<>();
+    private final PlotMarketFilter marketFilter = new PlotMarketFilter();
 
     public PlotMarketCommand(PlotManager plotManager, PlotMarketService marketService) {
         this.plotManager = plotManager;
@@ -51,7 +53,7 @@ public class PlotMarketCommand {
         return switch (sub) {
             case "sell" -> sell(player, args);
             case "unsell" -> unsell(player, args);
-            case "market" -> market(player);
+            case "market" -> market(player, args);
             case "buy" -> buy(player, args);
             default -> false;
         };
@@ -96,14 +98,19 @@ public class PlotMarketCommand {
         return true;
     }
 
-    private boolean market(Player player) {
+    private boolean market(Player player, String[] args) {
         List<MarketListing> listings = marketService.getListingsSnapshot();
-        if (listings.isEmpty()) {
-            player.sendMessage("§7No plots are currently listed.");
+        PlotMarketFilter.Query query = parseMarketQuery(args);
+        List<MarketListing> filtered = marketFilter.apply(listings, query);
+        if (filtered.isEmpty()) {
+            player.sendMessage("§7No market listings matched the current filter.");
             return true;
         }
         player.sendMessage("§6=== Plot Market ===");
-        for (MarketListing listing : listings) {
+        player.sendMessage("§7Filters: min=" + nullable(query.minPrice()) + " max=" + nullable(query.maxPrice())
+                + " sort=" + query.sort().name().toLowerCase(Locale.ROOT)
+                + " limit=" + query.limit());
+        for (MarketListing listing : filtered) {
             player.sendMessage("§e" + listing.getPlotId() + " §7- §f" + format(listing.getPrice()));
         }
         return true;
@@ -155,6 +162,53 @@ public class PlotMarketCommand {
             case LISTING_NOT_FOUND -> player.sendMessage("§cThat plot is no longer listed.");
         }
         return true;
+    }
+
+    private PlotMarketFilter.Query parseMarketQuery(String[] args) {
+        Double minPrice = null;
+        Double maxPrice = null;
+        String plotIdContains = null;
+        PlotMarketFilter.Sort sort = PlotMarketFilter.Sort.PRICE_ASC;
+        int limit = 25;
+
+        for (int i = 1; i < args.length; i++) {
+            String token = args[i];
+            if (token.startsWith("min=")) {
+                minPrice = parseOptionalDouble(token.substring(4));
+            } else if (token.startsWith("max=")) {
+                maxPrice = parseOptionalDouble(token.substring(4));
+            } else if (token.startsWith("id=")) {
+                plotIdContains = token.substring(3).trim();
+            } else if (token.startsWith("sort=")) {
+                sort = PlotMarketFilter.Sort.fromInput(token.substring(5));
+            } else if (token.startsWith("limit=")) {
+                Integer parsedLimit = parseOptionalInt(token.substring(6));
+                if (parsedLimit != null) {
+                    limit = parsedLimit;
+                }
+            }
+        }
+        return new PlotMarketFilter.Query(minPrice, maxPrice, plotIdContains, sort, limit);
+    }
+
+    private Double parseOptionalDouble(String value) {
+        try {
+            return Double.parseDouble(value);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Integer parseOptionalInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String nullable(Double value) {
+        return value == null ? "-" : format(value);
     }
 
     private Plot currentOwnedPlot(Player player) {

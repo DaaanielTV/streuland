@@ -3,6 +3,7 @@ package de.streuland.commands;
 import de.streuland.approval.PlotApprovalActionType;
 import de.streuland.approval.PlotApprovalRequest;
 import de.streuland.approval.PlotApprovalService;
+import de.streuland.approval.PlotApprovalWorkflowService;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -15,9 +16,11 @@ import java.util.Map;
 
 public class PlotApprovalCommand implements CommandExecutor {
     private final PlotApprovalService approvalService;
+    private final PlotApprovalWorkflowService workflowService;
 
     public PlotApprovalCommand(PlotApprovalService approvalService) {
         this.approvalService = approvalService;
+        this.workflowService = new PlotApprovalWorkflowService(approvalService);
     }
 
     @Override
@@ -74,7 +77,7 @@ public class PlotApprovalCommand implements CommandExecutor {
             details = new HashMap<>();
             details.put("targetPlayerId", args[2]);
         }
-        PlotApprovalRequest request = approvalService.request((Player) sender, actionType, plotId, details);
+        PlotApprovalRequest request = workflowService.submit((Player) sender, actionType, plotId, details);
         sender.sendMessage("§eAntrag eingereicht: §f" + request.getId() + " §7(" + actionType.name().toLowerCase() + ")");
         return true;
     }
@@ -84,7 +87,7 @@ public class PlotApprovalCommand implements CommandExecutor {
             sender.sendMessage("§cKeine Berechtigung.");
             return true;
         }
-        List<PlotApprovalRequest> pending = approvalService.listPending();
+        List<PlotApprovalRequest> pending = workflowService.listPendingForReview();
         if (pending.isEmpty()) {
             sender.sendMessage("§7Keine offenen Plot-Freigaben.");
             return true;
@@ -102,7 +105,7 @@ public class PlotApprovalCommand implements CommandExecutor {
             return true;
         }
         Player player = (Player) sender;
-        boolean success = approvalService.approve(id, player, "approved in command");
+        boolean success = workflowService.approve(id, player, "approved in command");
         sender.sendMessage(success ? "§aAntrag genehmigt." : "§cAntrag nicht gefunden oder keine Berechtigung.");
         return true;
     }
@@ -113,7 +116,7 @@ public class PlotApprovalCommand implements CommandExecutor {
             return true;
         }
         Player player = (Player) sender;
-        boolean success = approvalService.deny(id, player, "denied in command");
+        boolean success = workflowService.deny(id, player, "denied in command");
         sender.sendMessage(success ? "§eAntrag abgelehnt." : "§cAntrag nicht gefunden oder keine Berechtigung.");
         return true;
     }

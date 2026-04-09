@@ -197,7 +197,7 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
             case "claim":
                 return handleClaim(player);
             case "info":
-                return handleInfo(player);
+                return handleInfo(player, args);
             case "team":
                 return plotTeamCommand.execute(player, args);
             case "home":
@@ -209,7 +209,11 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
             case "last":
                 return handleLast(player);
             case "list":
-                return handleList(player);
+                return handleList(player, args);
+            case "trust":
+                return handleTrust(player, args);
+            case "untrust":
+                return handleUntrust(player, args);
             case "snapshot":
                 return handleSnapshot(player, args);
             case "snapshots":
@@ -328,15 +332,17 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
 
     private boolean handleCreate(Player player) {
         List<Plot> playerPlots = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId());
-        if (playerPlots.size() >= plotManager.getMaxPlotsPerPlayer(player.getWorld())) {
-            player.sendMessage("§cDu kannst maximal " + plotManager.getMaxPlotsPerPlayer(player.getWorld()) + " Plots besitzen!");
+        int maxPlots = plotManager.getMaxPlotsPerPlayer(player.getWorld());
+        if (playerPlots.size() >= maxPlots) {
+            player.sendMessage("§cDu kannst maximal " + maxPlots + " Plots besitzen! (§f" + playerPlots.size() + "/" + maxPlots + "§c)");
+            player.sendMessage("§7Nutze /plot list, um deine aktuellen Plots zu sehen.");
             return true;
         }
 
         if (plotApprovalService != null && plotApprovalService.requiresApproval(player)) {
             PlotApprovalRequest request = plotApprovalService.createPending(player);
             player.sendMessage("§eDein Plot-Antrag wurde eingereicht: §f" + request.getId());
-            player.sendMessage("§7Ein Admin kann mit /plotapprove approve " + request.getId() + " freigeben.");
+            player.sendMessage("§7Ein Admin kann mit §f/plotapprove approve " + request.getId() + " §7freigeben.");
             return true;
         }
 
@@ -394,10 +400,10 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         return true;
     }
 
-    private boolean handleInfo(Player player) {
-        Plot plot = plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+    private boolean handleInfo(Player player, String[] args) {
+        Plot plot = resolvePlotFromArgsOrLocation(player, args, 1);
         if (plot == null) {
-            sendPlotNotFound(player, msg("messages.plot.error.no-plot-here", "&cYou are not standing in a plot."));
+            sendPlotNotFound(player, msg("messages.plot.error.no-plot-here", "&cStand in a plot or use /plot info <plotId>."));
             return true;
         }
 
@@ -417,6 +423,9 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         player.sendMessage(color(msg("messages.plot.info.trust", "&eTrust status: &f{0}", ChatColor.stripColor(color(trustLabel)))));
         player.sendMessage(color(msg("messages.plot.info.team-size", "&eTeam members: &f{0}", Math.max(0, plot.getRoles().size() - 1))));
         player.sendMessage(color(msg("messages.plot.info.neighborhood", "&eNeighborhood: &f{0}", neighborhoodService.getAnalyticsSummary(plot.getPlotId()))));
+        if (plot.getOwner() != null && plot.getOwner().equals(player.getUniqueId())) {
+            player.sendMessage(color(msg("messages.plot.info.owner-hint", "&7Manage access with &f/plot trust <player> [plotId] &7or &f/plot untrust <player> [plotId]&7.")));
+        }
         return true;
     }
 
@@ -482,7 +491,7 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
     private boolean handleHome(Player player, String[] args) {
         List<Plot> plots = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId());
         if (plots.isEmpty()) {
-            player.sendMessage("§cDu besitzt keinen Plot!");
+            player.sendMessage("§cDu besitzt keinen Plot. Nutze /plot create, um einen Plot anzulegen.");
             return true;
         }
 
@@ -492,10 +501,19 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         }
 
         if (args.length > 1) {
+            Plot byId = plotManager.getStorage(player.getWorld()).getPlot(args[1]);
+            if (byId != null) {
+                if (!player.getUniqueId().equals(byId.getOwner())) {
+                    player.sendMessage("§cDer Plot " + byId.getPlotId() + " gehört dir nicht.");
+                    return true;
+                }
+                teleportToPlot(player, byId, "§aDu wurdest zu Plot " + byId.getPlotId() + " teleportiert!");
+                return true;
+            }
             try {
                 int plotNumber = Integer.parseInt(args[1]) - 1;
                 if (plotNumber < 0 || plotNumber >= plots.size()) {
-                    player.sendMessage("§cUngültige Plot-Nummer!");
+                    player.sendMessage("§cUngültige Plot-Nummer. Nutze /plot list, um deine Plots zu sehen.");
                     return true;
                 }
                 teleportToPlot(player, plots.get(plotNumber), "§aDu wurdest zu Plot " + (plotNumber + 1) + " teleportiert!");
@@ -507,6 +525,7 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         }
 
         player.sendMessage("§6=== Wähle einen Plot ===");
+        player.sendMessage("§7Nutze /plot home <Nummer> oder /plot home <plotId>");
         for (int i = 0; i < plots.size(); i++) {
             Plot plot = plots.get(i);
             player.sendMessage("§e/plot home " + (i + 1) + "§f: Plot bei " + plot.getCenterX() + ", " + plot.getCenterZ());
@@ -514,21 +533,87 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         return true;
     }
 
-    private boolean handleList(Player player) {
+    private boolean handleList(Player player, String[] args) {
         List<Plot> plots = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId());
         if (plots.isEmpty()) {
-            player.sendMessage("§cDu besitzt keinen Plot!");
+            player.sendMessage("§cDu besitzt keinen Plot. Nutze /plot create, um einen Plot anzulegen.");
             return true;
         }
 
         player.sendMessage("§6=== Deine Plots ===");
-        for (Plot plot : plots) {
-            player.sendMessage("§e" + plot.getPlotId() + "§f: " + plot.getCenterX() + ", " + plot.getCenterZ());
+        for (int i = 0; i < plots.size(); i++) {
+            Plot plot = plots.get(i);
+            player.sendMessage("§e#" + (i + 1) + " §6" + plot.getPlotId() + "§f: " + plot.getCenterX() + ", " + plot.getCenterZ());
         }
+        player.sendMessage("§7Tip: /plot home <Nummer> oder /plot info <plotId>");
+        return true;
+    }
+
+    private boolean handleTrust(Player player, String[] args) {
+        return handleTrustUpdate(player, args, true);
+    }
+
+    private boolean handleUntrust(Player player, String[] args) {
+        return handleTrustUpdate(player, args, false);
+    }
+
+    private boolean handleTrustUpdate(Player player, String[] args, boolean trust) {
+        String verb = trust ? "trust" : "untrust";
+        if (args.length < 2) {
+            sendInvalidUsage(player, "/plot " + verb + " <player> [plotId]");
+            return true;
+        }
+
+        Plot plot = args.length > 2 ? plotManager.getStorage(player.getWorld()).getPlot(args[2])
+                : plotManager.getPlotAt(player.getWorld(), player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        if (plot == null) {
+            sendPlotNotFound(player, msg("messages.plot.error.trust-plot-not-found", "&cPlot not found. Stand in your plot or provide a plotId."));
+            return true;
+        }
+        if (plot.getOwner() == null || !plot.getOwner().equals(player.getUniqueId())) {
+            player.sendMessage("§cDu kannst nur auf deinen eigenen Plot-Vertrauen verwalten.");
+            return true;
+        }
+
+        OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
+        UUID targetId = target.getUniqueId();
+        if (targetId == null) {
+            player.sendMessage("§cSpieler nicht gefunden: " + args[1]);
+            return true;
+        }
+        if (targetId.equals(player.getUniqueId())) {
+            player.sendMessage("§cDu kannst dich nicht selbst " + (trust ? "vertrauen" : "entfernen") + ".");
+            return true;
+        }
+
+        if (trust) {
+            if (plot.getRoles().containsKey(targetId)) {
+                player.sendMessage("§e" + safePlayerName(target, args[1]) + " ist bereits im Plot-Team.");
+                return true;
+            }
+            boolean success = plotManager.assignRole(plot.getPlotId(), player.getUniqueId(), targetId, Role.BUILDER);
+            player.sendMessage(success
+                    ? "§a" + safePlayerName(target, args[1]) + " wurde als Builder auf " + plot.getPlotId() + " eingetragen."
+                    : "§cVertrauen fehlgeschlagen. Prüfe deine Berechtigung und den Plot-Status.");
+            return true;
+        }
+
+        if (!plot.getRoles().containsKey(targetId)) {
+            player.sendMessage("§e" + safePlayerName(target, args[1]) + " ist auf diesem Plot nicht vertraut.");
+            return true;
+        }
+        boolean success = plotManager.removeRole(plot.getPlotId(), player.getUniqueId(), targetId);
+        player.sendMessage(success
+                ? "§aVertrauen für " + safePlayerName(target, args[1]) + " wurde entfernt."
+                : "§cEntfernen fehlgeschlagen. Prüfe deine Berechtigung und den Plot-Status.");
         return true;
     }
 
     private boolean handleUnclaim(Player player, String[] args) {
+        if (args.length > 2) {
+            sendInvalidUsage(player, "/plot unclaim [plotId]");
+            return true;
+        }
         Plot target = resolvePlotFromArgsOrLocation(player, args, 1);
         if (target == null) {
             sendPlotNotFound(player, msg("messages.plot.error.unclaim-not-found", "Stand in a plot or use /plot unclaim <plotId>."));
@@ -546,6 +631,10 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
     }
 
     private boolean handleDelete(Player player, String[] args) {
+        if (args.length > 2) {
+            sendInvalidUsage(player, "/plot delete [plotId]");
+            return true;
+        }
         Plot target = resolvePlotFromArgsOrLocation(player, args, 1);
         if (target == null) {
             sendPlotNotFound(player, msg("messages.plot.error.delete-not-found", "Stand in a plot or use /plot delete <plotId>."));
@@ -888,11 +977,13 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         player.sendMessage("§6=== Streuland Plot Befehle ===");
         player.sendMessage("§e/plot create§f - Generiere und beanspruche einen neuen Plot");
         player.sendMessage("§e/plot claim§f - Beanspruche einen ungeclaimten Plot unter deinen Füßen");
-        player.sendMessage("§e/plot info§f - Zeige Informationen zum aktuellen Plot");
+        player.sendMessage("§e/plot info [plotId]§f - Zeige Informationen zum aktuellen oder angegebenen Plot");
         player.sendMessage("§e/plot nearby [Anzahl]§f - Zeigt nahe Plots mit Klick-Teleport");
         player.sendMessage("§e/plot tp <plotId>§f - Teleportiere direkt zu einer Plot-ID");
         player.sendMessage("§e/plot last§f - Teleportiere zum zuletzt besuchten Plot");
         player.sendMessage("§e/plot team <...>§f - Verwalte Plot-Teamrollen");
+        player.sendMessage("§e/plot trust <Spieler> [plotId]§f - Spieler als Builder hinzufügen");
+        player.sendMessage("§e/plot untrust <Spieler> [plotId]§f - Spieler aus Plot-Team entfernen");
         player.sendMessage("§e/plot home [Nummer]§f - Teleportiere dich zu einem eigenen Plot");
         player.sendMessage("§e/plot list§f - Liste deine Plots auf");
         player.sendMessage("§e/plot snapshot <create|list|restore>§f - Plot Snapshot Befehle"
@@ -1190,11 +1281,19 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
             return Collections.emptyList();
         }
         if (args.length == 1) {
-            return filterPrefix(args[0], Arrays.asList("help", "create", "claim", "info", "nearby", "tp", "last", "team", "home", "list", "unclaim", "delete"));
+            return filterPrefix(args[0], Arrays.asList("help", "create", "claim", "info", "nearby", "tp", "last", "team", "trust", "untrust", "home", "list", "unclaim", "delete"));
         }
-        if (args.length == 2 && ("tp".equalsIgnoreCase(args[0]) || "unclaim".equalsIgnoreCase(args[0]) || "delete".equalsIgnoreCase(args[0]))) {
+        if (args.length == 2 && ("tp".equalsIgnoreCase(args[0]) || "unclaim".equalsIgnoreCase(args[0]) || "delete".equalsIgnoreCase(args[0]) || "info".equalsIgnoreCase(args[0]) || "home".equalsIgnoreCase(args[0]))) {
             List<String> ids = plotManager.getAllPlots(player.getWorld()).stream().map(Plot::getPlotId).collect(Collectors.toList());
             return filterPrefix(args[1], ids);
+        }
+        if (args.length == 2 && ("trust".equalsIgnoreCase(args[0]) || "untrust".equalsIgnoreCase(args[0]))) {
+            List<String> names = Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList());
+            return filterPrefix(args[1], names);
+        }
+        if (args.length == 3 && ("trust".equalsIgnoreCase(args[0]) || "untrust".equalsIgnoreCase(args[0]))) {
+            List<String> ids = plotManager.getStorage(player.getWorld()).getPlayerPlots(player.getUniqueId()).stream().map(Plot::getPlotId).collect(Collectors.toList());
+            return filterPrefix(args[2], ids);
         }
         if (args.length == 3 && "neighbor".equalsIgnoreCase(args[0]) && "add".equalsIgnoreCase(args[1])) {
             List<String> names = Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList());
@@ -1250,5 +1349,12 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
 
     private String color(String message) {
         return ChatColor.translateAlternateColorCodes('&', message);
+    }
+
+    private String safePlayerName(OfflinePlayer player, String fallback) {
+        if (player == null) {
+            return fallback;
+        }
+        return player.getName() != null ? player.getName() : fallback;
     }
 }

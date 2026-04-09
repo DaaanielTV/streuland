@@ -10,6 +10,49 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 public class PlotManager {
+    public enum AccessActor {
+        OWNER,
+        TRUSTED,
+        UNAUTHORIZED,
+        NONE
+    }
+
+    public static final class AccessDecision {
+        private final AreaType areaType;
+        private final Plot plot;
+        private final AccessActor actor;
+        private final Permission permission;
+        private final boolean allowed;
+
+        private AccessDecision(AreaType areaType, Plot plot, AccessActor actor, Permission permission, boolean allowed) {
+            this.areaType = areaType;
+            this.plot = plot;
+            this.actor = actor;
+            this.permission = permission;
+            this.allowed = allowed;
+        }
+
+        public AreaType getAreaType() {
+            return areaType;
+        }
+
+        public Plot getPlot() {
+            return plot;
+        }
+
+        public AccessActor getActor() {
+            return actor;
+        }
+
+        public Permission getPermission() {
+            return permission;
+        }
+
+        public boolean isAllowed() {
+            return allowed;
+        }
+    }
+
     private static class WorldContext {
         private final World world;
         private final PlotStorage storage;
@@ -39,13 +82,22 @@ public class PlotManager {
         PlotStoragePartitioner partitioner = new PlotStoragePartitioner(plugin);
 
         for (WorldConfig.WorldSettings settings : worldConfig.getAllWorlds()) {
+            if (!validateWorldSettings(settings)) {
+                continue;
+            }
+
             World world = Bukkit.getWorld(settings.getWorldName());
             if (world == null) {
                 plugin.getLogger().warning("Configured plot world not loaded: " + settings.getWorldName());
                 continue;
             }
-            PlotStorage storage = new PlotStorage(plugin, settings.getWorldName(), partitioner);
-            contexts.put(settings.getWorldName(), new WorldContext(plugin, world, storage, settings));
+
+            try {
+                PlotStorage storage = new PlotStorage(plugin, settings.getWorldName(), partitioner);
+                contexts.put(settings.getWorldName(), new WorldContext(plugin, world, storage, settings));
+            } catch (Exception ex) {
+                plugin.getLogger().severe("Failed to initialize plot world context for " + settings.getWorldName() + ": " + ex.getMessage());
+            }
         }
 
         FileConfiguration config = plugin.getConfig();
@@ -53,6 +105,30 @@ public class PlotManager {
         if (!contexts.containsKey(primaryWorldName) && !contexts.isEmpty()) {
             plugin.getLogger().warning("Primary world " + primaryWorldName + " unavailable, using fallback world");
         }
+        if (contexts.isEmpty()) {
+            throw new IllegalStateException("No plot worlds could be initialized. Check world files and startup configuration.");
+        }
+    }
+
+
+    private boolean validateWorldSettings(WorldConfig.WorldSettings settings) {
+        if (settings == null) {
+            plugin.getLogger().warning("Encountered null world settings entry in configuration");
+            return false;
+        }
+        if (settings.getWorldName() == null || settings.getWorldName().isBlank()) {
+            plugin.getLogger().warning("Skipping world with empty world name in plot world config");
+            return false;
+        }
+        if (settings.getPlotSize() <= 0) {
+            plugin.getLogger().warning("Skipping world " + settings.getWorldName() + " due to invalid plot size " + settings.getPlotSize());
+            return false;
+        }
+        if (settings.getMinDistance() < 0) {
+            plugin.getLogger().warning("Skipping world " + settings.getWorldName() + " due to invalid min distance " + settings.getMinDistance());
+            return false;
+        }
+        return true;
     }
 
     private WorldContext contextFor(World world) {
@@ -94,9 +170,13 @@ public class PlotManager {
         int spawnY = findSafeSpawnY(ctx, centerX, centerZ);
         Plot plot = new Plot(plotId, centerX, centerZ, ctx.settings.getPlotSize(), playerUUID, System.currentTimeMillis(), spawnY, Plot.PlotState.CLAIMED);
         Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, () -> {
-            ctx.storage.savePlot(plot);
-            ctx.spatialGrid.addPlot(plot);
-            Bukkit.getPluginManager().callEvent(new de.streuland.event.PlotCreatedEvent(plot));
+            try {
+                ctx.storage.savePlot(plot);
+                ctx.spatialGrid.addPlot(plot);
+                Bukkit.getPluginManager().callEvent(new de.streuland.event.PlotCreatedEvent(plot));
+            } catch (Exception ex) {
+                plugin.getLogger().severe("Failed to finalize plot creation for " + plot.getPlotId() + ": " + ex.getMessage());
+            }
         });
         return plot;
     }
@@ -288,6 +368,38 @@ public class PlotManager {
     public boolean hasPermission(String plotId, UUID actor, Permission permission) {
         Plot plot = storageForPlot(plotId).getPlot(plotId);
         return hasPermission(plot, actor, permission);
+    }
+
+    public AccessDecision evaluateAccess(World world, int x, int y, int z, UUID actor, Permission permission) {
+        Permission effectivePermission = permission == null ? Permission.BUILD : permission;
+        AreaType areaType = resolveAreaTypeAt(world, x, y, z);
+        Plot plot = areaType == AreaType.PLOT_CLAIMED ? getPlotAt(world, x, z) : null;
+        AccessActor accessActor = resolveActor(plot, actor);
+        boolean allowed;
+        switch (areaType) {
+            case PLOT_UNCLAIMED:
+                allowed = true;
+                break;
+            case PLOT_CLAIMED:
+                allowed = plot != null && hasPermission(plot, actor, effectivePermission);
+                break;
+            case PATH:
+            case WILDERNESS:
+            default:
+                allowed = false;
+                break;
+        }
+        return new AccessDecision(areaType, plot, accessActor, effectivePermission, allowed);
+    }
+
+    private AccessActor resolveActor(Plot plot, UUID actor) {
+        if (plot == null || actor == null) {
+            return AccessActor.NONE;
+        }
+        if (Objects.equals(plot.getOwner(), actor)) {
+            return AccessActor.OWNER;
+        }
+        return plot.getRole(actor) == Role.VISITOR ? AccessActor.UNAUTHORIZED : AccessActor.TRUSTED;
     }
 
     private boolean canManageRoles(Plot plot, UUID actor) {

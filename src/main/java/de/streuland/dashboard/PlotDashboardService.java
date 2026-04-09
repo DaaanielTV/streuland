@@ -75,13 +75,23 @@ public class PlotDashboardService {
             return null;
         }
         Permission checked = permission == null ? Permission.BUILD : permission;
-        boolean allowed = plotManager.hasPermission(plotId, player, checked);
+        org.bukkit.World world = plotManager.getWorldForPlot(plotId);
+        PlotManager.AccessDecision decision = plotManager.evaluateAccess(
+                world,
+                plot.getCenterX(),
+                plot.getSpawnY(),
+                plot.getCenterZ(),
+                player,
+                checked
+        );
 
         Map<String, Object> response = new LinkedHashMap<String, Object>();
         response.put("plotId", plotId);
         response.put("player", player == null ? null : player.toString());
         response.put("permission", checked.name());
-        response.put("allowed", allowed);
+        response.put("allowed", decision.isAllowed());
+        response.put("areaType", decision.getAreaType().name());
+        response.put("actorType", decision.getActor().name());
         response.put("role", player == null ? Role.VISITOR.name() : plot.getRole(player).name());
         return response;
     }
