@@ -39,13 +39,22 @@ public class PlotManager {
         PlotStoragePartitioner partitioner = new PlotStoragePartitioner(plugin);
 
         for (WorldConfig.WorldSettings settings : worldConfig.getAllWorlds()) {
+            if (!validateWorldSettings(settings)) {
+                continue;
+            }
+
             World world = Bukkit.getWorld(settings.getWorldName());
             if (world == null) {
                 plugin.getLogger().warning("Configured plot world not loaded: " + settings.getWorldName());
                 continue;
             }
-            PlotStorage storage = new PlotStorage(plugin, settings.getWorldName(), partitioner);
-            contexts.put(settings.getWorldName(), new WorldContext(plugin, world, storage, settings));
+
+            try {
+                PlotStorage storage = new PlotStorage(plugin, settings.getWorldName(), partitioner);
+                contexts.put(settings.getWorldName(), new WorldContext(plugin, world, storage, settings));
+            } catch (Exception ex) {
+                plugin.getLogger().severe("Failed to initialize plot world context for " + settings.getWorldName() + ": " + ex.getMessage());
+            }
         }
 
         FileConfiguration config = plugin.getConfig();
@@ -53,6 +62,30 @@ public class PlotManager {
         if (!contexts.containsKey(primaryWorldName) && !contexts.isEmpty()) {
             plugin.getLogger().warning("Primary world " + primaryWorldName + " unavailable, using fallback world");
         }
+        if (contexts.isEmpty()) {
+            throw new IllegalStateException("No plot worlds could be initialized. Check world files and startup configuration.");
+        }
+    }
+
+
+    private boolean validateWorldSettings(WorldConfig.WorldSettings settings) {
+        if (settings == null) {
+            plugin.getLogger().warning("Encountered null world settings entry in configuration");
+            return false;
+        }
+        if (settings.getWorldName() == null || settings.getWorldName().isBlank()) {
+            plugin.getLogger().warning("Skipping world with empty world name in plot world config");
+            return false;
+        }
+        if (settings.getPlotSize() <= 0) {
+            plugin.getLogger().warning("Skipping world " + settings.getWorldName() + " due to invalid plot size " + settings.getPlotSize());
+            return false;
+        }
+        if (settings.getMinDistance() < 0) {
+            plugin.getLogger().warning("Skipping world " + settings.getWorldName() + " due to invalid min distance " + settings.getMinDistance());
+            return false;
+        }
+        return true;
     }
 
     private WorldContext contextFor(World world) {
@@ -94,9 +127,13 @@ public class PlotManager {
         int spawnY = findSafeSpawnY(ctx, centerX, centerZ);
         Plot plot = new Plot(plotId, centerX, centerZ, ctx.settings.getPlotSize(), playerUUID, System.currentTimeMillis(), spawnY, Plot.PlotState.CLAIMED);
         Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, () -> {
-            ctx.storage.savePlot(plot);
-            ctx.spatialGrid.addPlot(plot);
-            Bukkit.getPluginManager().callEvent(new de.streuland.event.PlotCreatedEvent(plot));
+            try {
+                ctx.storage.savePlot(plot);
+                ctx.spatialGrid.addPlot(plot);
+                Bukkit.getPluginManager().callEvent(new de.streuland.event.PlotCreatedEvent(plot));
+            } catch (Exception ex) {
+                plugin.getLogger().severe("Failed to finalize plot creation for " + plot.getPlotId() + ": " + ex.getMessage());
+            }
         });
         return plot;
     }
