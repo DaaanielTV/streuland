@@ -10,6 +10,49 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 public class PlotManager {
+    public enum AccessActor {
+        OWNER,
+        TRUSTED,
+        UNAUTHORIZED,
+        NONE
+    }
+
+    public static final class AccessDecision {
+        private final AreaType areaType;
+        private final Plot plot;
+        private final AccessActor actor;
+        private final Permission permission;
+        private final boolean allowed;
+
+        private AccessDecision(AreaType areaType, Plot plot, AccessActor actor, Permission permission, boolean allowed) {
+            this.areaType = areaType;
+            this.plot = plot;
+            this.actor = actor;
+            this.permission = permission;
+            this.allowed = allowed;
+        }
+
+        public AreaType getAreaType() {
+            return areaType;
+        }
+
+        public Plot getPlot() {
+            return plot;
+        }
+
+        public AccessActor getActor() {
+            return actor;
+        }
+
+        public Permission getPermission() {
+            return permission;
+        }
+
+        public boolean isAllowed() {
+            return allowed;
+        }
+    }
+
     private static class WorldContext {
         private final World world;
         private final PlotStorage storage;
@@ -325,6 +368,38 @@ public class PlotManager {
     public boolean hasPermission(String plotId, UUID actor, Permission permission) {
         Plot plot = storageForPlot(plotId).getPlot(plotId);
         return hasPermission(plot, actor, permission);
+    }
+
+    public AccessDecision evaluateAccess(World world, int x, int y, int z, UUID actor, Permission permission) {
+        Permission effectivePermission = permission == null ? Permission.BUILD : permission;
+        AreaType areaType = resolveAreaTypeAt(world, x, y, z);
+        Plot plot = areaType == AreaType.PLOT_CLAIMED ? getPlotAt(world, x, z) : null;
+        AccessActor accessActor = resolveActor(plot, actor);
+        boolean allowed;
+        switch (areaType) {
+            case PLOT_UNCLAIMED:
+                allowed = true;
+                break;
+            case PLOT_CLAIMED:
+                allowed = plot != null && hasPermission(plot, actor, effectivePermission);
+                break;
+            case PATH:
+            case WILDERNESS:
+            default:
+                allowed = false;
+                break;
+        }
+        return new AccessDecision(areaType, plot, accessActor, effectivePermission, allowed);
+    }
+
+    private AccessActor resolveActor(Plot plot, UUID actor) {
+        if (plot == null || actor == null) {
+            return AccessActor.NONE;
+        }
+        if (Objects.equals(plot.getOwner(), actor)) {
+            return AccessActor.OWNER;
+        }
+        return plot.getRole(actor) == Role.VISITOR ? AccessActor.UNAUTHORIZED : AccessActor.TRUSTED;
     }
 
     private boolean canManageRoles(Plot plot, UUID actor) {
