@@ -24,6 +24,8 @@ public final class YamlPlotUpgradeCatalog {
 
     public static PlotUpgradeTree load(FileConfiguration yaml) {
         PlotUpgradeTree tree = new PlotUpgradeTree();
+        loadProgressionTrack(yaml, tree);
+
         ConfigurationSection upgrades = yaml.getConfigurationSection("upgrades");
         if (upgrades == null) {
             return DefaultPlotUpgradeCatalog.create();
@@ -35,9 +37,12 @@ public final class YamlPlotUpgradeCatalog {
                 continue;
             }
 
-            PlotUpgradeType type = PlotUpgradeType.valueOf(section.getString("type", "COSMETIC_TITLE_EFFECT").toUpperCase(Locale.ROOT));
+            PlotUpgradeType type = PlotUpgradeType.valueOf(section.getString("type", "UTILITY").toUpperCase(Locale.ROOT));
             String displayName = section.getString("name", id);
             int level = section.getInt("level", 1);
+            int requiredPlotLevel = section.getInt("required-plot-level", 1);
+            int requiredPrestigeLevel = section.getInt("required-prestige-level", 0);
+            int xpReward = section.getInt("reward.xp", 0);
             double price = section.getDouble("cost.vault", 0D);
             long cooldown = section.getLong("cost.cooldown-seconds", 0L);
 
@@ -66,6 +71,9 @@ public final class YamlPlotUpgradeCatalog {
                     type,
                     displayName,
                     level,
+                    requiredPlotLevel,
+                    requiredPrestigeLevel,
+                    xpReward,
                     new PlotUpgradeCost(price, Collections.emptyMap(), Duration.ofSeconds(Math.max(0L, cooldown))),
                     requirements,
                     settings
@@ -73,5 +81,31 @@ public final class YamlPlotUpgradeCatalog {
         }
 
         return tree;
+    }
+
+    private static void loadProgressionTrack(FileConfiguration yaml, PlotUpgradeTree tree) {
+        ConfigurationSection progression = yaml.getConfigurationSection("progression");
+        if (progression == null) {
+            return;
+        }
+
+        String modeRaw = progression.getString("mode", "currency");
+        PlotProgressionTrack.Mode mode = "xp".equalsIgnoreCase(modeRaw)
+                ? PlotProgressionTrack.Mode.XP
+                : PlotProgressionTrack.Mode.CURRENCY;
+
+        Map<Integer, Integer> thresholds = new LinkedHashMap<>();
+        ConfigurationSection levels = progression.getConfigurationSection("levels");
+        if (levels != null) {
+            for (String key : levels.getKeys(false)) {
+                try {
+                    int level = Integer.parseInt(key);
+                    thresholds.put(level, levels.getInt(key, 0));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+
+        tree.setProgressionTrack(new PlotProgressionTrack(mode, thresholds));
     }
 }

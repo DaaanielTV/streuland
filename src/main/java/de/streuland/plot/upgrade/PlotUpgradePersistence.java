@@ -10,6 +10,9 @@ public final class PlotUpgradePersistence {
     public static Map<String, Object> serialize(PlotProgressionState state) {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("overallLevel", state.getOverallLevel());
+        root.put("progressionPoints", state.getProgressionPoints());
+        root.put("prestigeLevel", state.getPrestigeLevel());
+        root.put("lifetimeCurrencySpent", state.getLifetimeCurrencySpent());
         root.put("lastUpgradeAt", state.getLastUpgradeAt() == null ? null : state.getLastUpgradeAt().toEpochMilli());
         root.put("upgradeLevels", new LinkedHashMap<>(state.getUpgradeLevels()));
         root.put("settings", new LinkedHashMap<>(state.getActiveSettings()));
@@ -21,7 +24,10 @@ public final class PlotUpgradePersistence {
         if (root == null || root.isEmpty()) {
             return PlotProgressionState.initial();
         }
-        int overallLevel = ((Number) root.getOrDefault("overallLevel", 0)).intValue();
+        int overallLevel = ((Number) root.getOrDefault("overallLevel", 1)).intValue();
+        int progressionPoints = ((Number) root.getOrDefault("progressionPoints", 0)).intValue();
+        int prestigeLevel = ((Number) root.getOrDefault("prestigeLevel", 0)).intValue();
+        double lifetimeCurrencySpent = ((Number) root.getOrDefault("lifetimeCurrencySpent", 0D)).doubleValue();
         Object lastUpgradeAtValue = root.get("lastUpgradeAt");
         Instant lastUpgradeAt = lastUpgradeAtValue == null ? null : Instant.ofEpochMilli(((Number) lastUpgradeAtValue).longValue());
         Map<String, Integer> levels = new LinkedHashMap<>();
@@ -34,6 +40,6 @@ public final class PlotUpgradePersistence {
         if (settingsValue instanceof Map) {
             ((Map<String, Object>) settingsValue).forEach((key, value) -> settings.put(key, String.valueOf(value)));
         }
-        return new PlotProgressionState(overallLevel, lastUpgradeAt, levels, settings);
+        return new PlotProgressionState(overallLevel, progressionPoints, prestigeLevel, lifetimeCurrencySpent, lastUpgradeAt, levels, settings);
     }
 }

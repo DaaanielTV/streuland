@@ -22,9 +22,9 @@ class PlotUpgradeServiceTest {
 
         PlotUpgradeTree tree = new PlotUpgradeTree();
         tree.addUpgrade(new PlotUpgradeDefinition("size_1", PlotUpgradeType.SIZE_EXPANSION, "Size I", 1,
-                new PlotUpgradeCost(200D, Collections.emptyMap(), Duration.ZERO), Collections.emptyList(), Collections.singletonMap("size", "96")));
-        tree.addUpgrade(new PlotUpgradeDefinition("trusted_slots_1", PlotUpgradeType.TRUSTED_MEMBERS, "Trusted Slots I", 1,
-                new PlotUpgradeCost(50D, Collections.emptyMap(), Duration.ZERO), Arrays.asList(new PlotUpgradeRequirement("size_1", 1)), Collections.singletonMap("biome", "DESERT")));
+                1, 0, 100, new PlotUpgradeCost(200D, Collections.emptyMap(), Duration.ZERO), Collections.emptyList(), Collections.singletonMap("size", "96")));
+        tree.addUpgrade(new PlotUpgradeDefinition("trusted_slots_1", PlotUpgradeType.TRUSTED_PLAYER_SLOTS, "Trusted Slots I", 1,
+                1, 0, 0, new PlotUpgradeCost(50D, Collections.emptyMap(), Duration.ZERO), Arrays.asList(new PlotUpgradeRequirement("size_1", 1)), Collections.singletonMap("biome", "DESERT")));
 
         DefaultPlotUpgradeService service = new DefaultPlotUpgradeService(tree, new InMemoryPlotUpgradeStorage(), economyHook, (plotId, playerId) -> owner.equals(playerId));
 
@@ -59,22 +59,27 @@ class PlotUpgradeServiceTest {
     }
 
     @Test
-    void calculatesPricePerTierAcrossMultiplePurchases() {
+    void supportsPrestigeResetAfterMaxLevel() {
         UUID owner = UUID.randomUUID();
         FakePlotEconomyHook economyHook = new FakePlotEconomyHook();
-        economyHook.setBalance(owner, 1000D);
+        economyHook.setBalance(owner, 5000D);
 
-        PlotUpgradeTree tree = new PlotUpgradeTree();
-        tree.addUpgrade(new PlotUpgradeDefinition("cleanup_speed_1", PlotUpgradeType.AUTO_CLEANUP, "Cleanup I", 1,
-                new PlotUpgradeCost(200D, Collections.emptyMap(), Duration.ZERO), Collections.emptyList(), Collections.singletonMap("cleanup.interval-seconds", "600")));
-        tree.addUpgrade(new PlotUpgradeDefinition("cleanup_speed_2", PlotUpgradeType.AUTO_CLEANUP, "Cleanup II", 2,
-                new PlotUpgradeCost(350D, Collections.emptyMap(), Duration.ZERO), Arrays.asList(new PlotUpgradeRequirement("cleanup_speed_1", 1)), Collections.singletonMap("cleanup.interval-seconds", "300")));
+        PlotUpgradeTree tree = DefaultPlotUpgradeCatalog.create();
         DefaultPlotUpgradeService service = new DefaultPlotUpgradeService(tree, new InMemoryPlotUpgradeStorage(), economyHook, (plotId, playerId) -> owner.equals(playerId));
 
+        assertTrue(service.applyUpgrade("plot-1", owner, "size_1"));
+        assertTrue(service.applyUpgrade("plot-1", owner, "size_2"));
+        assertTrue(service.applyUpgrade("plot-1", owner, "trusted_slots_1"));
+        assertTrue(service.applyUpgrade("plot-1", owner, "trusted_slots_2"));
         assertTrue(service.applyUpgrade("plot-1", owner, "cleanup_speed_1"));
-        assertEquals(800D, economyHook.getBalance(owner));
         assertTrue(service.applyUpgrade("plot-1", owner, "cleanup_speed_2"));
-        assertEquals(450D, economyHook.getBalance(owner));
+
+        assertTrue(service.canPrestige("plot-1", owner));
+        assertTrue(service.prestige("plot-1", owner));
+        PlotProgressionState state = service.getState("plot-1").orElseThrow();
+        assertEquals(1, state.getOverallLevel());
+        assertEquals(1, state.getPrestigeLevel());
+        assertTrue(state.getUpgradeLevels().isEmpty());
     }
 
     private static final class FakePlotEconomyHook extends PlotEconomyHook {

@@ -22,6 +22,10 @@ public class PlotProgressionService {
         return getStateOrInitial(plotId).getOverallLevel();
     }
 
+    public int getPrestigeLevel(String plotId) {
+        return getStateOrInitial(plotId).getPrestigeLevel();
+    }
+
     public List<PlotUpgradeView> listUpgrades(String plotId, UUID playerId) {
         return upgradeService.getAvailableUpgrades(plotId, playerId);
     }
@@ -33,5 +37,12 @@ public class PlotProgressionService {
         return upgradeService.applyUpgrade(plotId, playerId, upgradeId)
                 ? Optional.empty()
                 : Optional.of("Upgrade purchase failed during apply.");
+    }
+
+    public Optional<String> prestige(String plotId, UUID playerId) {
+        if (!upgradeService.canPrestige(plotId, playerId)) {
+            return Optional.of("Plot is not eligible for prestige yet.");
+        }
+        return upgradeService.prestige(plotId, playerId) ? Optional.empty() : Optional.of("Prestige reset failed.");
     }
 }
