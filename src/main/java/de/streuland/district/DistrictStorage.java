@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.UUID;
 
 /**
  * YAML-based storage for districts.
@@ -50,6 +51,20 @@ public class DistrictStorage {
         config.set("sharedRules", new HashMap<>(district.getSharedRules()));
         config.set("sharedBank.enabled", district.isSharedBankEnabled());
         config.set("sharedBank.balance", district.getSharedBankBalance());
+        config.set("roleOverrideEnabled", district.isRoleOverrideEnabled());
+        Map<String, Object> members = new HashMap<>();
+        for (Map.Entry<UUID, DistrictMember> entry : district.getMembers().entrySet()) {
+            Map<String, Object> value = new HashMap<>();
+            value.put("role", entry.getValue().getRole().name());
+            value.put("joinedAt", entry.getValue().getJoinedAt());
+            members.put(entry.getKey().toString(), value);
+        }
+        config.set("members", members);
+        Map<String, String> invites = new HashMap<>();
+        for (Map.Entry<String, UUID> entry : district.getInviteCodes().entrySet()) {
+            invites.put(entry.getKey(), entry.getValue().toString());
+        }
+        config.set("invites", invites);
         config.set("spawn.world", district.getSpawnWorld());
         config.set("spawn.x", district.getSpawnX());
         config.set("spawn.y", district.getSpawnY());
@@ -113,6 +128,38 @@ public class DistrictStorage {
         }
         district.setSharedBankEnabled(config.getBoolean("sharedBank.enabled", false));
         district.setSharedBankBalance(config.getDouble("sharedBank.balance", 0D));
+        district.setRoleOverrideEnabled(config.getBoolean("roleOverrideEnabled", false));
+        if (config.isConfigurationSection("members")) {
+            for (String playerKey : config.getConfigurationSection("members").getKeys(false)) {
+                UUID playerId;
+                try {
+                    playerId = UUID.fromString(playerKey);
+                } catch (IllegalArgumentException ignored) {
+                    continue;
+                }
+                String roleRaw = config.getString("members." + playerKey + ".role", DistrictRole.VISITOR.name());
+                DistrictRole role;
+                try {
+                    role = DistrictRole.valueOf(roleRaw.toUpperCase());
+                } catch (IllegalArgumentException ignored) {
+                    role = DistrictRole.VISITOR;
+                }
+                district.upsertMember(playerId, role);
+            }
+        }
+        if (config.isConfigurationSection("invites")) {
+            for (String code : config.getConfigurationSection("invites").getKeys(false)) {
+                String invitedByRaw = config.getString("invites." + code);
+                if (invitedByRaw == null) {
+                    continue;
+                }
+                try {
+                    district.putInviteCode(code, UUID.fromString(invitedByRaw));
+                } catch (IllegalArgumentException ignored) {
+                    // keep loading when invite payload is malformed
+                }
+            }
+        }
         if (config.getString("spawn.world") != null) {
             district.setSpawn(config.getString("spawn.world"), config.getDouble("spawn.x"), config.getDouble("spawn.y"), config.getDouble("spawn.z"));
         }

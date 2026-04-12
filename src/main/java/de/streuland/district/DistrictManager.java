@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Manages district membership, shared settings, progress tracking, and persistence.
@@ -57,12 +58,27 @@ public class DistrictManager implements Listener {
 
     public District getDistrictById(String id) { return districts.get(id); }
     public Collection<District> getAllDistricts() { return new ArrayList<>(districts.values()); }
+    public District getDistrictForPlayer(UUID playerId) {
+        if (playerId == null) {
+            return null;
+        }
+        for (District district : districts.values()) {
+            if (district.hasMember(playerId)) {
+                return district;
+            }
+        }
+        return null;
+    }
 
     public synchronized District createDistrict(String name, Collection<Plot> plots) {
+        UUID ownerId = null;
         Set<String> plotIds = new HashSet<>();
         for (Plot plot : plots) {
             if (plot != null) {
                 plotIds.add(plot.getPlotId());
+                if (ownerId == null) {
+                    ownerId = plot.getOwner();
+                }
             }
         }
         if (plotIds.isEmpty()) {
@@ -72,9 +88,69 @@ public class DistrictManager implements Listener {
         for (String plotId : plotIds) {
             movePlotToDistrict(plotId, district);
         }
+        if (ownerId != null) {
+            district.upsertMember(ownerId, DistrictRole.OWNER);
+        }
         registerDistrict(district);
         storage.saveDistrict(district);
         return district;
+    }
+
+    public synchronized String createInvite(UUID actor) {
+        District district = getDistrictForPlayer(actor);
+        if (district == null) {
+            return null;
+        }
+        DistrictRole role = district.getRole(actor);
+        if (role == null || !role.canManageDistrict()) {
+            return null;
+        }
+        String code = Long.toHexString(ThreadLocalRandom.current().nextLong()).substring(0, 6).toUpperCase();
+        district.putInviteCode(code, actor);
+        storage.saveDistrict(district);
+        return code;
+    }
+
+    public synchronized boolean joinByInviteCode(UUID playerId, String inviteCode) {
+        if (playerId == null || inviteCode == null || inviteCode.isBlank() || getDistrictForPlayer(playerId) != null) {
+            return false;
+        }
+        for (District district : districts.values()) {
+            UUID invitedBy = district.consumeInviteCode(inviteCode.toUpperCase());
+            if (invitedBy != null) {
+                district.upsertMember(playerId, DistrictRole.VISITOR);
+                storage.saveDistrict(district);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public synchronized boolean leaveDistrict(UUID playerId) {
+        District district = getDistrictForPlayer(playerId);
+        if (district == null) {
+            return false;
+        }
+        DistrictRole role = district.getRole(playerId);
+        if (role == DistrictRole.OWNER) {
+            return false;
+        }
+        district.removeMember(playerId);
+        storage.saveDistrict(district);
+        return true;
+    }
+
+    public synchronized boolean disbandDistrict(UUID actor) {
+        District district = getDistrictForPlayer(actor);
+        if (district == null || district.getRole(actor) != DistrictRole.OWNER) {
+            return false;
+        }
+        districts.remove(district.getId());
+        for (String plotId : new HashSet<>(district.getPlotIds())) {
+            plotToDistrict.remove(plotId);
+        }
+        storage.deleteDistrict(district.getId());
+        return true;
     }
 
     public synchronized boolean addPlotToDistrict(String districtId, Plot plot) {
@@ -113,6 +189,18 @@ public class DistrictManager implements Listener {
         return true;
     }
 
+    public synchronized boolean renameDistrict(UUID actor, String name) {
+        District district = getDistrictForPlayer(actor);
+        if (district == null) {
+            return false;
+        }
+        DistrictRole role = district.getRole(actor);
+        if (role == null || !role.canManageDistrict()) {
+            return false;
+        }
+        return renameDistrict(district.getId(), name);
+    }
+
     public synchronized boolean setSharedRule(String districtId, String ruleKey, boolean value) {
         District district = districts.get(districtId);
         if (district == null || ruleKey == null || ruleKey.trim().isEmpty()) {
@@ -140,6 +228,62 @@ public class DistrictManager implements Listener {
             return false;
         }
         district.setSpawn(plotManager.getWorldForPlot(plot.getPlotId()).getName(), plot.getCenterX(), plot.getSpawnY(), plot.getCenterZ());
+        storage.saveDistrict(district);
+        return true;
+    }
+
+    public synchronized boolean claimPlotToActorDistrict(UUID actor, String plotId) {
+        District district = getDistrictForPlayer(actor);
+        if (district == null || plotId == null || plotId.isBlank()) {
+            return false;
+        }
+        DistrictRole role = district.getRole(actor);
+        if (role == null || !role.canManageDistrict()) {
+            return false;
+        }
+        Plot plot = resolvePlot(plotId);
+        if (plot == null) {
+            return false;
+        }
+        movePlotToDistrict(plotId, district);
+        storage.saveDistrict(district);
+        return true;
+    }
+
+    public synchronized boolean unclaimPlotFromActorDistrict(UUID actor, String plotId) {
+        District district = getDistrictForPlayer(actor);
+        if (district == null || plotId == null || plotId.isBlank()) {
+            return false;
+        }
+        DistrictRole role = district.getRole(actor);
+        if (role == null || !role.canManageDistrict()) {
+            return false;
+        }
+        return removePlotFromDistrict(district.getId(), plotId);
+    }
+
+    public boolean canUseDistrictPermissionOverride(Plot plot, UUID actor, de.streuland.plot.Permission permission) {
+        if (plot == null || actor == null || permission == null) {
+            return false;
+        }
+        District district = getDistrictForPlot(plot);
+        if (district == null || !district.isRoleOverrideEnabled()) {
+            return false;
+        }
+        DistrictRole role = district.getRole(actor);
+        return role != null && role.grants(permission);
+    }
+
+    public synchronized boolean setRoleOverrideEnabled(UUID actor, boolean enabled) {
+        District district = getDistrictForPlayer(actor);
+        if (district == null) {
+            return false;
+        }
+        DistrictRole role = district.getRole(actor);
+        if (role == null || !role.canManageDistrict()) {
+            return false;
+        }
+        district.setRoleOverrideEnabled(enabled);
         storage.saveDistrict(district);
         return true;
     }
@@ -264,6 +408,15 @@ public class DistrictManager implements Listener {
         }
         targetDistrict.addPlot(plotId);
         plotToDistrict.put(plotId, targetDistrict.getId());
+    }
+
+    private Plot resolvePlot(String plotId) {
+        for (Plot plot : plotManager.getAllPlots()) {
+            if (plotId.equalsIgnoreCase(plot.getPlotId())) {
+                return plot;
+            }
+        }
+        return null;
     }
 
     private String nextDistrictId() { return "district_" + (++districtCounter); }
