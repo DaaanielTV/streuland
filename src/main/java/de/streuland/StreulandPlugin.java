@@ -7,6 +7,7 @@ import de.streuland.admin.StreulandDiagnosticsService;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.approval.PlotApprovalService;
 import de.streuland.backup.SnapshotService;
+import de.streuland.backup.PlotBackupCoordinator;
 import de.streuland.bootstrap.ConfigValidationService;
 import de.streuland.bootstrap.FeatureToggles;
 import de.streuland.command.DistrictCommandExecutor;
@@ -16,6 +17,7 @@ import de.streuland.commands.PlotApprovalCommand;
 import de.streuland.commands.PlotUpgradeCommand;
 import de.streuland.compat.WorldGuardCompat;
 import de.streuland.dashboard.DashboardDataExporter;
+import de.streuland.dashboard.PlotAuditLogService;
 import de.streuland.dashboard.RestApiController;
 import de.streuland.discord.DiscordNotifier;
 import de.streuland.district.DistrictClusterService;
@@ -102,6 +104,8 @@ public class StreulandPlugin extends JavaPlugin {
     private AdminPlotService adminPlotService;
     private DailyPlotBackupService dailyPlotBackupService;
     private SnapshotService snapshotService;
+    private PlotBackupCoordinator plotBackupCoordinator;
+    private PlotAuditLogService plotAuditLogService;
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
     private PlotFlagManager plotFlagManager;
@@ -137,6 +141,8 @@ public class StreulandPlugin extends JavaPlugin {
         SnapshotStorage snapshotStorage = new SnapshotStorage(this);
         snapshotManager = new SnapshotManager(this, plotManager, snapshotStorage);
         snapshotService = new SnapshotService(this, plotManager, snapshotManager);
+        plotBackupCoordinator = new PlotBackupCoordinator(plotManager, snapshotService);
+        plotAuditLogService = new PlotAuditLogService(5000);
 
         ruleEngine = new RuleEngine(plotManager, new DefaultPlotLevelProvider());
         ruleEngine.registerProvider(new ExampleRules());
@@ -280,7 +286,18 @@ public class StreulandPlugin extends JavaPlugin {
 
         if (features.dashboardApiEnabled()) {
             DashboardDataExporter exporter = new DashboardDataExporter(plotManager.getStorage());
-            restApiController = new RestApiController(this, plotManager, neighborhoodService, analyticsService, exporter, plotMarketService, plotApprovalService);
+            restApiController = new RestApiController(
+                    this,
+                    plotManager,
+                    neighborhoodService,
+                    analyticsService,
+                    exporter,
+                    plotMarketService,
+                    plotApprovalService,
+                    districtManager,
+                    plotBackupCoordinator,
+                    plotAuditLogService
+            );
             restApiController.start();
             getLogger().info("✓ Dashboard API initialized");
 
@@ -378,7 +395,12 @@ public class StreulandPlugin extends JavaPlugin {
             getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager, messageProvider));
         }
         if (getCommand("streuland") != null) {
-            getCommand("streuland").setExecutor(new StreulandCommandExecutor(plotManager, new StreulandDiagnosticsService(plotManager, getLogger())));
+            getCommand("streuland").setExecutor(new StreulandCommandExecutor(
+                    plotManager,
+                    new StreulandDiagnosticsService(plotManager, getLogger()),
+                    plotBackupCoordinator,
+                    plotAuditLogService
+            ));
         }
 
         if (features.backupsEnabled() || features.dashboardApiEnabled() || features.upgradesEnabled()) {
@@ -464,4 +486,3 @@ public class StreulandPlugin extends JavaPlugin {
         return plotApprovalService;
     }
 }
-
