@@ -316,6 +316,7 @@ public class StreulandPlugin extends JavaPlugin {
 
     private void districtBootstrap() {
         districtManager = new DistrictManager(this, plotManager);
+        plotManager.setDistrictManager(districtManager);
         districtProgressService = new DistrictProgressService(this, plotManager, districtManager);
         getServer().getPluginManager().registerEvents(districtManager, this);
         getServer().getPluginManager().registerEvents(districtProgressService, this);
@@ -375,7 +376,9 @@ public class StreulandPlugin extends JavaPlugin {
             getCommand("plotapprove").setExecutor(new PlotApprovalCommand(plotApprovalService));
         }
         if (getCommand("district") != null) {
-            getCommand("district").setExecutor(new DistrictCommandExecutor(plotManager, districtManager, messageProvider));
+            DistrictCommandExecutor districtCommandExecutor = new DistrictCommandExecutor(plotManager, districtManager, messageProvider);
+            getCommand("district").setExecutor(districtCommandExecutor);
+            getCommand("district").setTabCompleter(districtCommandExecutor);
         }
         if (getCommand("streuland") != null) {
             getCommand("streuland").setExecutor(new StreulandCommandExecutor(plotManager, new StreulandDiagnosticsService(plotManager, getLogger())));
@@ -464,4 +467,3 @@ public class StreulandPlugin extends JavaPlugin {
         return plotApprovalService;
     }
 }
-

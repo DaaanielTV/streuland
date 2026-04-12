@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Represents a district made up of one or more plots with shared settings.
@@ -19,8 +20,11 @@ public class District {
     private final DistrictProgress progress;
     private final long createdAt;
     private final Map<String, Boolean> sharedRules;
+    private final Map<UUID, DistrictMember> members;
+    private final Map<String, UUID> inviteCodes;
     private boolean sharedBankEnabled;
     private double sharedBankBalance;
+    private boolean roleOverrideEnabled;
     private String spawnWorld;
     private Double spawnX;
     private Double spawnY;
@@ -34,6 +38,9 @@ public class District {
         this.progress = new DistrictProgress();
         this.createdAt = createdAt;
         this.sharedRules = new HashMap<>();
+        this.members = new HashMap<>();
+        this.inviteCodes = new HashMap<>();
+        this.roleOverrideEnabled = false;
     }
 
     public String getId() { return id; }
@@ -47,10 +54,14 @@ public class District {
     public DistrictProgress getProgress() { return progress; }
     public long getCreatedAt() { return createdAt; }
     public Map<String, Boolean> getSharedRules() { return sharedRules; }
+    public Map<UUID, DistrictMember> getMembers() { return Collections.unmodifiableMap(members); }
+    public Map<String, UUID> getInviteCodes() { return Collections.unmodifiableMap(inviteCodes); }
     public boolean isSharedBankEnabled() { return sharedBankEnabled; }
     public void setSharedBankEnabled(boolean sharedBankEnabled) { this.sharedBankEnabled = sharedBankEnabled; }
     public double getSharedBankBalance() { return sharedBankBalance; }
     public void setSharedBankBalance(double sharedBankBalance) { this.sharedBankBalance = sharedBankBalance; }
+    public boolean isRoleOverrideEnabled() { return roleOverrideEnabled; }
+    public void setRoleOverrideEnabled(boolean roleOverrideEnabled) { this.roleOverrideEnabled = roleOverrideEnabled; }
     public String getSpawnWorld() { return spawnWorld; }
     public Double getSpawnX() { return spawnX; }
     public Double getSpawnY() { return spawnY; }
@@ -79,5 +90,42 @@ public class District {
             return null;
         }
         return new Location(world, spawnX, spawnY, spawnZ);
+    }
+
+    public DistrictRole getRole(UUID playerId) {
+        DistrictMember member = members.get(playerId);
+        return member == null ? null : member.getRole();
+    }
+
+    public boolean hasMember(UUID playerId) {
+        return playerId != null && members.containsKey(playerId);
+    }
+
+    public void upsertMember(UUID playerId, DistrictRole role) {
+        if (playerId == null || role == null) {
+            return;
+        }
+        members.put(playerId, new DistrictMember(playerId, role, System.currentTimeMillis()));
+    }
+
+    public void removeMember(UUID playerId) {
+        if (playerId == null) {
+            return;
+        }
+        members.remove(playerId);
+    }
+
+    public void putInviteCode(String code, UUID invitedBy) {
+        if (code == null || code.isBlank() || invitedBy == null) {
+            return;
+        }
+        inviteCodes.put(code, invitedBy);
+    }
+
+    public UUID consumeInviteCode(String code) {
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        return inviteCodes.remove(code);
     }
 }

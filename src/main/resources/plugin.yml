@@ -14,7 +14,7 @@ commands:
       - p
   district:
     description: District command
-    usage: /district <info|progress|list>
+    usage: /district <create|invite|join|leave|info|rename|disband|claimplot|unclaimplot|override>
     aliases:
       - city
   plotapprove:

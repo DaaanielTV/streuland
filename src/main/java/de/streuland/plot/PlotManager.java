@@ -1,5 +1,6 @@
 package de.streuland.plot;
 
+import de.streuland.district.DistrictManager;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -74,6 +75,7 @@ public class PlotManager {
     private final WorldConfig worldConfig;
     private final Map<String, WorldContext> contexts = new HashMap<>();
     private final String primaryWorldName;
+    private DistrictManager districtManager;
 
     public PlotManager(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -362,7 +364,13 @@ public class PlotManager {
     }
 
     public boolean hasPermission(Plot plot, UUID actor, Permission permission) {
-        return plot != null && permission != null && plot.isAllowed(actor, permission);
+        if (plot == null || permission == null) {
+            return false;
+        }
+        if (plot.isAllowed(actor, permission)) {
+            return true;
+        }
+        return districtManager != null && districtManager.canUseDistrictPermissionOverride(plot, actor, permission);
     }
 
     public boolean hasPermission(String plotId, UUID actor, Permission permission) {
@@ -424,6 +432,10 @@ public class PlotManager {
             mappings.put(role, permissions);
         }
         return mappings;
+    }
+
+    public void setDistrictManager(DistrictManager districtManager) {
+        this.districtManager = districtManager;
     }
 
     public Plot claimPlotAt(UUID player, World world, int x, int z) {

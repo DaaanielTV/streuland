@@ -101,4 +101,47 @@ class DistrictManagerTest {
         assertTrue(json.contains("\"districtSharedBank\":true"));
         assertTrue(json.contains("\"districtHasSpawn\":true"));
     }
+
+    @Test
+    void membershipInviteJoinLeaveFlow() {
+        UUID ownerId = plotOne.getOwner();
+        District district = districtManager.createDistrict("Harbor", Collections.singletonList(plotOne));
+        district.upsertMember(ownerId, DistrictRole.OWNER);
+        districtManager.getStorage().saveDistrict(district);
+
+        String inviteCode = districtManager.createInvite(ownerId);
+        assertNotNull(inviteCode);
+
+        UUID memberId = UUID.randomUUID();
+        assertTrue(districtManager.joinByInviteCode(memberId, inviteCode));
+        assertEquals(DistrictRole.VISITOR, districtManager.getDistrictForPlayer(memberId).getRole(memberId));
+        assertTrue(districtManager.leaveDistrict(memberId));
+        assertNull(districtManager.getDistrictForPlayer(memberId));
+    }
+
+    @Test
+    void districtRoleOverrideCanGrantAccessBeyondPlotTrust() {
+        UUID ownerId = plotOne.getOwner();
+        UUID builderId = UUID.randomUUID();
+        District district = districtManager.createDistrict("Forge", Collections.singletonList(plotOne));
+        district.upsertMember(ownerId, DistrictRole.OWNER);
+        district.upsertMember(builderId, DistrictRole.BUILDER);
+        district.setRoleOverrideEnabled(true);
+        districtManager.getStorage().saveDistrict(district);
+
+        assertTrue(districtManager.canUseDistrictPermissionOverride(plotOne, builderId, de.streuland.plot.Permission.BUILD));
+        assertFalse(districtManager.canUseDistrictPermissionOverride(plotOne, builderId, de.streuland.plot.Permission.TRANSFER));
+    }
+
+    @Test
+    void districtStorageBackwardsCompatibilityLoadsWithoutMembersSection() {
+        District district = districtManager.createDistrict("Compat", Collections.singletonList(plotOne));
+        districtManager.getStorage().saveDistrict(district);
+
+        DistrictStorage reloaded = new DistrictStorage(plugin);
+        District loaded = reloaded.getDistrict(district.getId());
+        assertNotNull(loaded);
+        assertNotNull(loaded.getMembers());
+        assertEquals(Collections.singleton(plotOne.getPlotId()), loaded.getPlotIds());
+    }
 }
