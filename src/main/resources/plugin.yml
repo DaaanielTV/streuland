@@ -22,7 +22,7 @@ commands:
     usage: /plotapprove <list|approve|reject> <id>
   streuland:
     description: Admin diagnostics and maintenance
-    usage: /streuland <debug|reload|scan|repair>
+    usage: /streuland <debug|reload|scan|repair|backup|audit>
 
 softdepend:
   - Vault

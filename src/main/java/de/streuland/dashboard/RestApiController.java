@@ -9,6 +9,10 @@ import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.analytics.PlotAnalyticsRecord;
 import de.streuland.api.event.PlotUpgradedEvent;
 import de.streuland.approval.PlotApprovalService;
+import de.streuland.backup.PlotBackupCoordinator;
+import de.streuland.district.District;
+import de.streuland.district.DistrictManager;
+import de.streuland.event.PlotClaimedEvent;
 import de.streuland.event.PlotCreatedEvent;
 import de.streuland.neighborhood.NeighborhoodService;
 import de.streuland.plot.Permission;
@@ -34,11 +38,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Hosts dashboard REST endpoints and static assets.
@@ -53,6 +59,9 @@ public class RestApiController implements Listener {
     private final PlotApprovalService approvalService;
     private final PlotDashboardService plotDashboardService;
     private final DashboardAuthService authService;
+    private final DistrictManager districtManager;
+    private final PlotAuditLogService auditLogService;
+    private final PlotBackupOperationsService backupOperationsService;
     private final Gson gson;
     private HttpServer httpServer;
     private DashboardWebSocketServer webSocketServer;
@@ -63,7 +72,10 @@ public class RestApiController implements Listener {
                              InMemoryPlotAnalyticsService analyticsService,
                              DashboardDataExporter dataExporter,
                              PlotMarketService marketService,
-                             PlotApprovalService approvalService) {
+                             PlotApprovalService approvalService,
+                             DistrictManager districtManager,
+                             PlotBackupCoordinator backupCoordinator,
+                             PlotAuditLogService auditLogService) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.neighborhoodService = neighborhoodService;
@@ -71,8 +83,11 @@ public class RestApiController implements Listener {
         this.dataExporter = dataExporter;
         this.marketService = marketService;
         this.approvalService = approvalService;
+        this.districtManager = districtManager;
         this.plotDashboardService = new PlotDashboardService(plotManager, marketService);
         this.authService = new DashboardAuthService(plugin);
+        this.auditLogService = auditLogService;
+        this.backupOperationsService = new PlotBackupOperationsService(backupCoordinator, auditLogService);
         this.gson = new Gson();
     }
 
@@ -89,6 +104,10 @@ public class RestApiController implements Listener {
 
         httpServer.createContext("/api/dashboard/plots", new PlotCollectionHandler());
         httpServer.createContext("/api/dashboard/plots/", new PlotDetailHandler());
+        httpServer.createContext("/api/dashboard/ops/plots", new OpsPlotCollectionHandler());
+        httpServer.createContext("/api/dashboard/ops/plots/", new OpsPlotDetailHandler());
+        httpServer.createContext("/api/dashboard/ops/backups", new OpsBackupHandler());
+        httpServer.createContext("/api/dashboard/ops/audit", new OpsAuditHandler());
 
         httpServer.createContext("/streuland-dashboard", new DashboardStaticHandler());
         httpServer.createContext("/api/approval/approve", exchange -> handleApproval(exchange, true));
@@ -119,12 +138,26 @@ public class RestApiController implements Listener {
     public void onPlotCreated(PlotCreatedEvent event) {
         Plot plot = event.getPlot();
         analyticsService.record(new PlotAnalyticsRecord(plot.getPlotId(), plot.getOwner(), "plot_created", Instant.now(), 1));
+        auditLogService.record(plot.getPlotId(), "plot_create", "SYSTEM", Collections.<String, Object>emptyMap());
+        broadcastAudit(plot.getPlotId());
         broadcast("plot_created", plot.getPlotId());
+    }
+
+    @EventHandler
+    public void onPlotClaimed(PlotClaimedEvent event) {
+        Plot plot = event.getPlot();
+        auditLogService.record(plot.getPlotId(), "claim", "SYSTEM", Collections.<String, Object>emptyMap());
+        broadcastAudit(plot.getPlotId());
     }
 
     @EventHandler
     public void onPlotUpgraded(PlotUpgradedEvent event) {
         analyticsService.record(new PlotAnalyticsRecord(event.getPlotId(), null, "plot_upgraded", Instant.now(), event.getToLevel()));
+        Map<String, Object> metadata = new LinkedHashMap<String, Object>();
+        metadata.put("fromLevel", event.getFromLevel());
+        metadata.put("toLevel", event.getToLevel());
+        auditLogService.record(event.getPlotId(), "upgrade_change", "SYSTEM", metadata);
+        broadcastAudit(event.getPlotId());
         broadcast("plot_upgraded", event.getPlotId());
     }
 
@@ -138,6 +171,18 @@ public class RestApiController implements Listener {
         event.put("plot", plotDashboardService.getPlotDetails(plotId));
         event.put("ts", System.currentTimeMillis());
         webSocketServer.broadcastJson(gson.toJson(event));
+    }
+
+    private void broadcastAudit(String plotId) {
+        if (webSocketServer == null) {
+            return;
+        }
+        Map<String, Object> payload = new HashMap<String, Object>();
+        payload.put("type", "audit_event");
+        payload.put("plotId", plotId);
+        payload.put("events", toAuditRows(auditLogService.listByPlot(plotId, 10)));
+        payload.put("ts", System.currentTimeMillis());
+        webSocketServer.broadcastJson(gson.toJson(payload));
     }
 
     private String buildLiveHeatmapJson() {
@@ -298,6 +343,10 @@ public class RestApiController implements Listener {
             }
 
             if (parts.length == 2 && "trusted".equals(parts[1]) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                if (!authService.isAuthorized(exchange, DashboardRole.OPERATOR)) {
+                    exchange.sendResponseHeaders(403, -1);
+                    return;
+                }
                 JsonObject payload = gson.fromJson(readBody(exchange), JsonObject.class);
                 UUID actor = payload != null && payload.has("actor") ? toUuid(payload.get("actor").getAsString()) : null;
                 UUID target = payload != null && payload.has("target") ? toUuid(payload.get("target").getAsString()) : null;
@@ -307,6 +356,12 @@ public class RestApiController implements Listener {
                     exchange.sendResponseHeaders(403, -1);
                     return;
                 }
+                Map<String, Object> metadata = new LinkedHashMap<String, Object>();
+                metadata.put("target", target == null ? null : target.toString());
+                metadata.put("action", action);
+                auditLogService.record(plotId, "add".equalsIgnoreCase(action) ? "trust" : "untrust",
+                        actor == null ? "UNKNOWN" : actor.toString(), metadata);
+                broadcastAudit(plotId);
                 broadcast("plot_updated", plotId);
                 writeJson(exchange, gson.toJson(Collections.singletonMap("success", true)));
                 return;
@@ -404,6 +459,147 @@ public class RestApiController implements Listener {
             }
             exchange.sendResponseHeaders(404, -1);
         }
+    }
+
+    private class OpsPlotCollectionHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!authService.isAuthorized(exchange, DashboardRole.VIEWER)) {
+                exchange.sendResponseHeaders(401, -1);
+                return;
+            }
+            Map<String, String> query = parseQuery(exchange.getRequestURI().getRawQuery());
+            List<Map<String, Object>> rows = plotDashboardService.listPlots(
+                    query.get("search"),
+                    query.get("owner"),
+                    query.get("areaType"),
+                    query.get("marketStatus"));
+            writeJson(exchange, gson.toJson(Collections.singletonMap("plots", rows)));
+        }
+    }
+
+    private class OpsPlotDetailHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!authService.isAuthorized(exchange, DashboardRole.VIEWER)) {
+                exchange.sendResponseHeaders(401, -1);
+                return;
+            }
+            String path = exchange.getRequestURI().getPath();
+            String suffix = path.substring("/api/dashboard/ops/plots/".length());
+            String[] parts = suffix.split("/");
+            if (parts.length == 0 || parts[0].trim().isEmpty()) {
+                exchange.sendResponseHeaders(404, -1);
+                return;
+            }
+            String plotId = parts[0];
+            Map<String, Object> detail = plotDashboardService.getPlotDetails(plotId);
+            if (detail == null) {
+                exchange.sendResponseHeaders(404, -1);
+                return;
+            }
+            detail.put("audit", toAuditRows(auditLogService.listByPlot(plotId, 100)));
+            detail.put("district", districtPayload(plotId));
+            writeJson(exchange, gson.toJson(detail));
+        }
+    }
+
+    private class OpsBackupHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            Map<String, String> query = parseQuery(exchange.getRequestURI().getRawQuery());
+            String plotId = query.get("plotId");
+            if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                if (!authService.isAuthorized(exchange, DashboardRole.VIEWER)) {
+                    exchange.sendResponseHeaders(401, -1);
+                    return;
+                }
+                writeJson(exchange, gson.toJson(Collections.singletonMap("backups", backupOperationsService.listBackups(plotId))));
+                return;
+            }
+            if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                if (!authService.isAuthorized(exchange, DashboardRole.ADMIN)) {
+                    exchange.sendResponseHeaders(403, -1);
+                    return;
+                }
+                String action = query.getOrDefault("action", "create");
+                String actor = query.getOrDefault("actor", "dashboard");
+                if ("restore".equalsIgnoreCase(action)) {
+                    String snapshotId = query.get("snapshotId");
+                    Map<String, Object> restored = backupOperationsService.restoreBackup(plotId, snapshotId, UUID.randomUUID(), actor).join();
+                    if (restored == null) {
+                        exchange.sendResponseHeaders(400, -1);
+                        return;
+                    }
+                    broadcastAudit(plotId);
+                    writeJson(exchange, gson.toJson(restored));
+                    return;
+                }
+                Map<String, Object> created = backupOperationsService.createBackup(plotId, UUID.randomUUID(), actor, "dashboard-manual").join();
+                if (created == null) {
+                    exchange.sendResponseHeaders(400, -1);
+                    return;
+                }
+                broadcastAudit(plotId);
+                writeJson(exchange, gson.toJson(created));
+                return;
+            }
+            exchange.sendResponseHeaders(405, -1);
+        }
+    }
+
+    private class OpsAuditHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!authService.isAuthorized(exchange, DashboardRole.VIEWER)) {
+                exchange.sendResponseHeaders(401, -1);
+                return;
+            }
+            Map<String, String> query = parseQuery(exchange.getRequestURI().getRawQuery());
+            int limit = 100;
+            try {
+                limit = Integer.parseInt(query.getOrDefault("limit", "100"));
+            } catch (NumberFormatException ignored) {
+            }
+            String plotId = query.get("plotId");
+            List<PlotAuditEvent> events = plotId == null
+                    ? auditLogService.listRecent(limit)
+                    : auditLogService.listByPlot(plotId, limit);
+            writeJson(exchange, gson.toJson(Collections.singletonMap("events", toAuditRows(events))));
+        }
+    }
+
+    private List<Map<String, Object>> toAuditRows(List<PlotAuditEvent> events) {
+        return events.stream().map(event -> {
+            Map<String, Object> row = new LinkedHashMap<String, Object>();
+            row.put("id", event.getEventId());
+            row.put("plotId", event.getPlotId());
+            row.put("action", event.getAction());
+            row.put("actor", event.getActor());
+            row.put("timestamp", event.getTimestamp().toString());
+            row.put("metadata", event.getMetadata());
+            return row;
+        }).collect(Collectors.toList());
+    }
+
+    private Map<String, Object> districtPayload(String plotId) {
+        if (districtManager == null) {
+            return null;
+        }
+        Plot plot = plotManager.getStorage().getPlot(plotId);
+        if (plot == null) {
+            return null;
+        }
+        District district = districtManager.getDistrictForPlot(plot);
+        if (district == null) {
+            return null;
+        }
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("id", district.getId());
+        payload.put("name", district.getName());
+        payload.put("level", district.getLevel().name());
+        payload.put("plotIds", new ArrayList<String>(district.getPlotIds()));
+        return payload;
     }
 
     private class DashboardStaticHandler implements HttpHandler {
