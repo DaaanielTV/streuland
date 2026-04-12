@@ -281,6 +281,8 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
                 return handleFlag(player, args);
             case "upgrade":
             case "upgrades":
+            case "prestige":
+            case "level":
                 return plotUpgradeCommand.handle(player, args);
             default:
                 if ("template".equals(subcommand)) {

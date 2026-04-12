@@ -1,10 +1,22 @@
+progression:
+  # mode: currency | xp
+  mode: currency
+  levels:
+    "1": 0
+    "2": 500
+    "3": 1500
+    "4": 3500
+
 upgrades:
   size_1:
     type: SIZE_EXPANSION
     name: "Plot Size I"
     level: 1
+    required-plot-level: 1
     cost:
       vault: 200
+    reward:
+      xp: 30
     settings:
       size: 96
 
@@ -12,16 +24,38 @@ upgrades:
     type: SIZE_EXPANSION
     name: "Plot Size II"
     level: 2
+    required-plot-level: 2
     cost:
       vault: 500
+    reward:
+      xp: 60
     requirements:
       - id: size_1
         level: 1
     settings:
       size: 128
 
+  biome_desert:
+    type: BIOME_UNLOCK
+    name: "Desert Biome"
+    level: 1
+    required-plot-level: 2
+    cost:
+      vault: 180
+    settings:
+      biome.unlock: DESERT
+
+  decor_limit_1:
+    type: DECORATION_LIMIT
+    name: "Decoration Capacity I"
+    level: 1
+    cost:
+      vault: 140
+    settings:
+      decoration.max: 125
+
   trusted_slots_1:
-    type: TRUSTED_MEMBERS
+    type: TRUSTED_PLAYER_SLOTS
     name: "Trusted Slots I"
     level: 1
     cost:
@@ -30,9 +64,10 @@ upgrades:
       trusted.max: 8
 
   trusted_slots_2:
-    type: TRUSTED_MEMBERS
+    type: TRUSTED_PLAYER_SLOTS
     name: "Trusted Slots II"
     level: 2
+    required-plot-level: 2
     cost:
       vault: 325
     requirements:
@@ -41,8 +76,8 @@ upgrades:
     settings:
       trusted.max: 12
 
-  cleanup_speed_1:
-    type: AUTO_CLEANUP
+  utility_cleanup_1:
+    type: UTILITY
     name: "Auto Cleanup I"
     level: 1
     cost:
@@ -50,23 +85,15 @@ upgrades:
     settings:
       cleanup.interval-seconds: 600
 
-  cleanup_speed_2:
-    type: AUTO_CLEANUP
+  utility_cleanup_2:
+    type: UTILITY
     name: "Auto Cleanup II"
     level: 2
+    required-plot-level: 3
     cost:
       vault: 360
     requirements:
-      - id: cleanup_speed_1
+      - id: utility_cleanup_1
         level: 1
     settings:
       cleanup.interval-seconds: 300
-
-  title_glow_1:
-    type: COSMETIC_TITLE_EFFECT
-    name: "Title Glow"
-    level: 1
-    cost:
-      vault: 250
-    settings:
-      title.effect: GLOW

@@ -13,15 +13,25 @@ public class DefaultPlotUpgradeService implements PlotUpgradeService {
     private final PlotUpgradeStorage storage;
     private final PlotEconomyHook economyHook;
     private final PlotOwnershipResolver ownershipResolver;
+    private final PlotUpgradeConstraintValidator constraintValidator;
 
     public DefaultPlotUpgradeService(PlotUpgradeTree tree,
                                      PlotUpgradeStorage storage,
                                      PlotEconomyHook economyHook,
                                      PlotOwnershipResolver ownershipResolver) {
+        this(tree, storage, economyHook, ownershipResolver, PlotUpgradeConstraintValidator.allowAll());
+    }
+
+    public DefaultPlotUpgradeService(PlotUpgradeTree tree,
+                                     PlotUpgradeStorage storage,
+                                     PlotEconomyHook economyHook,
+                                     PlotOwnershipResolver ownershipResolver,
+                                     PlotUpgradeConstraintValidator constraintValidator) {
         this.tree = tree;
         this.storage = storage;
         this.economyHook = economyHook;
         this.ownershipResolver = ownershipResolver;
+        this.constraintValidator = constraintValidator == null ? PlotUpgradeConstraintValidator.allowAll() : constraintValidator;
     }
 
     @Override
@@ -60,12 +70,36 @@ public class DefaultPlotUpgradeService implements PlotUpgradeService {
         if (validation != null) {
             return false;
         }
-        if (definition.get().getCost().getVaultCost() > 0D) {
-            if (!economyHook.hasEconomy() || !economyHook.withdraw(playerId, definition.get().getCost().getVaultCost())) {
+        double vaultCost = definition.get().getCost().getVaultCost();
+        if (vaultCost > 0D) {
+            if (!economyHook.hasEconomy() || !economyHook.withdraw(playerId, vaultCost)) {
                 return false;
             }
         }
-        storage.save(plotId, state.withUpgrade(definition.get(), Instant.now()));
+
+        int gainedPoints = tree.getProgressionTrack().getMode() == PlotProgressionTrack.Mode.XP
+                ? definition.get().getXpReward()
+                : 0;
+        storage.save(plotId, state.withUpgrade(definition.get(), Instant.now(), tree.getProgressionTrack(), gainedPoints, vaultCost));
+        return true;
+    }
+
+    @Override
+    public boolean canPrestige(String plotId, UUID playerId) {
+        PlotProgressionState state = getState(plotId).orElse(PlotProgressionState.initial());
+        if (playerId == null || !ownershipResolver.isOwner(plotId, playerId)) {
+            return false;
+        }
+        return state.getOverallLevel() >= tree.getMaxLevel();
+    }
+
+    @Override
+    public boolean prestige(String plotId, UUID playerId) {
+        if (!canPrestige(plotId, playerId)) {
+            return false;
+        }
+        PlotProgressionState state = getState(plotId).orElse(PlotProgressionState.initial());
+        storage.save(plotId, state.withPrestigeReset());
         return true;
     }
 
@@ -76,10 +110,20 @@ public class DefaultPlotUpgradeService implements PlotUpgradeService {
         if (state.getLevel(definition.getId()) >= definition.getLevel()) {
             return "already-owned";
         }
+        if (state.getOverallLevel() < definition.getRequiredPlotLevel()) {
+            return "plot-level-too-low";
+        }
+        if (state.getPrestigeLevel() < definition.getRequiredPrestigeLevel()) {
+            return "prestige-level-too-low";
+        }
         for (PlotUpgradeRequirement requirement : definition.getRequirements()) {
             if (state.getLevel(requirement.getUpgradeId()) < requirement.getMinimumLevel()) {
                 return "missing-requirement:" + requirement.getUpgradeId();
             }
+        }
+        String constraintReason = constraintValidator.validate(plotId, definition, state);
+        if (constraintReason != null) {
+            return constraintReason;
         }
         if (definition.getCost().getVaultCost() > 0D) {
             if (!economyHook.hasEconomy()) {

@@ -9,4 +9,6 @@ public interface PlotUpgradeService {
     List<PlotUpgradeView> getAvailableUpgrades(String plotId, UUID playerId);
     boolean canUpgrade(String plotId, UUID playerId, String upgradeId);
     boolean applyUpgrade(String plotId, UUID playerId, String upgradeId);
+    boolean canPrestige(String plotId, UUID playerId);
+    boolean prestige(String plotId, UUID playerId);
 }
