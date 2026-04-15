@@ -15,8 +15,12 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class PlotMarketServiceTest {
     private JavaPlugin plugin;
@@ -39,6 +43,7 @@ class PlotMarketServiceTest {
         when(config.getDouble(eq("market.tax-rate"), anyDouble())).thenReturn(0.10D);
         when(config.getDouble(eq("market.flat-fee"), anyDouble())).thenReturn(5D);
         when(config.getDouble(eq("market.confirmation-threshold"), anyDouble())).thenReturn(500D);
+        when(config.getDouble(eq("market.approval-threshold"), anyDouble())).thenReturn(1000D);
         when(config.getStringList("market.blocked-plot-ids")).thenReturn(java.util.Collections.emptyList());
     }
 
@@ -88,5 +93,49 @@ class PlotMarketServiceTest {
 
         assertEquals(PlotMarketService.BuyResult.STALE_LISTING, outcome.result());
         assertTrue(service.getListingsSnapshot().isEmpty());
+    }
+
+    @Test
+    void rentFlowCreatesContractAndPersists() {
+        UUID seller = UUID.randomUUID();
+        UUID tenant = UUID.randomUUID();
+        Plot plot = mock(Plot.class);
+        when(plot.getPlotId()).thenReturn("plot_9");
+        when(plot.getOwner()).thenReturn(seller);
+
+        when(storage.getPlotData("plot_9")).thenReturn(new PlotData());
+
+        PlotMarketService service = new PlotMarketService(plugin, storage, economy);
+        assertEquals(PlotMarketService.ListResult.OK, service.listPlotForRent(plot, seller, 40D, 7));
+
+        when(storage.getPlot("plot_9")).thenReturn(plot);
+        when(economy.hasEconomy()).thenReturn(true);
+        when(economy.getBalance(tenant)).thenReturn(40D);
+        when(economy.withdraw(tenant, 40D)).thenReturn(true);
+        when(economy.deposit(eq(seller), eq(31D))).thenReturn(true);
+
+        PlotMarketService.BuyOutcome outcome = service.rentPlot(tenant, "plot_9");
+        assertEquals(PlotMarketService.BuyResult.OK, outcome.result());
+        assertFalse(service.getContractsSnapshot().isEmpty());
+
+        PlotMarketService reloaded = new PlotMarketService(plugin, storage, economy);
+        assertEquals(1, reloaded.getContractsSnapshot().size());
+    }
+
+    @Test
+    void highValueSaleRequiresApproval() {
+        UUID seller = UUID.randomUUID();
+        UUID buyer = UUID.randomUUID();
+        Plot plot = mock(Plot.class);
+        when(plot.getPlotId()).thenReturn("plot_12");
+        when(plot.getOwner()).thenReturn(seller);
+        when(storage.getPlotData("plot_12")).thenReturn(new PlotData());
+
+        PlotMarketService service = new PlotMarketService(plugin, storage, economy);
+        assertEquals(PlotMarketService.ListResult.OK, service.listPlot(plot, seller, 2000D));
+        when(storage.getPlot("plot_12")).thenReturn(plot);
+
+        PlotMarketService.BuyOutcome outcome = service.buyPlot(buyer, "plot_12");
+        assertEquals(PlotMarketService.BuyResult.APPROVAL_REQUIRED, outcome.result());
     }
 }

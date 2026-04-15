@@ -160,6 +160,8 @@ public class PlotMarketCommand {
             case TRANSFER_FAILED -> player.sendMessage("§cOwnership transfer failed; transaction was reverted.");
             case PAYMENT_FAILED -> player.sendMessage("§cPayment failed; no ownership change was made.");
             case LISTING_NOT_FOUND -> player.sendMessage("§cThat plot is no longer listed.");
+            case WRONG_LISTING_TYPE -> player.sendMessage("§cThat listing is not a purchase listing.");
+            case APPROVAL_REQUIRED -> player.sendMessage("§eThis purchase requires staff approval.");
         }
         return true;
     }
