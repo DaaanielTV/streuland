@@ -25,6 +25,8 @@ public final class YamlPlotUpgradeCatalog {
     public static PlotUpgradeTree load(FileConfiguration yaml) {
         PlotUpgradeTree tree = new PlotUpgradeTree();
         loadProgressionTrack(yaml, tree);
+        loadExperienceRules(yaml, tree);
+        loadLevelRewards(yaml, tree);
 
         ConfigurationSection upgrades = yaml.getConfigurationSection("upgrades");
         if (upgrades == null) {
@@ -107,5 +109,59 @@ public final class YamlPlotUpgradeCatalog {
         }
 
         tree.setProgressionTrack(new PlotProgressionTrack(mode, thresholds));
+    }
+
+    private static void loadExperienceRules(FileConfiguration yaml, PlotUpgradeTree tree) {
+        ConfigurationSection experience = yaml.getConfigurationSection("progression.experience");
+        if (experience == null) {
+            return;
+        }
+        int defaultXp = experience.getInt("default-xp", 1);
+        long cooldownMs = experience.getLong("cooldown-ms", 1500L);
+        Map<String, Integer> sourceXp = new LinkedHashMap<>();
+        ConfigurationSection rules = experience.getConfigurationSection("rules");
+        if (rules != null) {
+            for (String source : rules.getKeys(false)) {
+                sourceXp.put(source.toLowerCase(Locale.ROOT), Math.max(0, rules.getInt(source, defaultXp)));
+            }
+        }
+        tree.setExperienceRuleSet(new PlotExperienceRuleSet(defaultXp, cooldownMs, sourceXp));
+    }
+
+    private static void loadLevelRewards(FileConfiguration yaml, PlotUpgradeTree tree) {
+        ConfigurationSection rewards = yaml.getConfigurationSection("progression.level-rewards");
+        if (rewards == null) {
+            return;
+        }
+
+        for (String levelKey : rewards.getKeys(false)) {
+            int level;
+            try {
+                level = Integer.parseInt(levelKey);
+            } catch (NumberFormatException ignored) {
+                continue;
+            }
+            ConfigurationSection section = rewards.getConfigurationSection(levelKey);
+            if (section == null) {
+                continue;
+            }
+            int storageSlots = section.getInt("storage-slots", 0);
+            List<String> abilities = section.getStringList("abilities");
+            List<String> cosmetics = section.getStringList("cosmetics");
+            Map<String, Double> statBonuses = new LinkedHashMap<>();
+            ConfigurationSection statsSection = section.getConfigurationSection("stats");
+            if (statsSection != null) {
+                for (String stat : statsSection.getKeys(false)) {
+                    statBonuses.put(stat, statsSection.getDouble(stat, 0D));
+                }
+            }
+            tree.putLevelReward(new PlotLevelReward(
+                    level,
+                    storageSlots,
+                    new java.util.LinkedHashSet<>(abilities),
+                    new java.util.LinkedHashSet<>(cosmetics),
+                    statBonuses
+            ));
+        }
     }
 }

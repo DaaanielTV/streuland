@@ -4,9 +4,12 @@ import de.streuland.economy.PlotEconomyHook;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class DefaultPlotUpgradeService implements PlotUpgradeService {
     private final PlotUpgradeTree tree;
@@ -14,6 +17,7 @@ public class DefaultPlotUpgradeService implements PlotUpgradeService {
     private final PlotEconomyHook economyHook;
     private final PlotOwnershipResolver ownershipResolver;
     private final PlotUpgradeConstraintValidator constraintValidator;
+    private final ConcurrentMap<String, Long> experienceThrottle = new ConcurrentHashMap<>();
 
     public DefaultPlotUpgradeService(PlotUpgradeTree tree,
                                      PlotUpgradeStorage storage,
@@ -80,7 +84,9 @@ public class DefaultPlotUpgradeService implements PlotUpgradeService {
         int gainedPoints = tree.getProgressionTrack().getMode() == PlotProgressionTrack.Mode.XP
                 ? definition.get().getXpReward()
                 : 0;
-        storage.save(plotId, state.withUpgrade(definition.get(), Instant.now(), tree.getProgressionTrack(), gainedPoints, vaultCost));
+        PlotProgressionState updated = state.withUpgrade(definition.get(), Instant.now(), tree.getProgressionTrack(), gainedPoints, vaultCost);
+        PlotProgressionState rewarded = applyLevelRewards(plotId, updated, null);
+        storage.save(plotId, rewarded);
         return true;
     }
 
@@ -101,6 +107,68 @@ public class DefaultPlotUpgradeService implements PlotUpgradeService {
         PlotProgressionState state = getState(plotId).orElse(PlotProgressionState.initial());
         storage.save(plotId, state.withPrestigeReset());
         return true;
+    }
+
+    @Override
+    public PlotExperienceResult grantExperience(String plotId, UUID playerId, String source, int suggestedAmount) {
+        if (plotId == null || plotId.isBlank() || playerId == null) {
+            return PlotExperienceResult.none();
+        }
+        PlotProgressionTrack track = tree.getProgressionTrack();
+        if (track.getMode() != PlotProgressionTrack.Mode.XP) {
+            return PlotExperienceResult.none();
+        }
+        if (!ownershipResolver.isOwner(plotId, playerId)) {
+            return PlotExperienceResult.none();
+        }
+
+        PlotExperienceRuleSet ruleSet = tree.getExperienceRuleSet();
+        long now = System.currentTimeMillis();
+        long cooldown = ruleSet.getCooldownMillis();
+        String throttleKey = plotId + ":" + playerId + ":" + (source == null ? "unknown" : source.toLowerCase());
+        if (cooldown > 0L) {
+            Long previous = experienceThrottle.get(throttleKey);
+            if (previous != null && (now - previous) < cooldown) {
+                return PlotExperienceResult.none();
+            }
+            experienceThrottle.put(throttleKey, now);
+        }
+
+        int gainedXp = ruleSet.resolveXp(source, suggestedAmount);
+        if (gainedXp <= 0) {
+            return PlotExperienceResult.none();
+        }
+
+        PlotProgressionState state = getState(plotId).orElse(PlotProgressionState.initial());
+        int previousLevel = state.getOverallLevel();
+        PlotProgressionState updated = state.withExperienceGain(gainedXp, track, Instant.now());
+        LinkedHashSet<Integer> unlockedRewards = new LinkedHashSet<>();
+        PlotProgressionState rewarded = applyLevelRewards(plotId, updated, unlockedRewards);
+        storage.save(plotId, rewarded);
+        return new PlotExperienceResult(true, gainedXp, previousLevel, rewarded.getOverallLevel(), unlockedRewards);
+    }
+
+    private PlotProgressionState applyLevelRewards(String plotId, PlotProgressionState updated, LinkedHashSet<Integer> unlockedOut) {
+        if (!(storage instanceof PlotStorageBackedUpgradeStorage)) {
+            return updated;
+        }
+        PlotStorageBackedUpgradeStorage storageBacked = (PlotStorageBackedUpgradeStorage) storage;
+        PlotProgressionState working = updated;
+        for (int level = 1; level <= updated.getOverallLevel(); level++) {
+            if (working.getAwardedRewardLevels().contains(level)) {
+                continue;
+            }
+            Optional<PlotLevelReward> reward = tree.getLevelReward(level);
+            if (!reward.isPresent()) {
+                continue;
+            }
+            storageBacked.applyLevelReward(plotId, reward.get());
+            working = working.withAwardedRewardLevel(level);
+            if (unlockedOut != null) {
+                unlockedOut.add(level);
+            }
+        }
+        return working;
     }
 
     private String validate(String plotId, UUID playerId, PlotUpgradeDefinition definition, PlotProgressionState state) {

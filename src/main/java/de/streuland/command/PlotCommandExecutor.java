@@ -281,9 +281,11 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
                 return handleFlag(player, args);
             case "upgrade":
             case "upgrades":
-            case "prestige":
-            case "level":
                 return plotUpgradeCommand.handle(player, args);
+            case "prestige":
+                return plotUpgradeCommand.handle(player, new String[]{"upgrade", "prestige"});
+            case "level":
+                return plotUpgradeCommand.handle(player, new String[]{"upgrade", "info"});
             default:
                 if ("template".equals(subcommand)) {
                     return plotSchematicCommand.handle(player, args);
@@ -425,8 +427,10 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         player.sendMessage(color(msg("messages.plot.info.trust", "&eTrust status: &f{0}", ChatColor.stripColor(color(trustLabel)))));
         player.sendMessage(color(msg("messages.plot.info.team-size", "&eTeam members: &f{0}", Math.max(0, plot.getRoles().size() - 1))));
         player.sendMessage(color(msg("messages.plot.info.neighborhood", "&eNeighborhood: &f{0}", neighborhoodService.getAnalyticsSummary(plot.getPlotId()))));
+        plotUpgradeCommand.sendPlotProgressInfo(player, plot.getPlotId());
         if (plot.getOwner() != null && plot.getOwner().equals(player.getUniqueId())) {
             player.sendMessage(color(msg("messages.plot.info.owner-hint", "&7Manage access with &f/plot trust <player> [plotId] &7or &f/plot untrust <player> [plotId]&7.")));
+            player.sendMessage("§7Plot progression actions: §f/plot upgrade info §7| §f/plot upgrade buy <id> §7| §f/plot upgrade prestige");
         }
         return true;
     }

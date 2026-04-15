@@ -12,7 +12,9 @@ import java.util.stream.Collectors;
 
 public class PlotUpgradeTree {
     private final Map<String, PlotUpgradeDefinition> upgrades = new HashMap<>();
+    private final Map<Integer, PlotLevelReward> levelRewards = new HashMap<>();
     private PlotProgressionTrack progressionTrack = PlotProgressionTrack.defaultCurrencyTrack();
+    private PlotExperienceRuleSet experienceRuleSet = PlotExperienceRuleSet.defaults();
 
     public void addUpgrade(PlotUpgradeDefinition definition) { upgrades.put(definition.getId(), definition); }
     public Optional<PlotUpgradeDefinition> getUpgrade(String id) { return Optional.ofNullable(upgrades.get(id)); }
@@ -30,6 +32,30 @@ public class PlotUpgradeTree {
 
     public int getMaxLevel() {
         return progressionTrack.getMaxLevel();
+    }
+
+    public void putLevelReward(PlotLevelReward reward) {
+        if (reward != null) {
+            levelRewards.put(reward.getLevel(), reward);
+        }
+    }
+
+    public Optional<PlotLevelReward> getLevelReward(int level) {
+        return Optional.ofNullable(levelRewards.get(level));
+    }
+
+    public Map<Integer, PlotLevelReward> getLevelRewards() {
+        return Collections.unmodifiableMap(levelRewards);
+    }
+
+    public PlotExperienceRuleSet getExperienceRuleSet() {
+        return experienceRuleSet;
+    }
+
+    public void setExperienceRuleSet(PlotExperienceRuleSet experienceRuleSet) {
+        if (experienceRuleSet != null) {
+            this.experienceRuleSet = experienceRuleSet;
+        }
     }
 
     public List<PlotUpgradeDefinition> getAvailableOrder() {

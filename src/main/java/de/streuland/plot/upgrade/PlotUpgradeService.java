@@ -11,4 +11,5 @@ public interface PlotUpgradeService {
     boolean applyUpgrade(String plotId, UUID playerId, String upgradeId);
     boolean canPrestige(String plotId, UUID playerId);
     boolean prestige(String plotId, UUID playerId);
+    PlotExperienceResult grantExperience(String plotId, UUID playerId, String source, int suggestedAmount);
 }

@@ -1,11 +1,39 @@
 progression:
   # mode: currency | xp
-  mode: currency
+  mode: xp
   levels:
     "1": 0
-    "2": 500
-    "3": 1500
-    "4": 3500
+    "2": 150
+    "3": 450
+    "4": 900
+    "5": 1500
+  experience:
+    default-xp: 1
+    cooldown-ms: 1500
+    rules:
+      block_place: 1
+      block_break: 2
+      block_burn: 1
+  level-rewards:
+    "2":
+      storage-slots: 4
+      abilities: [ "showcase.basic" ]
+      stats:
+        build_speed: 0.05
+    "3":
+      storage-slots: 6
+      cosmetics: [ "theme_oak" ]
+      stats:
+        build_speed: 0.10
+    "4":
+      storage-slots: 8
+      abilities: [ "showcase.advanced" ]
+      cosmetics: [ "theme_crimson" ]
+    "5":
+      storage-slots: 12
+      abilities: [ "weather.override" ]
+      stats:
+        crop_boost: 0.15
 
 upgrades:
   size_1:

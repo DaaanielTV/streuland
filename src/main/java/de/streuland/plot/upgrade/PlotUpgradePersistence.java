@@ -16,6 +16,7 @@ public final class PlotUpgradePersistence {
         root.put("lastUpgradeAt", state.getLastUpgradeAt() == null ? null : state.getLastUpgradeAt().toEpochMilli());
         root.put("upgradeLevels", new LinkedHashMap<>(state.getUpgradeLevels()));
         root.put("settings", new LinkedHashMap<>(state.getActiveSettings()));
+        root.put("awardedRewardLevels", state.getAwardedRewardLevels().stream().sorted().toArray(Integer[]::new));
         return root;
     }
 
@@ -40,6 +41,15 @@ public final class PlotUpgradePersistence {
         if (settingsValue instanceof Map) {
             ((Map<String, Object>) settingsValue).forEach((key, value) -> settings.put(key, String.valueOf(value)));
         }
-        return new PlotProgressionState(overallLevel, progressionPoints, prestigeLevel, lifetimeCurrencySpent, lastUpgradeAt, levels, settings);
+        java.util.Set<Integer> awardedRewardLevels = new java.util.LinkedHashSet<>();
+        Object rewardsValue = root.get("awardedRewardLevels");
+        if (rewardsValue instanceof Iterable) {
+            for (Object value : (Iterable<?>) rewardsValue) {
+                if (value instanceof Number) {
+                    awardedRewardLevels.add(((Number) value).intValue());
+                }
+            }
+        }
+        return new PlotProgressionState(overallLevel, progressionPoints, prestigeLevel, lifetimeCurrencySpent, lastUpgradeAt, levels, settings, awardedRewardLevels);
     }
 }

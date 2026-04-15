@@ -1,6 +1,7 @@
 package de.streuland.plot;
 
 import de.streuland.plot.skin.PlotTheme;
+import de.streuland.plot.upgrade.PlotProgressionState;
 import de.streuland.quest.QuestProgress;
 
 import java.util.Arrays;
@@ -25,16 +26,7 @@ public class PlotData {
     private final Map<String, Double> statBonuses;
     private final Map<String, QuestProgress> questProgress;
     private final Map<String, Boolean> flagOverrides;
-    private boolean featured;
-    private boolean publicVisitEnabled;
-    private String showcaseTitle;
-    private String showcaseDescription;
-    private final Set<String> showcaseTags;
-    private int showcaseSpawnX;
-    private int showcaseSpawnY;
-    private int showcaseSpawnZ;
     private PlotProgressionState progressionState;
-
     private boolean featured;
     private boolean publicVisitEnabled;
     private String showcaseTitle;
@@ -69,6 +61,9 @@ public class PlotData {
         this.showcaseSpawnY = 0;
         this.showcaseSpawnZ = 0;
         this.progressionState = PlotProgressionState.initial();
+        this.selectedBiome = "";
+        this.weatherLocked = false;
+        this.environmentCosmetics = new HashMap<>();
     }
 
     public PlotTheme getTheme() { return theme; }
@@ -139,6 +134,26 @@ public class PlotData {
 
     public void setProgressionState(PlotProgressionState progressionState) {
         this.progressionState = progressionState == null ? PlotProgressionState.initial() : progressionState;
+    }
+
+    public String getSelectedBiome() {
+        return selectedBiome == null ? "" : selectedBiome;
+    }
+
+    public void setSelectedBiome(String selectedBiome) {
+        this.selectedBiome = selectedBiome == null ? "" : selectedBiome.trim();
+    }
+
+    public boolean isWeatherLocked() {
+        return weatherLocked;
+    }
+
+    public void setWeatherLocked(boolean weatherLocked) {
+        this.weatherLocked = weatherLocked;
+    }
+
+    public Map<String, String> getEnvironmentCosmetics() {
+        return environmentCosmetics;
     }
 
     private static String normalizeText(String input, int maxLength) {
