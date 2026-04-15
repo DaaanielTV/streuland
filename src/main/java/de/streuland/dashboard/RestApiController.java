@@ -173,6 +173,18 @@ public class RestApiController implements Listener {
         webSocketServer.broadcastJson(gson.toJson(event));
     }
 
+    private void broadcastEvent(String type, String plotId, Map<String, Object> payload) {
+        if (webSocketServer == null) {
+            return;
+        }
+        Map<String, Object> envelope = new HashMap<String, Object>();
+        envelope.put("type", type);
+        envelope.put("plotId", plotId);
+        envelope.put("payload", payload == null ? Collections.<String, Object>emptyMap() : payload);
+        envelope.put("ts", System.currentTimeMillis());
+        webSocketServer.broadcastJson(gson.toJson(envelope));
+    }
+
     private void broadcastAudit(String plotId) {
         if (webSocketServer == null) {
             return;
@@ -363,6 +375,7 @@ public class RestApiController implements Listener {
                         actor == null ? "UNKNOWN" : actor.toString(), metadata);
                 broadcastAudit(plotId);
                 broadcast("plot_updated", plotId);
+                broadcastEvent("trust_permissions_updated", plotId, metadata);
                 writeJson(exchange, gson.toJson(Collections.singletonMap("success", true)));
                 return;
             }
@@ -532,6 +545,8 @@ public class RestApiController implements Listener {
                         return;
                     }
                     broadcastAudit(plotId);
+                    broadcast("plot_updated", plotId);
+                    broadcastEvent("backup_updated", plotId, restored);
                     writeJson(exchange, gson.toJson(restored));
                     return;
                 }
@@ -541,6 +556,8 @@ public class RestApiController implements Listener {
                     return;
                 }
                 broadcastAudit(plotId);
+                broadcast("plot_updated", plotId);
+                broadcastEvent("backup_updated", plotId, created);
                 writeJson(exchange, gson.toJson(created));
                 return;
             }
@@ -562,9 +579,10 @@ public class RestApiController implements Listener {
             } catch (NumberFormatException ignored) {
             }
             String plotId = query.get("plotId");
-            List<PlotAuditEvent> events = plotId == null
-                    ? auditLogService.listRecent(limit)
-                    : auditLogService.listByPlot(plotId, limit);
+            String action = query.get("action");
+            String actor = query.get("actor");
+            String search = query.get("search");
+            List<PlotAuditEvent> events = auditLogService.listFiltered(plotId, action, actor, search, limit);
             writeJson(exchange, gson.toJson(Collections.singletonMap("events", toAuditRows(events))));
         }
     }

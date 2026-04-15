@@ -6,6 +6,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -50,5 +52,37 @@ public class PlotAuditLogService {
 
     public synchronized List<PlotAuditEvent> listRecent(int limit) {
         return listByPlot(null, limit);
+    }
+
+    public synchronized List<PlotAuditEvent> listFiltered(String plotId, String action, String actor, String search, int limit) {
+        String actionFilter = normalize(action);
+        String actorFilter = normalize(actor);
+        String searchFilter = normalize(search);
+        List<PlotAuditEvent> scoped = listByPlot(plotId, Math.max(1, Math.min(500, limit * 4)));
+        List<PlotAuditEvent> filtered = new ArrayList<PlotAuditEvent>();
+        for (PlotAuditEvent event : scoped) {
+            if (!actionFilter.isEmpty() && !event.getAction().toLowerCase(Locale.ROOT).contains(actionFilter)) {
+                continue;
+            }
+            if (!actorFilter.isEmpty() && (event.getActor() == null || !event.getActor().toLowerCase(Locale.ROOT).contains(actorFilter))) {
+                continue;
+            }
+            if (!searchFilter.isEmpty()) {
+                String combined = (event.getPlotId() + " " + event.getAction() + " " + event.getActor() + " " + event.getMetadata())
+                        .toLowerCase(Locale.ROOT);
+                if (!combined.contains(searchFilter)) {
+                    continue;
+                }
+            }
+            filtered.add(event);
+            if (filtered.size() >= Math.max(1, Math.min(500, limit))) {
+                break;
+            }
+        }
+        return filtered;
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 }

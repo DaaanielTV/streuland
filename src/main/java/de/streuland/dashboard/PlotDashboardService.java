@@ -61,6 +61,7 @@ public class PlotDashboardService {
 
         payload.put("coordinates", buildCoordinates(plot));
         payload.put("roles", buildRoles(plot));
+        payload.put("rolePermissions", buildRolePermissions(plot));
         payload.put("upgrades", new ArrayList<String>(data.getUnlockedAbilities()));
         payload.put("stats", new LinkedHashMap<String, Double>(data.getStatBonuses()));
         payload.put("publicVisit", data.isPublicVisitEnabled());
@@ -117,6 +118,7 @@ public class PlotDashboardService {
         row.put("owner", plot.getOwner() == null ? null : plot.getOwner().toString());
         row.put("trustedPlayers", toUuidStrings(plot.getTrustedPlayers()));
         row.put("areaType", plot.getAreaType().name());
+        row.put("status", plot.getState().name());
         row.put("upgrades", new ArrayList<String>(data.getUnlockedAbilities()));
         row.put("marketStatus", listing == null ? "NOT_LISTED" : "LISTED");
         row.put("marketPrice", listing == null ? null : listing.getPrice());
@@ -139,6 +141,20 @@ public class PlotDashboardService {
             roles.put(entry.getKey().toString(), entry.getValue().name());
         }
         return roles;
+    }
+
+
+    private Map<String, List<String>> buildRolePermissions(Plot plot) {
+        Map<String, List<String>> rolePermissions = new LinkedHashMap<String, List<String>>();
+        for (Map.Entry<String, java.util.Set<Permission>> entry : plot.getRoleDefinitions().entrySet()) {
+            List<String> permissions = new ArrayList<String>();
+            for (Permission permission : entry.getValue()) {
+                permissions.add(permission.name());
+            }
+            Collections.sort(permissions);
+            rolePermissions.put(entry.getKey(), permissions);
+        }
+        return rolePermissions;
     }
 
     private List<String> toUuidStrings(Iterable<UUID> players) {
