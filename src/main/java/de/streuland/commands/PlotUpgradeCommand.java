@@ -3,11 +3,14 @@ package de.streuland.commands;
 import de.streuland.plot.Plot;
 import de.streuland.plot.PlotManager;
 import de.streuland.plot.upgrade.PlotProgressionService;
+import de.streuland.plot.upgrade.PlotProgressionState;
 import de.streuland.plot.upgrade.PlotUpgradeService;
 import de.streuland.plot.upgrade.PlotUpgradeView;
 import org.bukkit.entity.Player;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 public class PlotUpgradeCommand {
@@ -17,6 +20,10 @@ public class PlotUpgradeCommand {
     public PlotUpgradeCommand(PlotManager plotManager, PlotUpgradeService plotUpgradeService) {
         this.plotManager = plotManager;
         this.progressionService = new PlotProgressionService(plotUpgradeService);
+    }
+
+    public PlotProgressionService getProgressionService() {
+        return progressionService;
     }
 
     public boolean handle(Player player, String[] args) {
@@ -31,42 +38,60 @@ public class PlotUpgradeCommand {
             return true;
         }
 
-        String action = args.length == 0 ? "upgrades" : args[0].toLowerCase();
+        String action = args.length <= 1 ? "list" : args[1].toLowerCase(Locale.ROOT);
         switch (action) {
-            case "upgrades":
-            case "upgrade":
-                if (args.length >= 2 && !"buy".equalsIgnoreCase(args[1])) {
-                    return buyUpgrade(player, plot.getPlotId(), args[1]);
-                }
-                if (args.length >= 3 && "buy".equalsIgnoreCase(args[1])) {
-                    return buyUpgrade(player, plot.getPlotId(), args[2]);
-                }
-                return listUpgrades(player, plot.getPlotId());
-            case "level":
-                player.sendMessage("§6Plot level: §a" + progressionService.getOverallLevel(plot.getPlotId())
-                        + " §7(Prestige: §b" + progressionService.getPrestigeLevel(plot.getPlotId()) + "§7)");
-                return true;
-            case "prestige":
-                Optional<String> prestigeFailure = progressionService.prestige(plot.getPlotId(), player.getUniqueId());
-                if (prestigeFailure.isPresent()) {
-                    player.sendMessage("§cPrestige fehlgeschlagen: " + prestigeFailure.get());
+            case "buy":
+                if (args.length < 3) {
+                    player.sendMessage("§cNutzung: /plot upgrade buy <upgradeId>");
                     return true;
                 }
-                player.sendMessage("§aPrestige durchgeführt! Neues Prestige-Level: §b" + progressionService.getPrestigeLevel(plot.getPlotId()));
+                return buyUpgrade(player, plot.getPlotId(), args[2]);
+            case "prestige":
+                return prestige(player, plot.getPlotId());
+            case "info":
+            case "level":
+                sendPlotProgressInfo(player, plot.getPlotId());
                 return true;
+            case "list":
+            case "upgrades":
+            case "upgrade":
             default:
                 return listUpgrades(player, plot.getPlotId());
         }
     }
 
+    public void sendPlotProgressInfo(Player player, String plotId) {
+        PlotProgressionState state = progressionService.getState(plotId);
+        player.sendMessage("§6=== Plot Progression ===");
+        player.sendMessage("§eLevel: §a" + state.getOverallLevel() + " §8| §ePrestige: §b" + state.getPrestigeLevel());
+        player.sendMessage("§eXP: §f" + state.getProgressionPoints() + " §8| §eSpent: §f" + String.format(Locale.US, "%.2f", state.getLifetimeCurrencySpent()));
+
+        if (!state.getAwardedRewardLevels().isEmpty()) {
+            player.sendMessage("§eReward levels unlocked: §a" + state.getAwardedRewardLevels());
+        }
+
+        if (!state.getUpgradeLevels().isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (Map.Entry<String, Integer> entry : state.getUpgradeLevels().entrySet()) {
+                if (sb.length() > 0) {
+                    sb.append("§7, ");
+                }
+                sb.append("§f").append(entry.getKey()).append(" §8(L").append(entry.getValue()).append(")");
+            }
+            player.sendMessage("§ePurchased upgrades: " + sb);
+        } else {
+            player.sendMessage("§ePurchased upgrades: §7none");
+        }
+    }
+
     private boolean listUpgrades(Player player, String plotId) {
         List<PlotUpgradeView> upgrades = progressionService.listUpgrades(plotId, player.getUniqueId());
-        player.sendMessage("§6=== Plot Upgrades ===");
-        player.sendMessage("§7Current progression level: §a" + progressionService.getOverallLevel(plotId)
-                + " §7Prestige: §b" + progressionService.getPrestigeLevel(plotId));
+        sendPlotProgressInfo(player, plotId);
+        player.sendMessage("§6=== Available Upgrades ===");
         for (PlotUpgradeView view : upgrades) {
-            String status = view.isAvailable() ? "§aKaufbar" : "§7" + view.getReason();
-            player.sendMessage("§e" + view.getDefinition().getId() + " §8- §f" + view.getDefinition().getDisplayName() + " §8(" + view.getDefinition().getCost().getVaultCost() + "$) §7" + status);
+            String status = view.isAvailable() ? "§aKaufbar" : "§7" + humanReason(view.getReason());
+            player.sendMessage("§e" + view.getDefinition().getId() + " §8- §f" + view.getDefinition().getDisplayName()
+                    + " §8(" + view.getDefinition().getCost().getVaultCost() + "$) §7" + status);
         }
         return true;
     }
@@ -74,11 +99,41 @@ public class PlotUpgradeCommand {
     private boolean buyUpgrade(Player player, String plotId, String upgradeId) {
         Optional<String> failure = progressionService.buyUpgrade(plotId, player.getUniqueId(), upgradeId);
         if (failure.isPresent()) {
-            player.sendMessage("§cUpgrade-Kauf fehlgeschlagen: " + failure.get());
+            player.sendMessage("§cUpgrade-Kauf fehlgeschlagen: " + humanReason(failure.get()));
             return true;
         }
         player.sendMessage("§aUpgrade erfolgreich gekauft: §f" + upgradeId);
-        player.sendMessage("§7Neues Gesamtlevel: §a" + progressionService.getOverallLevel(plotId));
+        sendPlotProgressInfo(player, plotId);
         return true;
+    }
+
+    private boolean prestige(Player player, String plotId) {
+        Optional<String> prestigeFailure = progressionService.prestige(plotId, player.getUniqueId());
+        if (prestigeFailure.isPresent()) {
+            player.sendMessage("§cPrestige fehlgeschlagen: " + humanReason(prestigeFailure.get()));
+            return true;
+        }
+        player.sendMessage("§aPrestige durchgeführt!");
+        sendPlotProgressInfo(player, plotId);
+        return true;
+    }
+
+    private String humanReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return "nicht verfügbar";
+        }
+        switch (reason) {
+            case "not-owner": return "Du bist nicht der Eigentümer";
+            case "already-owned": return "Bereits freigeschaltet";
+            case "plot-level-too-low": return "Plot-Level zu niedrig";
+            case "prestige-level-too-low": return "Prestige-Level zu niedrig";
+            case "economy-unavailable": return "Economy nicht verfügbar";
+            case "insufficient-funds": return "Nicht genug Guthaben";
+            default:
+                if (reason.startsWith("missing-requirement:")) {
+                    return "Voraussetzung fehlt: " + reason.substring("missing-requirement:".length());
+                }
+                return reason;
+        }
     }
 }

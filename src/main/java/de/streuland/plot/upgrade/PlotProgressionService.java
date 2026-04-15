@@ -30,6 +30,10 @@ public class PlotProgressionService {
         return upgradeService.getAvailableUpgrades(plotId, playerId);
     }
 
+    public PlotProgressionState getState(String plotId) {
+        return getStateOrInitial(plotId);
+    }
+
     public Optional<String> buyUpgrade(String plotId, UUID playerId, String upgradeId) {
         if (!upgradeService.canUpgrade(plotId, playerId, upgradeId)) {
             return Optional.of("Upgrade requirements not met.");
@@ -44,5 +48,9 @@ public class PlotProgressionService {
             return Optional.of("Plot is not eligible for prestige yet.");
         }
         return upgradeService.prestige(plotId, playerId) ? Optional.empty() : Optional.of("Prestige reset failed.");
+    }
+
+    public PlotExperienceResult awardExperience(String plotId, UUID playerId, String source, int amount) {
+        return upgradeService.grantExperience(plotId, playerId, source, amount);
     }
 }

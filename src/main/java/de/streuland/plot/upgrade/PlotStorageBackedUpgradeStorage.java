@@ -24,4 +24,17 @@ public class PlotStorageBackedUpgradeStorage implements PlotUpgradeStorage {
         data.setProgressionState(state);
         plotStorage.savePlotData(plotId, data);
     }
+
+    public void applyLevelReward(String plotId, PlotLevelReward reward) {
+        if (reward == null) {
+            return;
+        }
+        PlotData data = plotStorage.getPlotData(plotId);
+        data.setBonusStorageSlots(data.getBonusStorageSlots() + reward.getStorageSlots());
+        data.getUnlockedAbilities().addAll(reward.getUnlockedAbilities());
+        data.getCosmeticInventory().addAll(reward.getCosmetics());
+        reward.getStatBonuses().forEach((key, value) ->
+                data.getStatBonuses().merge(key, value, Double::sum));
+        plotStorage.savePlotData(plotId, data);
+    }
 }
