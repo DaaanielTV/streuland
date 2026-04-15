@@ -1,16 +1,29 @@
 body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; }
-main { max-width: 1180px; margin: 0 auto; padding: 16px; }
+main { max-width: 1280px; margin: 0 auto; padding: 14px; }
 .panel { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
 .auth-panel { display: flex; gap: 12px; align-items: center; }
-.filters { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.filters { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.grid-two { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; }
+.stacked-form { display: grid; gap: 8px; }
+.row-actions { display: flex; gap: 8px; }
 input, select, button { background: #0b1220; color: #e2e8f0; border: 1px solid #475569; border-radius: 4px; padding: 8px; }
 button { cursor: pointer; background: #2563eb; border-color: #1d4ed8; }
-table { width: 100%; border-collapse: collapse; }
+button:hover { background: #1d4ed8; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { border-bottom: 1px solid #334155; text-align: left; padding: 8px; vertical-align: top; }
 tr:hover { background: #0f1a2c; cursor: pointer; }
-#plotDetails { background: #0b1220; border: 1px solid #334155; border-radius: 4px; padding: 10px; min-height: 170px; overflow: auto; }
-.mutate { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 8px; }
+tr.selected { background: #172554; }
+pre { margin: 0; }
+#plotDetails, #permissionResult { background: #0b1220; border: 1px solid #334155; border-radius: 4px; padding: 10px; min-height: 120px; overflow: auto; }
+code { font-size: 12px; color: #bfdbfe; }
+.events-filters { grid-template-columns: 2fr 1.2fr 1.2fr auto; margin-bottom: 10px; }
+
+@media (max-width: 1000px) {
+  .grid-two { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 900px) {
-  .filters, .mutate { grid-template-columns: 1fr; }
+  .filters, .events-filters { grid-template-columns: 1fr; }
   .auth-panel { flex-direction: column; align-items: stretch; }
+  .row-actions { flex-direction: column; }
 }

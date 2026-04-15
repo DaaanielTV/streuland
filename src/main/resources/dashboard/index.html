@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Streuland Plot Dashboard</title>
+  <title>Streuland Admin Dashboard</title>
   <link rel="stylesheet" href="/streuland-dashboard/style.css" />
 </head>
 <body>
   <main>
-    <header>
-      <h1>Streuland Plot Dashboard</h1>
-      <p>Live plot overview + management actions</p>
+    <header class="panel">
+      <h1>Streuland Admin Dashboard</h1>
+      <p>Fast moderation view for plots, ownership, trust controls, events, and snapshots.</p>
     </header>
 
     <section class="panel auth-panel">
-      <label>API Token <input id="tokenInput" type="password" placeholder="dashboard.auth.token" /></label>
+      <label>API Token <input id="tokenInput" type="password" placeholder="dashboard.auth.tokens.*" /></label>
       <button id="connectBtn">Connect</button>
       <span id="authStatus">Not connected</span>
     </section>
 
     <section class="panel filters">
-      <input id="searchInput" placeholder="Search plot, owner, trusted player" />
-      <input id="ownerInput" placeholder="Owner UUID" />
+      <input id="searchInput" placeholder="Search plot / owner / trusted" />
+      <input id="ownerInput" placeholder="Filter owner UUID" />
       <select id="areaTypeFilter">
         <option value="">All area types</option>
         <option value="plot_claimed">Claimed</option>
@@ -35,32 +35,90 @@
       <button id="refreshBtn">Refresh</button>
     </section>
 
-    <section class="panel">
-      <h2>Plots</h2>
-      <table id="plotTable">
-        <thead>
+    <section class="grid-two">
+      <article class="panel">
+        <h2>Plots</h2>
+        <table id="plotTable">
+          <thead>
           <tr>
             <th>Plot</th>
+            <th>Status</th>
             <th>Owner</th>
             <th>Trusted</th>
-            <th>Area Type</th>
-            <th>Upgrades</th>
             <th>Market</th>
           </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </article>
+
+      <article class="panel">
+        <h2>Plot details</h2>
+        <pre id="plotDetails">Select a plot row.</pre>
+      </article>
+    </section>
+
+    <section class="grid-two">
+      <article class="panel">
+        <h2>Trust + Permission Check</h2>
+        <div class="stacked-form">
+          <input id="actorInput" placeholder="Actor UUID" />
+          <input id="targetInput" placeholder="Target UUID" />
+          <div class="row-actions">
+            <button data-action="add" class="trustedAction">Add Trusted</button>
+            <button data-action="remove" class="trustedAction">Remove Trusted</button>
+          </div>
+          <input id="permissionPlayerInput" placeholder="Permission check player UUID" />
+          <select id="permissionSelect">
+            <option value="BUILD">BUILD</option>
+            <option value="BREAK">BREAK</option>
+            <option value="INTERACT">INTERACT</option>
+            <option value="TRANSFER">TRANSFER</option>
+          </select>
+          <button id="permissionBtn">Run permission check</button>
+          <pre id="permissionResult">Run a permission check for the selected plot.</pre>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Backups / Snapshots</h2>
+        <div class="row-actions">
+          <button id="createBackupBtn">Create backup</button>
+          <button id="restoreBackupBtn">Restore selected snapshot</button>
+        </div>
+        <table id="backupTable">
+          <thead>
+          <tr>
+            <th>Snapshot</th>
+            <th>Created At</th>
+            <th>Note</th>
+          </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </article>
     </section>
 
     <section class="panel">
-      <h2>Plot Details</h2>
-      <pre id="plotDetails">Select a plot row.</pre>
-      <div class="mutate">
-        <input id="actorInput" placeholder="Actor UUID" />
-        <input id="targetInput" placeholder="Target UUID" />
-        <button data-action="add" class="trustedAction">Add Trusted</button>
-        <button data-action="remove" class="trustedAction">Remove Trusted</button>
+      <h2>Recent moderation events</h2>
+      <div class="filters events-filters">
+        <input id="eventSearchInput" placeholder="Search events" />
+        <input id="eventActionInput" placeholder="Action filter (backup, trust, upgrade)" />
+        <input id="eventActorInput" placeholder="Actor filter" />
+        <button id="eventRefreshBtn">Refresh events</button>
       </div>
+      <table id="eventTable">
+        <thead>
+        <tr>
+          <th>Time</th>
+          <th>Plot</th>
+          <th>Action</th>
+          <th>Actor</th>
+          <th>Metadata</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </section>
   </main>
 
