@@ -1,9 +1,9 @@
 name: Streuland
 version: 1.0.0
 main: de.streuland.StreulandPlugin
-description: Random plot system with vanilla world generation
+description: Streuland plot system with vanilla world generation
 authors:
-  - Developer
+  - Streuland Contributors
 api-version: 1.13
 
 commands:

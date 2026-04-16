@@ -1,0 +1,23 @@
+# Maven / Java build output
+/target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Maven helper files
+/dependency-reduced-pom.xml
+
+# Logs and runtime files
+*.log
+*.pid
+*.tmp
+
+# IDE/editor metadata
+.idea/
+.vscode/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
