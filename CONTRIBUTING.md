@@ -1,52 +1,58 @@
-# Beitragen zu Streuland
+# Contributing to Streuland Plot Plugin
 
-Danke für deinen Beitrag! Bitte nutze den folgenden Ablauf über **Issue + Pull Request**.
+Thanks for contributing to Streuland Plot Plugin. We use a lightweight issue + pull request workflow.
 
-## 1) Issue erstellen
+## 1) Before You Start
 
-Lege vor größeren Änderungen ein Issue an mit:
+- Search existing issues and pull requests first.
+- Open an issue for non-trivial changes before implementing.
+- Keep proposals focused: problem, approach, risks, and test plan.
 
-- Problemstellung oder Feature-Wunsch
-- Vorschlag für die Umsetzung
-- Risiken/Migrationsbedarf
-- Grobe Teststrategie
+## 2) Branching
 
-Kleine Tippfehler- oder Doku-Fixes können direkt per PR eingereicht werden.
+Use descriptive branch names:
 
-## 2) Branch erstellen
+- `feat/<short-description>`
+- `fix/<short-description>`
+- `docs/<short-description>`
+- `chore/<short-description>`
 
-Namensvorschlag:
+## 3) Development Checklist
 
-- `feat/<kurzbeschreibung>`
-- `fix/<kurzbeschreibung>`
-- `docs/<kurzbeschreibung>`
+1. Build and test locally:
 
-## 3) Lokal prüfen
+   ```bash
+   mvn clean verify
+   ```
 
-```bash
-mvn clean verify
-```
+2. Update docs for behavior, API, or configuration changes.
+3. Avoid unrelated refactors in the same PR.
+4. Keep commits clear and reviewable.
 
-Wenn die Umgebung keinen Zugriff auf externe Maven-Repositories hat, dokumentiere das transparent im PR.
+## 4) Pull Request Requirements
 
-## 4) Pull Request erstellen
+Every PR should include:
 
-Bitte im PR enthalten:
+- Summary of what changed and why
+- Linked issue (`Fixes #...` or `Refs #...`)
+- Test evidence (commands + result)
+- Notes for breaking changes or migrations
 
-- Kurzbeschreibung der Änderung
-- Verknüpftes Issue (`Fixes #...` oder `Refs #...`)
-- Testnachweis (ausgeführte Befehle + Ergebnis)
-- Hinweise auf Breaking Changes oder Konfigurationsänderungen
+## 5) Code Style and Quality
 
-## 5) Review-Richtlinien
+- Follow existing project conventions and package structure.
+- Prefer small, focused changes.
+- Do not commit generated outputs (`target/`, logs, cache files, IDE artifacts).
 
-- Kleine, nachvollziehbare Commits
-- Keine unnötigen Formatierungsänderungen
-- Dokumentation bei Feature- oder API-Änderungen aktualisieren
+## 6) Reporting Security Issues
 
-## 6) Merge-Kriterien
+Please do **not** open public issues for sensitive vulnerabilities. Instead, contact maintainers privately and include:
 
-- Code-Review abgeschlossen
-- Relevante Tests erfolgreich
-- Doku aktualisiert
-- Offene TODOs im PR beschrieben oder in Folge-Issues ausgelagert
+- affected component
+- reproduction steps
+- potential impact
+- suggested mitigation (if available)
+
+## 7) Community Expectations
+
+By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

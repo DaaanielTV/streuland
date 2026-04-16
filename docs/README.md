@@ -1,22 +1,22 @@
-# Dokumentation
+# Documentation
 
-Dieses Verzeichnis enthält die technische Projektdokumentation für Streuland.
+This directory contains the technical documentation for the Streuland Plot Plugin.
 
-## Inhalte
+## Contents
 
-- `architecture/system-overview.md` – Gesamtarchitektur und Laufzeitkomponenten
-- `architecture/code-walkthrough.md` – Orientierung im Quellcode
-- `api/core-components.md` – Kernbausteine und Verantwortlichkeiten
-- `examples/command-flows.md` – Beispielabläufe typischer Befehle
-- `plot-system-expansion.md` – Ideen und Plan für Funktionserweiterungen
-- `maintenance/refactoring-notes-2026-02.md` – Wartungs- und Refactoring-Notizen
+- `architecture/system-overview.md` - high-level runtime architecture and module map
+- `architecture/code-walkthrough.md` - source-tree orientation and implementation notes
+- `api/core-components.md` - core components and responsibilities
+- `examples/command-flows.md` - end-user and admin command examples
+- `plot-system-expansion.md` - feature expansion ideas and planning notes
+- `maintenance/refactoring-notes-2026-02.md` - maintenance and refactoring notes
 
-## Zielgruppe
+## Audience
 
-- Entwicklerinnen und Entwickler
-- Server-Admins
-- Beitragende über Issue- und PR-Workflow
+- plugin maintainers
+- contributors
+- server administrators
 
-## Beitrag zur Doku
+## Documentation Contributions
 
-Bitte Änderungen als Pull Request einreichen und bei inhaltlichen Rückfragen zuerst ein Issue anlegen.
+Please submit documentation updates through pull requests. For major structural changes, open an issue first to discuss scope.

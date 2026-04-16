@@ -1,70 +1,113 @@
 # Streuland Plot Plugin
 
-Streuland ist ein Plot-System für Paper 1.16.5 mit Vanilla-Weltgenerierung. Das Plugin trennt Wege, freie Plots und beanspruchte Plots explizit über Area-Typen.
+Streuland Plot Plugin is an open-source Paper plugin for managing player plots in a vanilla-style Minecraft world. It provides protected plots, path generation, district progression, environment controls, a marketplace, approvals, and an optional web dashboard.
 
-## Funktionen
+## Project Overview
 
-- Schutzlogik auf Basis von `AreaType` (`PATH`, `PLOT_UNCLAIMED`, `PLOT_CLAIMED`)
-- Automatische Wegerzeugung zwischen Plots
-- Persistenz per YAML-Dateien
-- Asynchrone Plot-Erstellung zur Lastreduktion
-- Erweiterungen für Markt, Freigabeprozess, Biome, Dashboard und Backups
+This repository contains the full Java source, tests, and documentation for the Streuland plugin (`de.streuland`). It is built with Maven and targets Paper `1.16.5`.
 
-## Schnellstart
+## Features / Purpose
 
-### 1) Bauen
+- Plot creation, ownership, trust/untrust, deletion workflows
+- Area-based protection model (`PATH`, `PLOT_UNCLAIMED`, `PLOT_CLAIMED`)
+- Automatic path generation and world-area partitioning
+- District progression and neighborhood systems
+- Plot upgrades, market listings, and approval workflows
+- YAML + SQLite-backed storage components
+- Optional REST/WebSocket dashboard assets
+
+## Installation
+
+### Prerequisites
+
+- Java 8+
+- Maven 3.8+
+- A Paper server compatible with `1.16.5`
+
+### Build from Source
 
 ```bash
 mvn clean package
 ```
 
-### 2) Installieren
+The plugin jar will be generated in `target/`.
 
-Kopiere `target/Streuland-1.0.0-SNAPSHOT.jar` in den Ordner `plugins/` deines Servers.
+### Deploy to Paper
 
-### 3) Konfigurieren
+1. Copy the generated jar into your server `plugins/` directory.
+2. Start or restart the server.
+3. Edit generated plugin config files under `plugins/Streuland/` as needed.
 
-Bearbeite `plugins/Streuland/config.yml` (Weltname, Plot-Größe, Suchradius, Limits).
+## Usage
 
-### 4) Server neu starten
+Common commands:
 
-```text
-/restart
+- `/plot create` – create a new plot
+- `/plot info` – inspect current plot data
+- `/plot trust <player>` and `/plot untrust <player>` – manage collaborators
+- `/plot list` – list owned plots
+- `/plot home` – teleport to plot
+- `/district ...` – district management operations
+- `/plotapprove ...` – review approval requests
+- `/streuland ...` – diagnostics and maintenance commands
+
+See additional command-flow documentation in `docs/examples/command-flows.md`.
+
+## Development Setup
+
+```bash
+git clone <your-fork-or-repo-url>
+cd streuland
+mvn clean verify
 ```
 
-## Wichtige Befehle
+Recommended:
 
-| Befehl | Beschreibung |
-|---|---|
-| `/plot create` | Neuen Plot erzeugen |
-| `/plot info` | Plot-Informationen anzeigen |
-| `/plot trust <spieler>` | Bau-Rechte vergeben |
-| `/plot untrust <spieler>` | Bau-Rechte entziehen |
-| `/plot home` | Zum Plot teleportieren |
-| `/plot list` | Eigene Plots auflisten |
-| `/plot unclaim [plotId]` | Plot freigeben |
-| `/plot delete [plotId]` | Plot löschen (mit Bestätigung) |
-| `/plot confirm` / `/plot cancel` | Löschvorgang bestätigen/abbrechen |
+- Use an IDE with Maven import enabled.
+- Keep all generated build output local (`target/` is intentionally ignored).
 
-## Build- und Entwicklungsstatus
+## Configuration
 
-- Die Maven-Konfiguration wurde bereinigt (kaputte XML-/Dependency-Definitionen entfernt).
-- In Umgebungen ohne Zugriff auf Maven Central kann der Build trotz korrekter `pom.xml` fehlschlagen, weil Plugins/Artefakte nicht heruntergeladen werden können.
+Primary configuration files are packaged from `src/main/resources/` and generated into the plugin data folder on first run:
 
-## Dokumentation
+- `config.yml`
+- `world_main.yml`
+- `world_nether.yml`
+- `world_end.yml`
+- `plot-upgrades.yml`
+- `quests.yml`
+- `messages_en.yml` / `messages_de.yml`
 
-Weitere Dokumente findest du in `docs/`:
+## Build / Run Instructions
 
-- [Dokumentationsübersicht](docs/README.md)
-- [Architekturüberblick](docs/architecture/system-overview.md)
-- [Code-Walkthrough](docs/architecture/code-walkthrough.md)
-- [API-Kernkomponenten](docs/api/core-components.md)
-- [Befehlsabläufe](docs/examples/command-flows.md)
+- Build jar: `mvn clean package`
+- Run test suite: `mvn test`
+- Run full verification: `mvn clean verify`
 
-## Mitwirken
+No compiled artifacts are stored in version control. Regenerate binaries locally using the Maven commands above.
 
-Bitte lies [CONTRIBUTING.md](CONTRIBUTING.md) für den Ablauf über Issue + Pull Request.
+## Troubleshooting
 
-## Lizenz
+- **Dependency resolution fails**: ensure network access to Maven repositories listed in `pom.xml`.
+- **Plugin not loading**: verify Paper version compatibility and check startup logs for missing soft dependencies (`Vault`, `WorldGuard`).
+- **Config issues**: delete invalid generated config files in `plugins/Streuland/` and restart to regenerate defaults.
 
-GNU GPLv3, siehe [LICENSE](LICENSE).
+## Documentation
+
+- `docs/README.md` – documentation index
+- `docs/architecture/system-overview.md` – architecture map
+- `docs/architecture/code-walkthrough.md` – source orientation
+- `docs/api/core-components.md` – module responsibilities
+- `docs/examples/command-flows.md` – command examples
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Code of Conduct
+
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## License
+
+GNU GPLv3. See [LICENSE](LICENSE).
