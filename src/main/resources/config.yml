@@ -296,6 +296,18 @@ pricing:
   nearby-sales-radius: 256
   spawn-falloff-distance: 5000
 
+# Auction system (Dutch Auction)
+auction:
+  enabled: true
+  tax-rate: 0.05
+  flat-fee: 0.0
+  default-duration-hours: 72
+  max-duration-hours: 168
+  extension-minutes: 5
+  confirmation-threshold: 25000.0
+  decay-type: LINEAR
+  blocked-plot-ids: []
+
 messages:
   plot:
     error:
