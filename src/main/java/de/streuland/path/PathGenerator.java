@@ -25,6 +25,7 @@ public class PathGenerator {
     private final PlotManager plotManager;
     private final int pathWidth;
     private final List<Material> pathStoneBlocks;
+    private final List<Material> goldenPathBlocks;
     
     public PathGenerator(JavaPlugin plugin, PlotManager plotManager) {
         this.plugin = plugin;
@@ -41,6 +42,13 @@ public class PathGenerator {
             Material.ANDESITE,
             Material.MOSSY_COBBLESTONE,
             Material.COBBLESTONE
+        );
+
+        this.goldenPathBlocks = Arrays.asList(
+            Material.GOLD_BLOCK,
+            Material.YELLOW_CONCRETE,
+            Material.YELLOW_WOOL,
+            Material.RAW_GOLD_BLOCK
         );
     }
     
@@ -112,6 +120,10 @@ public class PathGenerator {
      * Spreads block placement over multiple ticks to avoid lag.
      */
     public void buildPathBlocks(List<BlockPosition> pathBlocks) {
+        buildPathBlocks(pathBlocks, false);
+    }
+
+    public void buildPathBlocks(List<BlockPosition> pathBlocks, boolean golden) {
         if (pathBlocks.isEmpty()) {
             return;
         }
@@ -135,10 +147,15 @@ public class PathGenerator {
                 for (int j = batchStart; j < batchEnd; j++) {
                     BlockPosition pos = pathBlocks.get(j);
                     
-                    // Place cobblestone or mossy cobblestone at fixed Y=63
+                    // Place blocks at fixed Y=63
                     Block pathBlock = world.getBlockAt(pos.x, FIXED_PATH_Y, pos.z);
-                    Material stoneType = pathStoneBlocks.get(random.nextInt(pathStoneBlocks.size()));
-                    pathBlock.setType(stoneType);
+                    Material blockType;
+                    if (golden) {
+                        blockType = goldenPathBlocks.get(random.nextInt(goldenPathBlocks.size()));
+                    } else {
+                        blockType = pathStoneBlocks.get(random.nextInt(pathStoneBlocks.size()));
+                    }
+                    pathBlock.setType(blockType);
                     
                     blocksPlaced[0]++;
                     
@@ -153,10 +170,26 @@ public class PathGenerator {
                 
                 // Only log when all batches are done
                 if (batchesCompleted[0] == batchesTotal[0]) {
-                    plugin.getLogger().info("Path completed! Built " + blocksPlaced[0] + " path blocks.");
+                    plugin.getLogger().info((golden ? "Golden path" : "Path") + " completed! Built " + blocksPlaced[0] + " path blocks.");
                 }
             }, (long)(i / batchSize));  // Delay each batch by tick number
         }
+    }
+
+    public List<BlockPosition> generatePathBetween(int x1, int z1, int x2, int z2) {
+        List<BlockPosition> pathBlocks = new ArrayList<>();
+        final int FIXED_PATH_Y = 63;
+        
+        List<BlockPosition> line = bresenhamLine(x1, z1, x2, z2);
+        int radius = pathWidth / 2;
+        for (BlockPosition pos : line) {
+            for (int dx2 = -radius; dx2 <= radius; dx2++) {
+                for (int dz2 = -radius; dz2 <= radius; dz2++) {
+                    pathBlocks.add(new BlockPosition(pos.x + dx2, FIXED_PATH_Y, pos.z + dz2));
+                }
+            }
+        }
+        return pathBlocks;
     }
     
     /**

@@ -118,6 +118,7 @@ public class StreulandPlugin extends JavaPlugin {
     private PortalManager portalManager;
     private WebServer webServer;
     private de.streuland.storage.PlotStorage configuredStorageAdapter;
+    private de.streuland.clan.ClanManager clanManager;
     
     @Override
     public void onEnable() {
@@ -133,6 +134,9 @@ public class StreulandPlugin extends JavaPlugin {
 
             pathGenerator = new PathGenerator(this, plotManager);
             getLogger().info("✓ PathGenerator initialized");
+
+            clanManager = new de.streuland.clan.ClanManager(this, plotManager, pathGenerator);
+            getLogger().info("✓ ClanManager initialized");
 
         if (features.approvalsEnabled()) {
             plotApprovalService = new PlotApprovalService(this, plotManager, pathGenerator, discordNotifier);
@@ -404,6 +408,9 @@ public class StreulandPlugin extends JavaPlugin {
                     plotBackupCoordinator,
                     plotAuditLogService
             ));
+        }
+        if (getCommand("clan") != null) {
+            getCommand("clan").setExecutor(new de.streuland.clan.ClanCommand(clanManager));
         }
 
         if (features.backupsEnabled() || features.dashboardApiEnabled() || features.upgradesEnabled()) {
