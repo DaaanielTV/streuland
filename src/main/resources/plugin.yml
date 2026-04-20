@@ -23,6 +23,9 @@ commands:
   streuland:
     description: Admin diagnostics and maintenance
     usage: /streuland <debug|reload|scan|repair|backup|audit>
+  clan:
+    description: Clan system command
+    usage: /clan <create|join|raid>
 
 softdepend:
   - Vault

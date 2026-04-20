@@ -594,6 +594,17 @@ public class PlotManager {
         return all;
     }
 
+    public List<Plot> getPlotsByOwner(UUID owner) {
+        if (owner == null) return Collections.emptyList();
+        List<Plot> matches = new ArrayList<>();
+        for (Plot plot : getAllPlots()) {
+            if (owner.equals(plot.getOwner())) {
+                matches.add(plot);
+            }
+        }
+        return matches;
+    }
+
     public World getWorld() { return contextFor(null).world; }
 
     public int getPlotSize() { return contextFor(null).settings.getPlotSize(); }
