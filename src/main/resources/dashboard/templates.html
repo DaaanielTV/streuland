@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schnellbau Templates - Streuland</title>
+  <link rel="stylesheet" href="/streuland-dashboard/style.css" />
+  <style>
+    .templates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .template-card {
+      background: #1e1e2e;
+      border: 1px solid #313244;
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .template-card:hover {
+      transform: translateY(-4px);
+      border-color: #89b4fa;
+    }
+    .template-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+    .template-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: #cdd6f4;
+      margin-bottom: 8px;
+    }
+    .template-desc {
+      font-size: 14px;
+      color: #a6adc8;
+      margin-bottom: 12px;
+    }
+    .template-cost {
+      font-weight: 600;
+    }
+    .cost-free { color: #a6e3a1; }
+    .cost-paid { color: #f9e2af; }
+    .filters-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .filters-bar input {
+      padding: 8px 12px;
+      background: #181825;
+      border: 1px solid #313244;
+      border-radius: 6px;
+      color: #cdd6f4;
+    }
+    .templates-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="panel">
+      <div class="templates-header">
+        <h1>Schnellbau Templates</h1>
+        <p>Vorgefertigte Plot-Designs zum Kopieren</p>
+      </div>
+    </header>
+
+    <section class="panel filters-bar">
+      <input id="searchInput" placeholder="Suchen..." />
+      <select id="sortFilter">
+        <option value="name">Name</option>
+        <option value="cost">Preis</option>
+      </select>
+    </section>
+
+    <section id="templatesGrid" class="templates-grid">
+      <div class="template-card" data-id="basic_house">
+        <div class="template-icon">🏠</div>
+        <div class="template-name">Einfaches Haus</div>
+        <div class="template-desc">Ein einfaches Wohnhaus mit Keller</div>
+        <div class="template-cost cost-free">KOSTENLOS</div>
+      </div>
+      <div class="template-card" data-id="farm">
+        <div class="template-icon">🌾</div>
+        <div class="template-name">Bauernhof</div>
+        <div class="template-desc">Funktionaler Bauernhof mit Feldern</div>
+        <div class="template-cost cost-free">KOSTENLOS</div>
+      </div>
+      <div class="template-card" data-id="garden">
+        <div class="template-icon">🌳</div>
+        <div class="template-name">Garten</div>
+        <div class="template-desc">Dekorativer Garten mit Teich</div>
+        <div class="template-cost cost-free">KOSTENLOS</div>
+      </div>
+      <div class="template-card" data-id="shop">
+        <div class="template-icon">🏪</div>
+        <div class="template-name">Laden</div>
+        <div class="template-desc">Kleiner Laden mit Tresen</div>
+        <div class="template-cost cost-paid">500$</div>
+      </div>
+      <div class="template-card" data-id="arena">
+        <div class="template-icon">⚔️</div>
+        <div class="template-name">Arena</div>
+        <div class="template-desc">Kampfarena für PvP</div>
+        <div class="template-cost cost-paid">1.000$</div>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h3>In-Game verwenden</h3>
+      <p>Im Spiel: <code>/plot copy list</code> oder <code>/plot templates</code></p>
+      <p>Oder direkt: <code>/plot copy [name]</code></p>
+    </section>
+  </main>
+
+  <script>
+    document.querySelectorAll('.template-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.dataset.id;
+        window.location.href = '/plot-copy/' + id;
+      });
+    });
+
+    const searchInput = document.getElementById('searchInput');
+    const sortFilter = document.getElementById('sortFilter');
+    const grid = document.getElementById('templatesGrid');
+
+    function filterTemplates() {
+      const query = searchInput.value.toLowerCase();
+      const sort = sortFilter.value;
+      const cards = Array.from(grid.querySelectorAll('.template-card'));
+
+      cards.forEach(card => {
+        const name = card.querySelector('.template-name').textContent.toLowerCase();
+        card.style.display = name.includes(query) ? 'block' : 'none';
+      });
+    }
+
+    searchInput.addEventListener('input', filterTemplates);
+  </script>
+</body>
+</html>

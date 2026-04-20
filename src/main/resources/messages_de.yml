@@ -1,5 +1,26 @@
 error:
   no_permission: "§cKeine Berechtigung."
+copy:
+  usage: "§6=== Schnellbau Templates ==="
+  list_header: "§6=== Verfügbare Schnellbau Designs ==="
+  entry: "§e{0}§f - {1}"
+  cost_free: " §aKOSTENLOS"
+  cost_paid: " §e{0}§f§l$"
+  not_found: "§cTemplate nicht gefunden: {0}"
+  not_own_plot: "§cDu musst auf deinem eigenen Plot stehen!"
+  preview_active: "§eTemplate '{0}' als Vorschau."
+  preview_confirm: "§7Bestätigen mit §e/plot copy confirm§7 oder §e/plot cancel§7 zum Abbrechen."
+  no_preview: "§cKeine Vorschau aktiv. Verwende §e/plot copy preview <name>§c."
+  success: "§aSchnellbau '{0}' erfolgreich eingefügt!"
+  failed: "§cEinfügen fehlgeschlagen."
+  cancelled: "§cVorschau abgebrochen."
+  search_invalid: "§cVerwendung: /plot copy <list|preview|paste> <name>"
+  schematic_not_found: "§cSchematic nicht gefunden: {0}"
+templates:
+  shop_header: "§6=== Schnellbau Templates Shop ==="
+  item: "§e[{0}] §f{1} §7({2}) {3}"
+  click_hint: "§7Klicke auf eine Nummer oder nutze §e/plot copy <name>§7."
+  no_templates: "§cKeine Templates verfügbar."
 plot:
   lang:
     usage: "§cVerwendung: /plot lang <sprache>"

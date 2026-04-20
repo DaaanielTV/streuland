@@ -3,6 +3,8 @@ package de.streuland.command;
 import de.streuland.admin.AdminPlotService;
 import de.streuland.backup.SnapshotService;
 import de.streuland.commands.PlotPriceCommand;
+import de.streuland.commands.PlotCopyCommand;
+import de.streuland.plot.template.PlotTemplateRegistry;
 import de.streuland.commands.PlotBackupCommand;
 import de.streuland.commands.PlotHistoryCommand;
 import de.streuland.commands.PlotTeamCommand;
@@ -117,6 +119,7 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
     private final PlotUpgradeCommand plotUpgradeCommand;
     private final PlotTeamCommand plotTeamCommand;
     private final PlotSchematicCommand plotSchematicCommand;
+    private PlotCopyCommand plotCopyCommand;
     private final PlotBackupCommand plotBackupCommand;
     private final PlotHistoryCommand plotHistoryCommand;
     private final PlotMarketCommand plotMarketCommand;
@@ -165,6 +168,8 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
         PlotChangeJournal plotChangeJournal = new PlotChangeJournal(plugin, plotManager);
         this.plotHistoryCommand = new PlotHistoryCommand(new JournalManager(plugin, plotChangeJournal));
         this.plotSchematicCommand = new PlotSchematicCommand(new SchematicLoader(plugin), new SchematicPreview(), new SchematicPaster(plugin));
+        PlotTemplateRegistry registry = plugin instanceof de.streuland.StreulandPlugin ? ((de.streuland.StreulandPlugin) plugin).getPlotTemplateRegistry() : null;
+        this.plotCopyCommand = new PlotCopyCommand(registry, new SchematicPaster(plugin), new SchematicPreview(), plotManager);
         this.messageProvider = new MessageProvider(plugin);
         this.moduleCommands = new HashMap<>();
         this.pendingDeletes = new HashMap<>();
@@ -229,11 +234,17 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
             case "delete":
                 return handleDelete(player, args);
             case "confirm":
+                if (plotCopyCommand != null && plotCopyCommand.confirm(player)) {
+                    return true;
+                }
                 if (plotSchematicCommand.confirm(player)) {
                     return true;
                 }
                 return handleConfirmDelete(player);
             case "cancel":
+                if (plotCopyCommand != null && plotCopyCommand.cancel(player)) {
+                    return true;
+                }
                 return handleCancelDelete(player);
             case "generate":
                 return handleGenerate(player, args);
@@ -286,7 +297,12 @@ public class PlotCommandExecutor implements CommandExecutor, TabCompleter {
                 return plotUpgradeCommand.handle(player, new String[]{"upgrade", "prestige"});
             case "level":
                 return plotUpgradeCommand.handle(player, new String[]{"upgrade", "info"});
+            case "templates":
+                return plotCopyCommand != null && plotCopyCommand.handle(player, args);
             default:
+                if ("copy".equals(subcommand)) {
+                    return plotCopyCommand != null && plotCopyCommand.handle(player, args);
+                }
                 if ("template".equals(subcommand)) {
                     return plotSchematicCommand.handle(player, args);
                 }

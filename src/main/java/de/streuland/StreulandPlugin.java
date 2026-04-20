@@ -57,6 +57,8 @@ import de.streuland.plot.upgrade.PlotStorageBackedUpgradeStorage;
 import de.streuland.plot.upgrade.PlotUpgradeService;
 import de.streuland.plot.upgrade.PlotUpgradeTree;
 import de.streuland.plot.upgrade.YamlPlotUpgradeCatalog;
+import de.streuland.plot.template.PlotTemplateRegistry;
+import de.streuland.schematic.SchematicLoader;
 import de.streuland.quest.QuestService;
 import de.streuland.quest.QuestTracker;
 import de.streuland.rules.DefaultPlotLevelProvider;
@@ -109,6 +111,7 @@ public class StreulandPlugin extends JavaPlugin {
     private TraderNpcService traderNpcService;
     private SeasonalWeatherService seasonalWeatherService;
     private PlotFlagManager plotFlagManager;
+    private PlotTemplateRegistry plotTemplateRegistry;
     private PlotUpgradeService plotUpgradeService;
     private WorldGuardCompat worldGuardCompat;
     private MessageProvider messageProvider;
@@ -131,6 +134,10 @@ public class StreulandPlugin extends JavaPlugin {
             messageProvider = new MessageProvider(this);
             plotManager = new PlotManager(this);
             getLogger().info("✓ PlotManager initialized");
+
+            plotTemplateRegistry = new PlotTemplateRegistry(new SchematicLoader(this));
+            plotTemplateRegistry.registerDefaults();
+            getLogger().info("✓ PlotTemplateRegistry initialized");
 
             pathGenerator = new PathGenerator(this, plotManager);
             getLogger().info("✓ PathGenerator initialized");
@@ -494,5 +501,9 @@ public class StreulandPlugin extends JavaPlugin {
 
     public PlotApprovalService getPlotApprovalService() {
         return plotApprovalService;
+    }
+
+    public PlotTemplateRegistry getPlotTemplateRegistry() {
+        return plotTemplateRegistry;
     }
 }
