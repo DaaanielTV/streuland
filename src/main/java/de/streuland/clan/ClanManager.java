@@ -16,6 +16,7 @@ public class ClanManager {
     private final Map<UUID, Clan> clans;
     private final Map<UUID, UUID> playerClanMap;
     private final Map<UUID, Raid> activeRaids;
+    private final ClanDiplomacyManager diplomacyManager;
 
     public ClanManager(JavaPlugin plugin, PlotManager plotManager, PathGenerator pathGenerator) {
         this.plugin = plugin;
@@ -24,6 +25,11 @@ public class ClanManager {
         this.clans = new ConcurrentHashMap<>();
         this.playerClanMap = new ConcurrentHashMap<>();
         this.activeRaids = new ConcurrentHashMap<>();
+        this.diplomacyManager = new ClanDiplomacyManager(plugin, clans);
+    }
+
+    public ClanDiplomacyManager getDiplomacyManager() {
+        return diplomacyManager;
     }
 
     public Clan createClan(String name, UUID leader) {
@@ -165,5 +171,61 @@ public class ClanManager {
 
     public Collection<Clan> getAllClans() {
         return clans.values();
+    }
+
+    public boolean proposeAlly(UUID requesterId, UUID targetId) {
+        return diplomacyManager.proposeAlly(requesterId, targetId);
+    }
+
+    public boolean declareWar(UUID attackerId, UUID targetId) {
+        return diplomacyManager.declareWar(attackerId, targetId);
+    }
+
+    public boolean proposePeace(UUID requesterId, UUID targetId) {
+        return diplomacyManager.proposePeace(requesterId, targetId);
+    }
+
+    public boolean acceptDiplomacyProposal(UUID proposalId, UUID acceptingClanId) {
+        return diplomacyManager.acceptProposal(proposalId, acceptingClanId);
+    }
+
+    public boolean rejectDiplomacyProposal(UUID proposalId, UUID rejectingClanId) {
+        return diplomacyManager.rejectProposal(proposalId, rejectingClanId);
+    }
+
+    public boolean isAtWar(UUID clanIdA, UUID clanIdB) {
+        return diplomacyManager.isAtWar(clanIdA, clanIdB);
+    }
+
+    public boolean isAlly(UUID clanIdA, UUID clanIdB) {
+        return diplomacyManager.isAlly(clanIdA, clanIdB);
+    }
+
+    public List<Clan> getAllies(Clan clan) {
+        return diplomacyManager.getAllies(clan);
+    }
+
+    public List<Clan> getEnemies(Clan clan) {
+        return diplomacyManager.getEnemies(clan);
+    }
+
+    public Collection<ClanDiplomacyManager.DiplomaticProposal> getPendingProposals(UUID clanId) {
+        return diplomacyManager.getPendingProposals(clanId);
+    }
+
+    public void update() {
+        diplomacyManager.checkWarExpiry();
+        diplomacyManager.cleanupExpiredProposals();
+    }
+
+    public int getTotalClanCount() {
+        return clans.size();
+    }
+
+    public int getActiveWarCount() {
+        long count = clans.keySet().stream()
+                .filter(clanId -> diplomacyManager.getActiveWar(clanId) != null)
+                .count();
+        return (int) count;
     }
 }
