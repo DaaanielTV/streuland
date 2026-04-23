@@ -19,6 +19,45 @@
       <span id="authStatus">Not connected</span>
     </section>
 
+    <section class="panel" id="invitationsPanel">
+      <h2>Invite Codes</h2>
+      <div class="stacked-form">
+        <input id="inviteCodeInput" placeholder="Code (optional)" />
+        <input id="inviteExpiresInput" placeholder="Expires At (YYYY-MM-DDTHH:MM)" />
+        <input id="inviteMaxUsesInput" placeholder="Max Uses (empty for unlimited)" type="number" min="0" />
+        <input id="inviteRolesInput" placeholder="Allowed Roles (comma-separated)" />
+        <input id="inviteServerInput" placeholder="Server ID (optional)" />
+        <button id="inviteCreateBtn">Create Invite</button>
+      </div>
+      <table id="inviteTable" style="width:100%; margin-top:8px;">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Expires</th>
+            <th>Uses</th>
+            <th>Max Uses</th>
+            <th>Revoked</th>
+            <th>Roles</th>
+            <th>Server</th>
+            <th>Preview</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel" id="inviteDefaultsPanel">
+      <h2>Invite Defaults</h2>
+      <div class="stacked-form">
+        <input id="inviteDefaultsRolesInput" placeholder="Default Roles (comma-separated)" value="player" />
+        <input id="inviteDefaultsExpiresDaysInput" placeholder="Default Expiry (days)" value="30" type="number" min="0" />
+        <input id="inviteDefaultsMaxUsesInput" placeholder="Default Max Uses (null for unlimited)" type="number" min="-1" />
+        <button id="inviteDefaultsSaveBtn">Save Defaults</button>
+      </div>
+      <div id="inviteDefaultsInfo" style="margin-top:6px; color:#666; font-size:12px;"></div>
+    </section>
+
     <section class="panel filters">
       <input id="searchInput" placeholder="Search plot / owner / trusted" />
       <input id="ownerInput" placeholder="Filter owner UUID" />

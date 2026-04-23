@@ -5,8 +5,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import de.streuland.plot.Plot;
-import de.streuland.plot.PlotData;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,12 +28,45 @@ public class WebServer {
     private final String token;
     private final PlotGateway plotGateway;
     private final AdminObservabilityService observabilityService;
+    // Optional: invitation store/backend (MVP in-memory)
+    private final de.streuland.invite.InvitationGateway invitationGateway;
+    private final de.streuland.auth.UserGateway userGateway;
     private final Logger logger;
     private final Gson gson = new Gson();
     private HttpServer server;
 
+    // Composite handler for signup-with-code (GET serves page, POST processes signup)
+    private class SignUpCompositeHandler implements HttpHandler {
+        private final InvitationGateway invitationGateway;
+        private final UserGateway userGateway;
+        private final de.streuland.auth.SignUpWithCodeHandler delegate;
+
+        SignUpCompositeHandler(InvitationGateway invitationGateway, UserGateway userGateway) {
+            this.invitationGateway = invitationGateway;
+            this.userGateway = userGateway;
+            // Use a dedicated handler for POST to actually process signup
+            this.delegate = new de.streuland.auth.SignUpWithCodeHandler(invitationGateway, userGateway);
+        }
+
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                String lang = Optional.ofNullable(exchange.getRequestHeaders().getFirst("Accept-Language")).orElse("");
+                String resource = lang.toLowerCase().contains("de") ? "web/static/signup_de.html" : "web/static/signup.html";
+                try {
+                    serveResource(exchange, resource, "text/html");
+                } catch (Exception e) {
+                    exchange.sendResponseHeaders(500, -1);
+                }
+                return;
+            }
+            // POST: delegate to actual signup handler
+            delegate.handle(exchange);
+        }
+    }
+
     public WebServer(String host, int port, String token, PlotGateway plotGateway, Logger logger) {
-        this(host, port, token, plotGateway, null, logger);
+        this(host, port, token, plotGateway, null, null, null, logger);
     }
 
     public WebServer(String host, int port, String token, PlotGateway plotGateway, AdminObservabilityService observabilityService, Logger logger) {
@@ -45,12 +76,31 @@ public class WebServer {
         this.plotGateway = plotGateway;
         this.observabilityService = observabilityService == null ? new AdminObservabilityService(plotGateway, null) : observabilityService;
         this.logger = logger;
+        this.invitationGateway = null;
+        this.userGateway = null;
+    }
+
+    // Extended constructor to allow wiring an invitation gateway (optional)
+    public WebServer(String host, int port, String token, PlotGateway plotGateway, AdminObservabilityService observabilityService, de.streuland.invite.InvitationGateway invitationGateway, de.streuland.auth.UserGateway userGateway, Logger logger) {
+        this.host = host;
+        this.port = port;
+        this.token = token == null ? "" : token.trim();
+        this.plotGateway = plotGateway;
+        this.observabilityService = observabilityService == null ? new AdminObservabilityService(plotGateway, null) : observabilityService;
+        this.logger = logger;
+        this.invitationGateway = invitationGateway;
+        this.userGateway = userGateway;
     }
 
     public void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress(host, port), 0);
         server.createContext("/", new RootHandler());
         server.createContext("/api/", new ApiHandler());
+        // Sign-up flow endpoints (Sign-Up via Invitation Code)
+        if (invitationGateway != null && userGateway != null) {
+            server.createContext("/auth/signup-with-code", new SignUpCompositeHandler(invitationGateway, userGateway));
+            server.createContext("/auth/validate-invitation", new de.streuland.auth.ValidateInvitationHandler(invitationGateway));
+        }
         server.start();
     }
 

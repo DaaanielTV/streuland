@@ -297,6 +297,8 @@ public class StreulandPlugin extends JavaPlugin {
 
         if (features.dashboardApiEnabled()) {
             DashboardDataExporter exporter = new DashboardDataExporter(plotManager.getStorage());
+            // Initialize REST API controller with a persistent invitation gateway (SQLite MVP)
+            de.streuland.invite.SqliteInvitationGateway inviteGateway = new de.streuland.invite.SqliteInvitationGateway(getDataFolder().toPath().resolve("invite.sqlite"));
             restApiController = new RestApiController(
                     this,
                     plotManager,
@@ -307,7 +309,8 @@ public class StreulandPlugin extends JavaPlugin {
                     plotApprovalService,
                     districtManager,
                     plotBackupCoordinator,
-                    plotAuditLogService
+                    plotAuditLogService,
+                    inviteGateway
             );
             restApiController.start();
             getLogger().info("✓ Dashboard API initialized");
@@ -317,7 +320,9 @@ public class StreulandPlugin extends JavaPlugin {
                 int webPort = getConfig().getInt("web.port", 8090);
                 WebServer.PlotGatewayAdapter gateway = new WebServer.PlotGatewayAdapter(plotManager);
                 AdminObservabilityService observabilityService = new AdminObservabilityService(gateway, analyticsService);
-                webServer = new WebServer("0.0.0.0", webPort, token, gateway, observabilityService, getLogger());
+                de.streuland.invite.SqliteInvitationGateway invitationGateway = new de.streuland.invite.SqliteInvitationGateway(getDataFolder().toPath().resolve("invite.sqlite"));
+                de.streuland.auth.SqliteUserGateway userGateway = new de.streuland.auth.SqliteUserGateway(getDataFolder().toPath().resolve("invite.sqlite"));
+                webServer = new WebServer("0.0.0.0", webPort, token, gateway, observabilityService, invitationGateway, userGateway, getLogger());
                 webServer.start();
                 getLogger().info("✓ Admin web server listening on http://0.0.0.0:" + webPort);
             }
@@ -334,7 +339,11 @@ public class StreulandPlugin extends JavaPlugin {
         }
 
         if (getConfig().getBoolean("web.enabled", false)) {
-            webServer = new WebServer("0.0.0.0", getConfig().getInt("web.port", 8090), getConfig().getString("web.token", ""), new WebServer.PlotGatewayAdapter(plotManager), getLogger());
+            WebServer.PlotGatewayAdapter gateway = new WebServer.PlotGatewayAdapter(plotManager);
+            de.streuland.invite.SqliteInvitationGateway invitationGateway = new de.streuland.invite.SqliteInvitationGateway(getDataFolder().toPath().resolve("invite.sqlite"));
+            de.streuland.auth.SqliteUserGateway userGateway = new de.streuland.auth.SqliteUserGateway(getDataFolder().toPath().resolve("invite.sqlite"));
+            AdminObservabilityService observabilityService = new AdminObservabilityService(gateway, analyticsService);
+            webServer = new WebServer("0.0.0.0", getConfig().getInt("web.port", 8090), getConfig().getString("web.token", ""), gateway, observabilityService, invitationGateway, userGateway, getLogger());
             webServer.start();
         }
     }

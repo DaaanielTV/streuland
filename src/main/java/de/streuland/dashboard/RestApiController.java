@@ -8,6 +8,8 @@ import com.sun.net.httpserver.HttpServer;
 import de.streuland.analytics.InMemoryPlotAnalyticsService;
 import de.streuland.analytics.PlotAnalyticsRecord;
 import de.streuland.api.event.PlotUpgradedEvent;
+import de.streuland.invite.InvitationCode;
+import java.time.Instant;
 import de.streuland.approval.PlotApprovalService;
 import de.streuland.backup.PlotBackupCoordinator;
 import de.streuland.district.District;
@@ -66,16 +68,20 @@ public class RestApiController implements Listener {
     private HttpServer httpServer;
     private DashboardWebSocketServer webSocketServer;
 
+    // Invitation gateway (DB-backed in future MVP; currently wired by plugin)
+    private final de.streuland.invite.InvitationGateway invitationGateway;
+
     public RestApiController(JavaPlugin plugin,
-                             PlotManager plotManager,
-                             NeighborhoodService neighborhoodService,
-                             InMemoryPlotAnalyticsService analyticsService,
-                             DashboardDataExporter dataExporter,
-                             PlotMarketService marketService,
-                             PlotApprovalService approvalService,
-                             DistrictManager districtManager,
-                             PlotBackupCoordinator backupCoordinator,
-                             PlotAuditLogService auditLogService) {
+                              PlotManager plotManager,
+                              NeighborhoodService neighborhoodService,
+                              InMemoryPlotAnalyticsService analyticsService,
+                              DashboardDataExporter dataExporter,
+                              PlotMarketService marketService,
+                              PlotApprovalService approvalService,
+                              DistrictManager districtManager,
+                              PlotBackupCoordinator backupCoordinator,
+                              PlotAuditLogService auditLogService,
+                              de.streuland.invite.InvitationGateway invitationGateway) {
         this.plugin = plugin;
         this.plotManager = plotManager;
         this.neighborhoodService = neighborhoodService;
@@ -89,6 +95,34 @@ public class RestApiController implements Listener {
         this.auditLogService = auditLogService;
         this.backupOperationsService = new PlotBackupOperationsService(backupCoordinator, auditLogService);
         this.gson = new Gson();
+        this.invitationGateway = invitationGateway;
+    }
+
+    private String toInviteCsv(List<InvitationCode> invites) {
+        String header = "id,code,issuerUserId,createdAt,expiresAt,maxUses,uses,isRevoked,allowedRoles,serverId,targetServer\n";
+        StringBuilder sb = new StringBuilder();
+        sb.append(header);
+        for (InvitationCode c : invites) {
+            sb.append(escapeCsv(c.id)).append(',')
+              .append(escapeCsv(c.code)).append(',')
+              .append(escapeCsv(c.issuerUserId)).append(',')
+              .append(escapeCsv(c.createdAt)).append(',')
+              .append(escapeCsv(c.expiresAt)).append(',')
+              .append(c.maxUses == null ? "" : c.maxUses).append(',')
+              .append(c.uses).append(',')
+              .append(c.isRevoked).append(',')
+              .append(escapeCsv((c.allowedRoles != null ? String.join("|", c.allowedRoles) : null))).append(',')
+              .append(escapeCsv(c.serverId)).append(',')
+              .append(escapeCsv(c.targetServer)).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private String escapeCsv(String s) {
+        if (s == null) return "";
+        boolean needsQuotes = s.contains(",") || s.contains("\n") || s.contains("\r");
+        String out = s.replace("\"", "\"\"");
+        return needsQuotes ? '"' + out + '"' : out;
     }
 
     public void start() throws IOException {
@@ -108,6 +142,7 @@ public class RestApiController implements Listener {
         httpServer.createContext("/api/dashboard/ops/plots/", new OpsPlotDetailHandler());
         httpServer.createContext("/api/dashboard/ops/backups", new OpsBackupHandler());
         httpServer.createContext("/api/dashboard/ops/audit", new OpsAuditHandler());
+            httpServer.createContext("/api/dashboard/ops/invitations", new OpsInvitationHandler());
 
         httpServer.createContext("/streuland-dashboard", new DashboardStaticHandler());
         httpServer.createContext("/api/approval/approve", exchange -> handleApproval(exchange, true));
@@ -584,6 +619,119 @@ public class RestApiController implements Listener {
             String search = query.get("search");
             List<PlotAuditEvent> events = auditLogService.listFiltered(plotId, action, actor, search, limit);
             writeJson(exchange, gson.toJson(Collections.singletonMap("events", toAuditRows(events))));
+        }
+    }
+
+    private class OpsInvitationHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            // Basic authorization for admin scope
+            if (!authService.isAuthorized(exchange, DashboardRole.ADMIN)) {
+                exchange.sendResponseHeaders(401, -1);
+                return;
+            }
+
+            String path = exchange.getRequestURI().getPath();
+            String method = exchange.getRequestMethod();
+            // List invitations
+            if ("GET".equalsIgnoreCase(method) && "/api/dashboard/ops/invitations".equals(path)) {
+                List<InvitationCode> list = invitationGateway.listAll();
+                List<Map<String, Object>> rows = new ArrayList<>();
+                for (InvitationCode c : list) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", c.id);
+                    row.put("code", c.code);
+                    row.put("issuerUserId", c.issuerUserId);
+                    row.put("createdAt", c.createdAt);
+                    row.put("expiresAt", c.expiresAt);
+                    row.put("maxUses", c.maxUses);
+                    row.put("uses", c.uses);
+                    row.put("isRevoked", c.isRevoked);
+                    row.put("allowedRoles", c.allowedRoles);
+                    row.put("serverId", c.serverId);
+                    row.put("targetServer", c.targetServer);
+                    rows.add(row);
+                }
+                writeJson(exchange, gson.toJson(Collections.singletonMap("invitations", rows)));
+                return;
+            }
+
+            // Export invites as CSV
+            if ("GET".equalsIgnoreCase(method) && "/api/dashboard/ops/invitations/export".equals(path)) {
+                List<InvitationCode> list = InMemoryInvitationStore.listAll();
+                String csv = toInviteCsv(list);
+                try {
+                    byte[] bytes = csv.getBytes(StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().set("Content-Type", "text/csv; charset=utf-8");
+                    exchange.getResponseHeaders().set("Content-Disposition", "attachment; filename=invitations.csv");
+                    exchange.sendResponseHeaders(200, bytes.length);
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        os.write(bytes);
+                    }
+                } catch (IOException e) {
+                    exchange.sendResponseHeaders(500, -1);
+                }
+                return;
+            }
+
+            // Create invitation
+            if ("POST".equalsIgnoreCase(method) && "/api/dashboard/ops/invitations".equals(path)) {
+                JsonObject payload = gson.fromJson(readBody(exchange), JsonObject.class);
+                String code = payload != null && payload.has("code") ? payload.get("code").getAsString() : null;
+                String issuerUserId = payload != null && payload.has("issuerUserId") ? payload.get("issuerUserId").getAsString() : null;
+                String expiresAt = payload != null && payload.has("expiresAt") ? payload.get("expiresAt").getAsString() : null;
+                Integer maxUses = payload != null && payload.has("maxUses") && !payload.get("maxUses").isJsonNull() ? payload.get("maxUses").getAsInt() : null;
+                List<String> allowedRoles = null;
+                if (payload != null && payload.has("allowedRoles")) {
+                    allowedRoles = new ArrayList<>();
+                    for (var el : payload.get("allowedRoles").getAsJsonArray()) {
+                        allowedRoles.add(el.getAsString());
+                    }
+                }
+                String serverId = payload != null && payload.has("serverId") ? payload.get("serverId").getAsString() : null;
+                String targetServer = payload != null && payload.has("targetServer") ? payload.get("targetServer").getAsString() : null;
+                InvitationCode newCode = InvitationCode.create(code, issuerUserId, Instant.now().toString(), expiresAt, maxUses, allowedRoles, serverId, targetServer);
+                invitationGateway.create(newCode);
+                writeJson(exchange, gson.toJson(Collections.singletonMap("invitation", newCode)));
+                return;
+            }
+
+            // Revoke
+            if ("POST".equalsIgnoreCase(method) && path.startsWith("/api/dashboard/ops/invitations/") && path.endsWith("/revoke")) {
+                String id = path.substring("/api/dashboard/ops/invitations/".length(), path.length() - "/revoke".length());
+                InvitationCode revoked = invitationGateway.revoke(id);
+                if (revoked == null) {
+                    exchange.sendResponseHeaders(404, -1);
+                    return;
+                }
+                writeJson(exchange, gson.toJson(Collections.singletonMap("invitation", revoked)));
+                return;
+            }
+
+            // Update
+            if ("PATCH".equalsIgnoreCase(method) && path.startsWith("/api/dashboard/ops/invitations/")) {
+                String id = path.substring("/api/dashboard/ops/invitations/".length());
+                JsonObject payload = gson.fromJson(readBody(exchange), JsonObject.class);
+                String expiresAt = payload != null && payload.has("expiresAt") && !payload.get("expiresAt").isJsonNull() ? payload.get("expiresAt").getAsString() : null;
+                Integer maxUses = payload != null && payload.has("maxUses") && !payload.get("maxUses").isJsonNull() ? payload.get("maxUses").getAsInt() : null;
+                List<String> allowedRoles = null;
+                if (payload != null && payload.has("allowedRoles")) {
+                    allowedRoles = new ArrayList<>();
+                    for (var el : payload.get("allowedRoles").getAsJsonArray()) {
+                        allowedRoles.add(el.getAsString());
+                    }
+                }
+                Boolean isRevoked = payload != null && payload.has("isRevoked") ? payload.get("isRevoked").getAsBoolean() : null;
+                InvitationCode updated = invitationGateway.update(id, expiresAt, maxUses, allowedRoles, isRevoked);
+                if (updated == null) {
+                    exchange.sendResponseHeaders(404, -1);
+                    return;
+                }
+                writeJson(exchange, gson.toJson(Collections.singletonMap("invitation", updated)));
+                return;
+            }
+
+            exchange.sendResponseHeaders(404, -1);
         }
     }
 
