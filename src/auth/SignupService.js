@@ -4,8 +4,9 @@ const InviteCode = require('../invitations/InviteCode');
 const { hashPasswordSHA256, signPayload } = require('../utils/JwtUtil');
 
 class SignupService {
-  constructor() {
-    this.repo = new InviteRepository();
+  constructor(repo) {
+    // allow injection for tests or alternate storage
+    this.repo = repo || new InviteRepository();
   }
 
   async signUpWithCode(code, password) {
