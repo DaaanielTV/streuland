@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Sign Up</title>
+</head>
+<body>
+  <h1>Sign Up</h1>
+  <form id="signupForm">
+    <label>Invite Code: <input name="code" required/></label><br/>
+    <label>Password: <input type="password" name="password" required/></label><br/>
+    <button type="submit">Sign Up</button>
+  </form>
+  <script>
+    document.getElementById('signupForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      // Placeholder: In MVP this would call /auth/signup-with-code
+      alert('Signup flow placeholder');
+    });
+  </script>
+</body>
+</html>

@@ -3,6 +3,16 @@
   <head><title>Admin Invitations</title></head>
   <body>
     <h1>Admin Invitations (MVP)</h1>
-    <p>Placeholder UI for managing invites. Persisted storage wired via MVP gateways.</p>
+    <p>Manage invite codes. This UI is wired to the MVP API gateway.</p>
+    <div id="inviteList"></div>
+    <script>
+      // Basic fetch to show that API is wired (no auth in MVP placeholder)
+      fetch('/api/dashboard/ops/invitations').then(r => r.json()).then(data => {
+        const el = document.getElementById('inviteList');
+        el.textContent = JSON.stringify(data, null, 2);
+      }).catch(() => {
+        document.getElementById('inviteList').textContent = 'Not connected (stub)';
+      });
+    </script>
   </body>
 </html>
