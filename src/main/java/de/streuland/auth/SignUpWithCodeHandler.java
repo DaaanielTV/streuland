@@ -4,25 +4,26 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import de.streuland.invite.InvitationGateway;
-import de.streuland.invite.InvitationCode;
-import javax.xml.bind.DatatypeConverter;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import de.streuland.security.JwtUtil;
+
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.xml.bind.DatatypeConverter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
-import java.security.SecureRandom;
-import de.streuland.security.JwtUtil;
-import de.streuland.auth.UserGateway;
 
-/** Minimal Sign-Up endpoint: POST /auth/signup-with-code
-    Payload: { username, email, password, invitation_code }
- */
 public class SignUpWithCodeHandler implements HttpHandler {
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final int PBKDF2_ITERATIONS = 210_000;
+    private static final int PBKDF2_KEY_LENGTH = 256;
+
     private final InvitationGateway invitationGateway;
     private final UserGateway userGateway;
     private final Gson gson = new Gson();
@@ -44,8 +45,7 @@ public class SignUpWithCodeHandler implements HttpHandler {
             exchange.sendResponseHeaders(405, -1);
             return;
         }
-        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        JsonObject payload = JsonParser.parseString(body).getAsJsonObject();
+        JsonObject payload = JsonParser.parseString(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject();
         String username = payload.has("username") ? payload.get("username").getAsString() : null;
         String email = payload.has("email") ? payload.get("email").getAsString() : null;
         String password = payload.has("password") ? payload.get("password").getAsString() : null;
@@ -56,75 +56,45 @@ public class SignUpWithCodeHandler implements HttpHandler {
             return;
         }
 
-        // Validate Invitation
-        InvitationCode code = invitationGateway.getByCode(inviteCode);
-        if (code == null || code.isRevoked) {
+        if (!invitationGateway.consumeIfValid(inviteCode, Instant.now())) {
             respond(exchange, 400, error("invalid_invitation", "Invitation code not valid"));
             return;
         }
-        // expiry check
-        if (code.expiresAt != null) {
-            Instant exp = Instant.parse(code.expiresAt);
-            if (Instant.now().isAfter(exp)) {
-                respond(exchange, 400, error("expired_invitation", "Invitation has expired"));
-                return;
-            }
-        }
-        if (code.maxUses != null && code.uses >= code.maxUses) {
-            respond(exchange, 400, error("max_uses_reached", "Invitation has reached its usage limit"));
-            return;
-        }
 
-        // Password hashing (salted SHA-256 for MVP)
-        String salt = generateSalt();
-        String passwordHash = sha256(salt + password);
-
-        // Create user
-        String serverId = code.serverId;
         try {
-            String passwordSalt = salt;
-            com.streuland.auth.User newUser = userGateway.createUser(username, email, passwordHash, passwordSalt, code.id, serverId);
-            // Increment uses of invitation
-            invitationGateway.incrementUses(code.id);
+            String salt = generateSalt();
+            String passwordHash = hashPassword(password.toCharArray(), salt);
+            com.streuland.auth.User newUser = userGateway.createUser(username, email, passwordHash, salt, inviteCode, null);
             String token = JwtUtil.createToken(newUser.id, 24 * 60 * 60 * 1000L, getJwtSecret());
             Map<String, String> resp = new HashMap<>();
             resp.put("userId", newUser.id);
             resp.put("token", token);
             respond(exchange, 201, gson.toJson(resp));
         } catch (Exception e) {
-            respond(exchange, 500, error("signup_error", e.getMessage()));
+            respond(exchange, 500, error("signup_error", "Sign-up failed"));
         }
     }
 
     private String getJwtSecret() {
-        String s = null;
-        if (jwtSecret != null && !jwtSecret.isEmpty()) {
-            s = jwtSecret;
-        } else {
-            s = System.getProperty("streuland.jwt.secret");
-            if (s == null || s.isEmpty()) {
-                s = System.getenv("STREULAND_JWT_SECRET");
-            }
-            if (s == null || s.isEmpty()) {
-                s = "default-secret";
-            }
-        }
+        String s = (jwtSecret != null && !jwtSecret.isEmpty()) ? jwtSecret : System.getProperty("streuland.jwt.secret");
+        if (s == null || s.isEmpty()) s = System.getenv("STREULAND_JWT_SECRET");
+        if (s == null || s.trim().isEmpty()) throw new IllegalStateException("Missing JWT secret configuration");
         return s;
     }
 
     private String generateSalt() {
         byte[] salt = new byte[16];
-        new SecureRandom().nextBytes(salt);
+        SECURE_RANDOM.nextBytes(salt);
         return DatatypeConverter.printHexBinary(salt).toLowerCase();
     }
 
-    private String sha256(String base) {
+    private String hashPassword(char[] password, String saltHex) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(base.getBytes(StandardCharsets.UTF_8));
-            return DatatypeConverter.printHexBinary(hash).toLowerCase();
+            PBEKeySpec spec = new PBEKeySpec(password, DatatypeConverter.parseHexBinary(saltHex), PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH);
+            SecretKeyFactory skf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            return DatatypeConverter.printHexBinary(skf.generateSecret(spec).getEncoded()).toLowerCase();
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Failed to hash password", e);
         }
     }
 

@@ -44,4 +44,14 @@ public class InMemoryInvitationGateway implements InvitationGateway {
     public void incrementUses(String id) {
         InMemoryInvitationStore.incrementUsesById(id);
     }
+
+    @Override
+    public boolean consumeIfValid(String code, Instant now) {
+        InvitationCode invite = InMemoryInvitationStore.findByCode(code);
+        if (invite == null || invite.isRevoked) return false;
+        if (invite.expiresAt != null && now.isAfter(Instant.parse(invite.expiresAt))) return false;
+        if (invite.maxUses != null && invite.uses >= invite.maxUses) return false;
+        invite.uses = invite.uses + 1;
+        return true;
+    }
 }
