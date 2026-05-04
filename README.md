@@ -1,3 +1,8 @@
+## Warranty & Liability
+This software is provided "as is", without warranty of any kind. See the LICENSE file for the full GPL-3.0 disclaimer of warranty and limitation of liability.
+
+I'm not responsible if this breaks your setup. Test it before using it in production.
+
 # Streuland Plot Plugin
 
 Streuland Plot Plugin is an open-source Paper plugin for managing player plots in a vanilla-style Minecraft world. It provides protected plots, path generation, district progression, environment controls, a marketplace, approvals, and an optional web dashboard.
