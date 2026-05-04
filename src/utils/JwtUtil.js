@@ -15,14 +15,12 @@ function verifyToken(token, secret) {
   }
 }
 
-function hashPasswordSHA256(password, salt) {
-  const h = crypto.createHash('sha256');
-  h.update(password + (salt || ''));
-  return h.digest('hex');
+function hashPasswordPBKDF2(password, salt) {
+  return crypto.pbkdf2Sync(password, salt, 210000, 32, 'sha256').toString('hex');
 }
 
 module.exports = {
   signPayload,
   verifyToken,
-  hashPasswordSHA256,
+  hashPasswordPBKDF2,
 };

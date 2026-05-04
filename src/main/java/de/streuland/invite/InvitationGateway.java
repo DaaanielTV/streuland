@@ -1,5 +1,6 @@
 package de.streuland.invite;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -14,4 +15,5 @@ public interface InvitationGateway {
     InvitationCode revoke(String id);
     InvitationCode update(String id, String expiresAt, Integer maxUses, List<String> allowedRoles, Boolean isRevoked);
     void incrementUses(String id);
+    boolean consumeIfValid(String code, Instant now);
 }

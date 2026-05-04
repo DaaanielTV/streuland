@@ -14,6 +14,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.security.SecureRandom;
 import java.util.List;
 
 /**
@@ -21,6 +22,7 @@ import java.util.List;
  * Persistents InvitationCode entities.
  */
 public class SqliteInvitationGateway implements InvitationGateway {
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final String jdbcUrl;
     private final Gson gson = new Gson();
     private static final Type ROLES_TYPE = new TypeToken<List<String>>(){}.getType();
@@ -195,13 +197,23 @@ public class SqliteInvitationGateway implements InvitationGateway {
         }
     }
 
+    @Override
+    public boolean consumeIfValid(String code, Instant now) {
+        String sql = "UPDATE invitations SET uses = uses + 1 WHERE code = ? AND is_revoked = 0 AND (expires_at IS NULL OR expires_at > ?) AND (max_uses IS NULL OR uses < max_uses)";
+        try (Connection c = connection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, code);
+            ps.setString(2, now.toString());
+            return ps.executeUpdate() == 1;
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to consume invitation", e);
+        }
+    }
+
     private String generateCode() {
-        // simple 32-char alphanumeric-like code, URL-safe
         String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         StringBuilder sb = new StringBuilder(32);
         for (int i = 0; i < 32; i++) {
-            int idx = (int) (Math.random() * chars.length());
-            sb.append(chars.charAt(idx));
+            sb.append(chars.charAt(SECURE_RANDOM.nextInt(chars.length())));
         }
         return sb.toString();
     }
